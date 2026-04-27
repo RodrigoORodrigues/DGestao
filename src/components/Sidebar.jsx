@@ -26,8 +26,8 @@ export default function Sidebar({ currentUser, currentView, setCurrentView, hasA
             
             <nav className="flex-1 space-y-1 overflow-y-auto pr-2">
                 <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase px-4 pt-2 mb-2">Principal</p>
-                {hasAccess('dashboard') && <SidebarItem icon={Home} label="Dashboard" active={currentView === 'dashboard'} onClick={() => setCurrentView('dashboard')} />}
                 {hasAccess('dashboard') && <SidebarItem icon={Layers} label="Painel" active={currentView === 'painel'} onClick={() => setCurrentView('painel')} />}
+                {hasAccess('dashboard') && <SidebarItem icon={Home} label="Dashboard" active={currentView === 'dashboard'} onClick={() => setCurrentView('dashboard')} />}
                 {hasAccess('vendas') && <SidebarItem icon={ShoppingCart} label="Vendas de Serviços" active={currentView === 'vendas'} onClick={() => setCurrentView('vendas')} />}
                 {hasAccess('clientes') && <SidebarItem icon={Users} label="Clientes" active={currentView === 'clientes'} onClick={() => setCurrentView('clientes')} />}
                 {hasAccess('processar') && <SidebarItem icon={FileCheck} label="Relatórios de Comissão" active={currentView === 'processar'} onClick={() => setCurrentView('processar')} />}
