@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import DatePicker, { registerLocale } from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
+import ptBR from 'date-fns/locale/pt-BR';
+registerLocale('pt-BR', ptBR);
 import { supabase } from './config/supabase';
 import { 
     SYSTEM_MODULES, EMPRESAS_INTERNAS, CATEGORIAS, MESES, 
@@ -133,7 +137,7 @@ export default function App() {
         numero: true, cliente: true, dataVenda: true, situacao: true, valor: true,
         contrato: false, codigoOperadora: false, vidas: false, loja: false,
         servico: false, corretor: false, parcela: false, inicioVigencia: false,
-        notaFiscal: false, vitalicio: false, assessoria: false, formaPagamento: false,
+        notaFiscal: true, vitalicio: false, assessoria: false, formaPagamento: false,
         desconto: false
     };
 
@@ -1020,8 +1024,21 @@ export default function App() {
     };
 
     const enviarNota = async () => {
-        const { cep, logradouro, numero, bairro, cidade, uf } = nfeForm;
+        const { dataEmissao, cep, logradouro, numero, bairro, cidade, uf } = nfeForm;
         
+        if (dataEmissao) {
+            const dateObj = new Date(dataEmissao + "T12:00:00");
+            const today = new Date();
+            const currentYear = today.getFullYear();
+            
+            if (dateObj > today) {
+                return showAlert("A Data de Competência não pode ser uma data futura.");
+            }
+            if (dateObj.getFullYear() < currentYear) {
+                return showAlert(`A Data de Competência não pode ser anterior ao ano atual (${currentYear}).`);
+            }
+        }
+
         if (!cep?.trim() || !logradouro?.trim() || !numero?.trim() || !bairro?.trim() || !cidade?.trim() || !uf?.trim()) {
             return showAlert("Por favor, preencha todos os campos do endereço do tomador (CEP, Logradouro, Número, Bairro, Cidade, UF).");
         }
@@ -2157,7 +2174,10 @@ export default function App() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">Data de Competência</label>
-                            <input type="date" value={nfeForm.dataEmissao} onChange={e => setNfeForm({...nfeForm, dataEmissao: e.target.value})}
+                            <input type="date" value={nfeForm.dataEmissao} 
+                                onChange={e => setNfeForm({...nfeForm, dataEmissao: e.target.value})}
+                                max={new Date().toISOString().split('T')[0]}
+                                min={`${new Date().getFullYear()}-01-01`}
                                 className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500"/>
                         </div>
                         <div>
@@ -2753,11 +2773,20 @@ export default function App() {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Data</label>
-                                        <input required type="date" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.dataVenda} onChange={e => {
-                                            const novaData = e.target.value;
-                                            const calcParcela = calcularParcelaDaVigencia(vendaForm.inicioVigencia, novaData);
-                                            setVendaForm({...vendaForm, dataVenda: novaData, parcela: calcParcela || vendaForm.parcela});
-                                        }} />
+                                        <DatePicker
+                                            selected={vendaForm.dataVenda ? new Date(vendaForm.dataVenda + "T12:00:00") : null}
+                                            onChange={date => {
+                                                const novaData = date ? date.toISOString().split('T')[0] : '';
+                                                const calcParcela = calcularParcelaDaVigencia(vendaForm.inicioVigencia, novaData);
+                                                setVendaForm({...vendaForm, dataVenda: novaData, parcela: calcParcela || vendaForm.parcela});
+                                            }}
+                                            dateFormat="dd/MM/yyyy"
+                                            locale="pt-BR"
+                                            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                            placeholderText="Selecione uma data"
+                                            isClearable
+                                            required
+                                        />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Nº Venda</label>
@@ -2801,11 +2830,19 @@ export default function App() {
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Início da Vigência</label>
-                                        <input type="date" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.inicioVigencia} onChange={e => {
-                                            const novaVig = e.target.value;
-                                            const calcParcela = calcularParcelaDaVigencia(novaVig, vendaForm.dataVenda);
-                                            setVendaForm({...vendaForm, inicioVigencia: novaVig, parcela: calcParcela || vendaForm.parcela});
-                                        }} />
+                                        <DatePicker
+                                            selected={vendaForm.inicioVigencia ? new Date(vendaForm.inicioVigencia + "T12:00:00") : null}
+                                            onChange={date => {
+                                                const novaVig = date ? date.toISOString().split('T')[0] : '';
+                                                const calcParcela = calcularParcelaDaVigencia(novaVig, vendaForm.dataVenda);
+                                                setVendaForm({...vendaForm, inicioVigencia: novaVig, parcela: calcParcela || vendaForm.parcela});
+                                            }}
+                                            dateFormat="dd/MM/yyyy"
+                                            locale="pt-BR"
+                                            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                            placeholderText="Selecione uma data"
+                                            isClearable
+                                        />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Nota Fiscal (NF)</label>
