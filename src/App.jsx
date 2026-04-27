@@ -17,7 +17,7 @@ import {
     Layers, Settings, Database, RefreshCw, Trash2, HardDrive, Users, FileCheck, 
     CheckCircle, XCircle, Edit, ListFilter, Upload, Sun, Moon, Printer, Archive, 
     History, AlertCircle, Lock, User, Key, LogOut, Shield, ShoppingCart, Receipt, 
-    Send, Percent, DollarSign, FileOutput, Copy, Info
+    Send, Percent, DollarSign, FileOutput, Copy, Info, Tag, AlertTriangle
 } from 'lucide-react';
 
 import * as XLSX from 'xlsx';
