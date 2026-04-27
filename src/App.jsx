@@ -6,7 +6,8 @@ registerLocale('pt-BR', ptBR);
 import { supabase } from './config/supabase';
 import { 
     SYSTEM_MODULES, EMPRESAS_INTERNAS, CATEGORIAS, MESES, 
-    dataDeHojeInterna, formatarMoeda, formatarDataVisivel, calcularParcelaDaVigencia 
+    dataDeHojeInterna, formatarMoeda, formatarDataVisivel, calcularParcelaDaVigencia,
+    validarCpfCnpj
 } from './utils/helpers';
 import Sidebar from './components/Sidebar';
 
@@ -79,8 +80,9 @@ export default function App() {
     const [modalClienteOpen, setModalClienteOpen] = useState(false);
     const [modalBuscaOpen, setModalBuscaOpen] = useState(false);
     const [clienteEditIndex, setClienteEditIndex] = useState(-1);
-    const [clienteForm, setClienteForm] = useState({ id: null, nome: '', tipo: 'Pessoa jurídica', documento: '', telefone: '', celular: '', email: '', situacao: true });
+    const [clienteForm, setClienteForm] = useState({ id: null, nome: '', tipo: 'Pessoa jurídica', documento: '', telefone: '', celular: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '', email: '', situacao: true });
     const [clientSaveSuccess, setClientSaveSuccess] = useState(false);
+    const [clientesCurrentPage, setClientesCurrentPage] = useState(1);
     
     const [modalArquivosOpen, setModalArquivosOpen] = useState(false);
     
@@ -646,6 +648,16 @@ export default function App() {
         return matchNome && matchTipo && matchSituacao;
     });
 
+    useEffect(() => {
+        setClientesCurrentPage(1);
+    }, [filtroNomeCliente, filtrosCli]);
+
+    const clientesPerPage = 20;
+    const totalPagesClientes = Math.ceil(clientesFiltrados.length / clientesPerPage);
+    const indexOfLastCliente = clientesCurrentPage * clientesPerPage;
+    const indexOfFirstCliente = indexOfLastCliente - clientesPerPage;
+    const currentClientes = clientesFiltrados.slice(indexOfFirstCliente, indexOfLastCliente);
+
     const apagarCliente = (id) => { 
         const clienteParaApagar = clientes.find(c => c.id === id);
         if(!clienteParaApagar) return;
@@ -666,7 +678,7 @@ export default function App() {
     };
     const abrirModalAddEdit = (cliente = null) => {
         if (cliente) { setClienteForm({...cliente}); setClienteEditIndex(cliente.id); } 
-        else { setClienteForm({ id: null, nome: '', tipo: 'Pessoa jurídica', documento: '', telefone: '', celular: '', email: '', situacao: true }); setClienteEditIndex(-1); }
+        else { setClienteForm({ id: null, nome: '', tipo: 'Pessoa jurídica', documento: '', telefone: '', celular: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '', email: '', situacao: true }); setClienteEditIndex(-1); }
         setModalClienteOpen(true);
     };
 
@@ -1029,6 +1041,13 @@ export default function App() {
         }
     };
 
+    const buscarCepCliente = async (cep) => {
+        const cepLimpo = cep.replace(/\D/g, '');
+        if (cepLimpo.length === 8) {
+            try { const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`); const data = await response.json(); if (!data.erro) { setClienteForm(prev => ({ ...prev, logradouro: data.logradouro, bairro: data.bairro, cidade: data.localidade, uf: data.uf })); } } catch (e) {}
+        }
+    };
+
     const enviarNota = async () => {
         const { dataEmissao, cep, logradouro, numero, bairro, cidade, uf } = nfeForm;
         
@@ -1054,7 +1073,18 @@ export default function App() {
             return showAlert("CEP inválido. O CEP deve conter 8 dígitos.");
         }
 
-        if (!nfeForm.cnpj || !nfeForm.valor) return showAlert("Por favor, preencha pelo menos o CNPJ e o Valor para emitir a NF.");
+        if (!nfeForm.cnpj || !nfeForm.valor) {
+            return showAlert("Por favor, preencha pelo menos o CNPJ e o Valor para emitir a NF.");
+        }
+        
+        const docNumeros = nfeForm.cnpj.replace(/[^\d]/g, '');
+        if (docNumeros.length !== 11 && docNumeros.length !== 14) {
+             return showAlert("CPF / CNPJ com tamanho inválido. Preencha corretamente (11 dígitos para CPF ou 14 para CNPJ).");
+        }
+        
+        if (!validarCpfCnpj(docNumeros)) {
+            return showAlert("CPF / CNPJ inválido. Por favor verifique os dígitos digitados.");
+        }
         
         setIsEmitting(true); setNfeLog(['> Iniciando transmissão segura...', '> Conectando ao Web Service da Prefeitura (RJ)...']);
         try {
@@ -1806,10 +1836,10 @@ export default function App() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {clientesFiltrados.length === 0 ? (
+                                    {currentClientes.length === 0 ? (
                                         <tr><td colSpan="10" className="py-8 text-center text-slate-500 italic">Nenhum cliente encontrado com os filtros atuais.</td></tr>
                                     ) : (
-                                        clientesFiltrados.map((cli) => (
+                                        currentClientes.map((cli) => (
                                             <tr key={cli.id} className="border-b border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-750/50 transition-colors">
                                                 {cols.codigo && <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{cli.codigo || '-'}</td>}
                                                 {cols.nome && <td className="py-3 px-4 font-medium text-slate-900 dark:text-slate-100">{cli.nome}</td>}
@@ -1830,9 +1860,36 @@ export default function App() {
                                 </tbody>
                             </table>
                         </div>
+                        
+                        {totalPagesClientes > 1 && (
+                            <div className="mt-4 flex flex-col md:flex-row items-center justify-between bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                <span className="text-sm text-slate-500 dark:text-slate-400 mb-4 md:mb-0">
+                                    A mostrar {indexOfFirstCliente + 1} a {Math.min(indexOfLastCliente, clientesFiltrados.length)} de {clientesFiltrados.length} clientes
+                                </span>
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={() => setClientesCurrentPage(p => Math.max(1, p - 1))} 
+                                        disabled={clientesCurrentPage === 1}
+                                        className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors font-medium text-sm"
+                                    >
+                                        Anterior
+                                    </button>
+                                    <span className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg font-bold text-sm border border-blue-200 dark:border-blue-800/50">
+                                        {clientesCurrentPage} / {totalPagesClientes}
+                                    </span>
+                                    <button 
+                                        onClick={() => setClientesCurrentPage(p => Math.min(totalPagesClientes, p + 1))} 
+                                        disabled={clientesCurrentPage === totalPagesClientes}
+                                        className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors font-medium text-sm"
+                                    >
+                                        Próxima
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
-
+                
                 {/* ECRÃ 4: PROCESSAR RELATÓRIOS */}
                 {currentView === 'processar' && hasAccess('processar') && (
                     <div className="max-w-full mx-auto animate-in fade-in duration-500 pb-20">
@@ -2215,8 +2272,18 @@ export default function App() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
                                 <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">CPF / CNPJ</label>
-                                <input type="text" value={nfeForm.cnpj} onChange={e => setNfeForm({...nfeForm, cnpj: e.target.value})}
-                                    placeholder="Apenas números"
+                                <input type="text" value={nfeForm.cnpj} onChange={e => {
+                                        let val = e.target.value.replace(/\D/g, '');
+                                        if (val.length > 14) val = val.slice(0, 14);
+                                        if (val.length > 11) {
+                                            val = val.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+                                        } else if (val.length > 9) {
+                                            val = val.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+                                        }
+                                        setNfeForm({...nfeForm, cnpj: val});
+                                    }}
+                                    placeholder="CPF ou CNPJ"
+                                    maxLength="18"
                                     className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500"/>
                             </div>
                             <div className="md:col-span-2">
@@ -2240,11 +2307,14 @@ export default function App() {
                                     <input type="text" value={nfeForm.cep}
                                         onBlur={e => buscarCep(e.target.value)}
                                         onChange={e => { 
-                                            const val = e.target.value; 
+                                            let val = e.target.value.replace(/\D/g, ''); 
+                                            if (val.length > 8) val = val.slice(0, 8);
+                                            if (val.length > 5) val = val.replace(/^(\d{5})(\d)/, "$1-$2");
                                             setNfeForm({...nfeForm, cep: val}); 
                                             if(val.replace(/\D/g, '').length === 8) buscarCep(val); 
                                         }}
                                         placeholder="00000-000"
+                                        maxLength="9"
                                         className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500"/>
                                 </div>
                                 <div className="md:col-span-3">
@@ -2746,11 +2816,73 @@ export default function App() {
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Telefone</label>
-                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.telefone} onChange={e => setClienteForm({...clienteForm, telefone: e.target.value})} />
+                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" 
+                                            value={clienteForm.telefone || ''} 
+                                            maxLength="14"
+                                            onChange={e => {
+                                                let val = e.target.value.replace(/\D/g, '');
+                                                if (val.length > 10) val = val.slice(0, 10);
+                                                if (val.length > 6) val = val.replace(/^(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3");
+                                                else if (val.length > 2) val = val.replace(/^(\d{2})(\d{0,4})/, "($1) $2");
+                                                setClienteForm({...clienteForm, telefone: val})
+                                            }} 
+                                            placeholder="(00) 0000-0000"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Celular</label>
+                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" 
+                                            value={clienteForm.celular || ''} 
+                                            maxLength="15"
+                                            onChange={e => {
+                                                let val = e.target.value.replace(/\D/g, '');
+                                                if (val.length > 11) val = val.slice(0, 11);
+                                                if (val.length > 7) val = val.replace(/^(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3");
+                                                else if (val.length > 2) val = val.replace(/^(\d{2})(\d{0,5})/, "($1) $2");
+                                                setClienteForm({...clienteForm, celular: val})
+                                            }} 
+                                            placeholder="(00) 00000-0000"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">CEP</label>
+                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" 
+                                            value={clienteForm.cep || ''} 
+                                            maxLength="9"
+                                            onBlur={e => { if (e.target.value.replace(/\D/g, '').length === 8) buscarCepCliente(e.target.value); }}
+                                            onChange={e => {
+                                                let val = e.target.value.replace(/\D/g, '');
+                                                if (val.length > 8) val = val.slice(0, 8);
+                                                if (val.length > 5) val = val.replace(/^(\d{5})(\d)/, "$1-$2");
+                                                setClienteForm({...clienteForm, cep: val});
+                                                if(val.replace(/\D/g, '').length === 8) buscarCepCliente(val);
+                                            }} 
+                                            placeholder="00000-000"
+                                        />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Logradouro</label>
+                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.logradouro || ''} onChange={e => setClienteForm({...clienteForm, logradouro: e.target.value})} placeholder="Rua, Av..." />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Número</label>
+                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.numero || ''} onChange={e => setClienteForm({...clienteForm, numero: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Bairro</label>
+                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.bairro || ''} onChange={e => setClienteForm({...clienteForm, bairro: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Cidade</label>
+                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.cidade || ''} onChange={e => setClienteForm({...clienteForm, cidade: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">UF</label>
+                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.uf || ''} onChange={e => setClienteForm({...clienteForm, uf: e.target.value})} maxLength="2" />
                                     </div>
                                     <div className="md:col-span-2">
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">E-mail</label>
-                                        <input type="email" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.email} onChange={e => setClienteForm({...clienteForm, email: e.target.value})} />
+                                        <input type="email" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.email || ''} onChange={e => setClienteForm({...clienteForm, email: e.target.value})} />
                                     </div>
                                 </div>
                                 <div className="flex justify-end pt-4 mt-6 border-t border-slate-200 dark:border-slate-700 gap-3">
