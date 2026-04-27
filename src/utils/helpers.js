@@ -11,6 +11,7 @@ export const SYSTEM_MODULES = [
     { id: 'settings', label: 'Configurações do Sistema e Backups' }
 ];
 
+export const EMPRESAS_INTERNAS = ["Protetta"];
 export const CATEGORIAS = ["Operadoras", "Seguradoras"];
 export const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 

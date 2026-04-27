@@ -11,58 +11,23 @@ const SidebarItem = ({ icon: Icon, label, active, onClick }) => (
     </button>
 );
 
-export default function Sidebar({ currentUser, currentView, setCurrentView, hasAccess, isDarkMode, setIsDarkMode, handleLogout, empresas, currentEmpresa, setCurrentEmpresa, setEmpresas, showPrompt }) {
+export default function Sidebar({ currentUser, currentView, setCurrentView, hasAccess, isDarkMode, setIsDarkMode, handleLogout }) {
     return (
         <aside className="w-64 bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex flex-col p-4 hidden md:flex shrink-0 transition-colors duration-200 z-10 relative">
-            <div className="flex flex-col space-y-4 mb-4 mt-2">
-                <div className="flex items-center space-x-2 px-2">
-                    <div className="bg-emerald-600 p-2 rounded-lg font-bold text-white leading-none border border-emerald-400/50">D</div>
-                    <div>
-                        <h1 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">Don Gestão</h1>
-                        <p className="text-xs text-slate-500 flex items-center mt-0.5">
-                            <User size={12} className="mr-1"/> {currentUser?.username}
-                        </p>
-                    </div>
-                </div>
-                
-                <div className="px-2">
-                    <select 
-                        value={currentEmpresa}
-                        onChange={(e) => {
-                            if (e.target.value === 'ADD_NEW') {
-                                showPrompt(
-                                    'Nova Empresa', 
-                                    'Digite o nome da nova empresa:', 
-                                    'Ex: Empresa XYZ', 
-                                    (newCompany) => {
-                                        if (newCompany && newCompany.trim()) {
-                                            const nome = newCompany.trim();
-                                            if (!empresas.includes(nome)) {
-                                                const novasEmpresas = [...empresas, nome];
-                                                setEmpresas(novasEmpresas);
-                                                localStorage.setItem('sys_empresas', JSON.stringify(novasEmpresas));
-                                            }
-                                            setCurrentEmpresa(nome);
-                                        }
-                                    }
-                                );
-                            } else {
-                                setCurrentEmpresa(e.target.value);
-                            }
-                        }}
-                        className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-blue-500 transition-colors cursor-pointer"
-                    >
-                        {empresas?.map(emp => (
-                            <option key={emp} value={emp}>{emp}</option>
-                        ))}
-                        <option value="ADD_NEW" className="font-bold text-blue-600 dark:text-blue-400">+ Adicionar Empresa</option>
-                    </select>
+            <div className="flex items-center space-x-2 px-2 mb-8 mt-2">
+                <div className="bg-emerald-600 p-2 rounded-lg font-bold text-white leading-none border border-emerald-400/50">D</div>
+                <div>
+                    <h1 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">Don Gestão</h1>
+                    <p className="text-xs text-slate-500 flex items-center mt-0.5">
+                        <User size={12} className="mr-1"/> {currentUser?.username}
+                    </p>
                 </div>
             </div>
             
             <nav className="flex-1 space-y-1 overflow-y-auto pr-2">
                 <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase px-4 pt-2 mb-2">Principal</p>
-                {hasAccess('dashboard') && <SidebarItem icon={Home} label="Painel" active={currentView === 'dashboard'} onClick={() => setCurrentView('dashboard')} />}
+                {hasAccess('dashboard') && <SidebarItem icon={Layers} label="Painel" active={currentView === 'painel'} onClick={() => setCurrentView('painel')} />}
+                {hasAccess('dashboard') && <SidebarItem icon={Home} label="Dashboard" active={currentView === 'dashboard'} onClick={() => setCurrentView('dashboard')} />}
                 {hasAccess('vendas') && <SidebarItem icon={ShoppingCart} label="Vendas de Serviços" active={currentView === 'vendas'} onClick={() => setCurrentView('vendas')} />}
                 {hasAccess('clientes') && <SidebarItem icon={Users} label="Clientes" active={currentView === 'clientes'} onClick={() => setCurrentView('clientes')} />}
                 {hasAccess('processar') && <SidebarItem icon={FileCheck} label="Relatórios de Comissão" active={currentView === 'processar'} onClick={() => setCurrentView('processar')} />}

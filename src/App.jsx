@@ -5,7 +5,7 @@ import ptBR from 'date-fns/locale/pt-BR';
 registerLocale('pt-BR', ptBR);
 import { supabase } from './config/supabase';
 import { 
-    SYSTEM_MODULES, CATEGORIAS, MESES, 
+    SYSTEM_MODULES, EMPRESAS_INTERNAS, CATEGORIAS, MESES, 
     dataDeHojeInterna, formatarMoeda, formatarDataVisivel, calcularParcelaDaVigencia,
     validarCpfCnpj
 } from './utils/helpers';
@@ -50,23 +50,6 @@ export const getNextSequenceNumber = (list, fieldSelector) => {
 };
 
 export default function App() {
-    const [empresas, setEmpresas] = useState(() => {
-        const saved = localStorage.getItem('sys_empresas');
-        return saved ? JSON.parse(saved) : ['Proper'];
-    });
-    const [currentEmpresa, setCurrentEmpresa] = useState(() => {
-        const saved = localStorage.getItem('sys_current_empresa');
-        return saved ? saved : 'Proper';
-    });
-
-    useEffect(() => {
-        localStorage.setItem('sys_empresas', JSON.stringify(empresas));
-    }, [empresas]);
-
-    useEffect(() => {
-        localStorage.setItem('sys_current_empresa', currentEmpresa);
-    }, [currentEmpresa]);
-
     const [isDarkMode, setIsDarkMode] = useState(() => {
         const saved = localStorage.getItem('protetta_theme'); return saved ? saved === 'dark' : true; 
     });
@@ -81,7 +64,6 @@ export default function App() {
 
     const [alertDialog, setAlertDialog] = useState({ isOpen: false, message: '' });
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null });
-    const [promptDialog, setPromptDialog] = useState({ isOpen: false, title: '', message: '', placeholder: '', onConfirm: null, value: '' });
     const [currentView, setCurrentView] = useState('dashboard'); 
     const [loading, setLoading] = useState(false);
     const [loadingMsg, setLoadingMsg] = useState('');
@@ -89,6 +71,7 @@ export default function App() {
     const [dbReports, setDbReports] = useState([]);
     const [currentPath, setCurrentPath] = useState([]); 
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedFile, setSelectedFile] = useState(null);
 
     const [clientes, setClientes] = useState([]);
     const [filtroNomeCliente, setFiltroNomeCliente] = useState('');
@@ -135,10 +118,10 @@ export default function App() {
     const [showFilterClienteSuggestions, setShowFilterClienteSuggestions] = useState(false);
     const [modalVendaOpen, setModalVendaOpen] = useState(false);
     const [vendaForm, setVendaForm] = useState({ 
-        id: null, numero: '', cliente: '', dataVenda: dataDeHojeInterna(), situacao: `FATURADO ${currentEmpresa?.toUpperCase()} NF`, 
-        loja: `${currentEmpresa?.toUpperCase()} SEGUROS`, valor: 0, contrato: '', codigoOperadora: '', vidas: '', 
-        parcela: '', inicioVigencia: '', notaFiscal: '', corretor: currentEmpresa,
-        vitalicio: 'Não', assessoria: currentEmpresa, formaPagamento: 'Crédito em conta',
+        id: null, numero: '', cliente: '', dataVenda: dataDeHojeInterna(), situacao: 'FATURADO PROTETTA NF', 
+        loja: 'PROTETTA SEGUROS', valor: 0, contrato: '', codigoOperadora: '', vidas: '', 
+        parcela: '', inicioVigencia: '', notaFiscal: '', corretor: 'Protetta',
+        vitalicio: 'Não', assessoria: 'Protetta', formaPagamento: 'Crédito em conta',
         servico: 'Plano de Saúde', desconto: '', notas: '', comissao: 0, comissaoPorcentagem: ''
     });
 
@@ -203,14 +186,13 @@ export default function App() {
         pis: '', cofins: '', inss: '', ir: '', csll: ''
     });
 
-    const [formData, setFormData] = useState({ ano: new Date().getFullYear().toString(), mes: MESES[0], categoria: CATEGORIAS[0], empresa: currentEmpresa || 'Proper', parceiro: '', arquivos: [] });
+    const [formData, setFormData] = useState({ ano: new Date().getFullYear().toString(), mes: MESES[0], categoria: CATEGORIAS[0], empresa: EMPRESAS_INTERNAS[0], parceiro: '', arquivos: [] });
     const [formError, setFormError] = useState(''); 
     const [successMsg, setSuccessMsg] = useState(''); 
     const fileInputRef = useRef(null);
 
     const showAlert = (msg) => setAlertDialog({ isOpen: true, message: msg });
     const showConfirm = (msg, callback) => setConfirmDialog({ isOpen: true, message: msg, onConfirm: callback });
-    const showPrompt = (title, message, placeholder, callback) => setPromptDialog({ isOpen: true, title, message, placeholder, onConfirm: callback, value: '' });
 
     const hasAccess = (module) => {
         if (!currentUser) return false;
@@ -408,7 +390,7 @@ export default function App() {
                         situacao: dado.situacao, loja: dado.loja, valor: dado.valorTotal, parcela: dado.parcela || '', 
                         corretor: dado.vendedor || '', inicioVigencia: dado.inicioVigencia || '', notaFiscal: dado.notaFiscal || '',
                         contrato: dado.contrato || '', codigoOperadora: dado.codigoOperadora || 'AMIL', vidas: dado.vidas || '', 
-                        vitalicio: dado.vitalicio || 'Não', assessoria: dado.assessoria || currentEmpresa, formaPagamento: dado.formaPagamento || 'Crédito em conta',
+                        vitalicio: dado.vitalicio || 'Não', assessoria: dado.assessoria || 'Protetta', formaPagamento: dado.formaPagamento || 'Crédito em conta',
                         servico: dado.servico || 'Plano de Saúde', desconto: dado.desconto || '' 
                     });
                 });
@@ -509,9 +491,9 @@ export default function App() {
     const abrirModalVenda = (venda = null) => {
         if (venda) setVendaForm({ ...venda });
         else setVendaForm({ 
-            id: null, numero: getNextSequenceNumber(vendasList, v => v.numero), cliente: '', dataVenda: dataDeHojeInterna(), situacao: `FATURADO ${currentEmpresa?.toUpperCase()} NF`, 
-            loja: `${currentEmpresa?.toUpperCase()} SEGUROS`, valor: 0, contrato: '', codigoOperadora: '', vidas: '', parcela: '', inicioVigencia: '', notaFiscal: '', 
-            corretor: currentEmpresa, vitalicio: 'Não', assessoria: currentEmpresa, formaPagamento: 'Crédito em conta',
+            id: null, numero: getNextSequenceNumber(vendasList, v => v.numero), cliente: '', dataVenda: dataDeHojeInterna(), situacao: 'FATURADO PROTETTA NF', 
+            loja: 'PROTETTA SEGUROS', valor: 0, contrato: '', codigoOperadora: '', vidas: '', parcela: '', inicioVigencia: '', notaFiscal: '', 
+            corretor: 'Protetta', vitalicio: 'Não', assessoria: 'Protetta', formaPagamento: 'Crédito em conta',
             servico: 'Plano de Saúde', desconto: '', notas: '' 
         });
         setModalVendaOpen(true);
@@ -687,7 +669,7 @@ export default function App() {
         if (currentPath.length === 0) return [...new Set(dbReports.map(r => r.ano))].sort().map(y => ({ id: y, name: y, type: 'folder' }));
         if (currentPath.length === 1) return [...new Set(dbReports.filter(r => r.ano === currentPath[0]).map(r => r.mes))].sort((a, b) => MESES.indexOf(a) - MESES.indexOf(b)).map(m => ({ id: m, name: m, type: 'folder' }));
         if (currentPath.length === 2) return CATEGORIAS.map(c => ({ id: c, name: c, type: 'folder' }));
-        if (currentPath.length === 3) return empresas.map(e => ({ id: e, name: e, type: 'folder' }));
+        if (currentPath.length === 3) return EMPRESAS_INTERNAS.map(e => ({ id: e, name: e, type: 'folder' }));
         if (currentPath.length === 4) return dbReports.filter(r => r.ano === currentPath[0] && r.mes === currentPath[1] && r.categoria === currentPath[2] && r.empresa === currentPath[3]).map(f => ({ ...f, type: 'file', name: f.parceiro }));
         return [];
     };
@@ -709,18 +691,13 @@ export default function App() {
     const handleNavigate = async (item) => {
         if (item.type === 'folder') { setCurrentPath([...currentPath, item.name]); setSearchTerm(''); } 
         else if (item.type === 'file') {
-            setLoading(true); setLoadingMsg("A preparar ficheiro...");
+            setLoading(true); setLoadingMsg("Descarregando ficheiro...");
             try { 
                 const pathTarget = item.filePath || item.fileName;
                 if (!pathTarget) throw new Error("Caminho do ficheiro ausente. O registo pode ser de uma versão mais antiga.");
-                const { data, error } = await supabase.storage.from('arquivos_extratos').createSignedUrl(pathTarget, 300);
-                if(error) throw error; 
-                if (data?.signedUrl) {
-                    window.open(data.signedUrl, '_blank');
-                } else {
-                    throw new Error("Não foi possível gerar a hiperligação.");
-                }
-            } catch(e) { showAlert("Erro ao aceder à Cloud: " + e.message); } finally { setLoading(false); }
+                const { data, error } = await supabase.storage.from('arquivos_extratos').download(pathTarget);
+                if(error) throw error; setSelectedFile({ ...item, fileObj: data }); 
+            } catch(e) { showAlert("Erro ao descarregar da Cloud: " + e.message); } finally { setLoading(false); }
         }
     };
 
@@ -934,7 +911,7 @@ export default function App() {
                         inicioVigenciaDetectada = `${partes[2]}-${partes[1]}-${partes[0]}`; 
                     }
 
-                    let vendedorDetectado = currentEmpresa; 
+                    let vendedorDetectado = "Protetta"; 
                     let parcelaDetectada = "1";
                     let numeroEsperado = null;
                     const historicoVendasCliente = vendasList.filter(v => 
@@ -973,8 +950,8 @@ export default function App() {
                         vidas: vidasDetectadas,
                         cliente: nomeCliente, 
                         data: dataDeHojeInterna(), 
-                        situacao: `FATURADO ${currentEmpresa?.toUpperCase()} NF`, 
-                        loja: currentEmpresa?.toUpperCase(), 
+                        situacao: "FATURADO PROTETTA NF", 
+                        loja: "PROTETTA", 
                         valorTotal, 
                         comissao, 
                         vendedor: vendedorDetectado, 
@@ -982,7 +959,7 @@ export default function App() {
                         inicioVigencia: inicioVigenciaDetectada, 
                         notaFiscal: '', 
                         vitalicio: 'Não', 
-                        assessoria: currentEmpresa, 
+                        assessoria: 'Protetta', 
                         formaPagamento: 'Crédito em conta',
                         servico: 'Plano de Saúde', 
                         desconto: '', 
@@ -1081,9 +1058,9 @@ export default function App() {
 
         const novaLinha = { 
             cod: String(maxCod).padStart(5, '0'), contrato: '', codigoOperadora: 'AMIL', vidas: '1',
-            cliente: 'Novo Cliente', data: '', situacao: `FATURADO ${currentEmpresa?.toUpperCase()} NF`, loja: currentEmpresa?.toUpperCase(), 
-            valorTotal: 0, comissao: 0, vendedor: currentEmpresa, parcela: '1', inicioVigencia: '', notaFiscal: '',
-            vitalicio: 'Não', assessoria: currentEmpresa, formaPagamento: 'Crédito em conta',
+            cliente: 'Novo Cliente', data: '', situacao: 'FATURADO PROTETTA NF', loja: 'PROTETTA', 
+            valorTotal: 0, comissao: 0, vendedor: 'Protetta', parcela: '1', inicioVigencia: '', notaFiscal: '',
+            vitalicio: 'Não', assessoria: 'Protetta', formaPagamento: 'Crédito em conta',
             servico: 'Plano de Saúde', desconto: '', selected: true 
         };
         const newData = [...pdfData, novaLinha]; setPdfData(newData); setEditRowIndex(newData.length - 1); setEditRowData(novaLinha);
@@ -1399,28 +1376,6 @@ export default function App() {
                 </div>
             )}
 
-            {promptDialog.isOpen && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4 border border-slate-200 dark:border-slate-700">
-                        <h3 className="text-lg font-bold mb-3 text-slate-900 dark:text-white flex items-center"><Edit className="mr-2 text-blue-500"/> {promptDialog.title}</h3>
-                        <p className="text-sm text-slate-700 dark:text-slate-300 mb-4">{promptDialog.message}</p>
-                        <input 
-                            type="text" 
-                            value={promptDialog.value} 
-                            onChange={e => setPromptDialog({...promptDialog, value: e.target.value})}
-                            placeholder={promptDialog.placeholder}
-                            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500 mb-6"
-                            autoFocus
-                            onKeyDown={e => { if (e.key === 'Enter' && promptDialog.value.trim()) { promptDialog.onConfirm(promptDialog.value); setPromptDialog({ isOpen: false, title: '', message: '', placeholder: '', onConfirm: null, value: '' }); } }}
-                        />
-                        <div className="flex justify-end gap-3">
-                            <button onClick={() => setPromptDialog({ isOpen: false, title: '', message: '', placeholder: '', onConfirm: null, value: '' })} className="bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white px-4 py-2 rounded-lg font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">Cancelar</button>
-                            <button onClick={() => { if(promptDialog.onConfirm && promptDialog.value.trim()) promptDialog.onConfirm(promptDialog.value); setPromptDialog({ isOpen: false, title: '', message: '', placeholder: '', onConfirm: null, value: '' }); }} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-bold transition-colors shadow-lg" disabled={!promptDialog.value.trim()}>Confirmar</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {loading && (
                 <div className="fixed inset-0 z-[60] bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center">
                     <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -1436,11 +1391,6 @@ export default function App() {
                 isDarkMode={isDarkMode}
                 setIsDarkMode={setIsDarkMode}
                 handleLogout={handleLogout}
-                empresas={empresas}
-                currentEmpresa={currentEmpresa}
-                setCurrentEmpresa={setCurrentEmpresa}
-                setEmpresas={setEmpresas}
-                showPrompt={showPrompt}
             />
 
             <main className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900 p-4 md:p-8 relative transition-colors duration-200">
@@ -1528,7 +1478,7 @@ export default function App() {
                 
                 {/* NOVO DASHBOARD */}
                 {currentView === 'dashboard' && hasAccess('dashboard') && (
-                    <DashboardControle vendasList={vendasList} currentEmpresa={currentEmpresa} />
+                    <DashboardControle vendasList={vendasList} />
                 )}
 
                 {/* ECRÃ 12: PAINEL DE CONTROLE (ANTIGO DASHBOARD) */}
@@ -1653,8 +1603,8 @@ export default function App() {
                                             className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500"
                                         >
                                             <option value="Todos">Todos</option>
-                                            <option value={`${currentEmpresa?.toUpperCase()} SEGUROS`}>{currentEmpresa?.toUpperCase()} SEGUROS</option>
-                                            <option value={currentEmpresa?.toUpperCase()}>{currentEmpresa?.toUpperCase()}</option>
+                                            <option value="PROTETTA SEGUROS">PROTETTA SEGUROS</option>
+                                            <option value="PROTETTA">PROTETTA</option>
                                         </select>
                                     </div>
 
@@ -1701,7 +1651,7 @@ export default function App() {
                                             className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500"
                                         >
                                             <option value="Todos">Todos</option>
-                                            <option value={`FATURADO ${currentEmpresa?.toUpperCase()} NF`}>FATURADO {currentEmpresa?.toUpperCase()} NF</option>
+                                            <option value="FATURADO PROTETTA NF">FATURADO PROTETTA NF</option>
                                             <option value="PENDENTE">PENDENTE</option>
                                             <option value="CANCELADO">CANCELADO</option>
                                         </select>
@@ -1805,7 +1755,7 @@ export default function App() {
                                             className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500"
                                         >
                                             <option value="Todos">Todos</option>
-                                            <option value={currentEmpresa}>{currentEmpresa}</option>
+                                            <option value="Protetta">Protetta</option>
                                             <option value="Proper">Proper</option>
                                             <option value="Assessoria">Assessoria</option>
                                             <option value="Corretor Interno">Corretor Interno</option>
@@ -2220,8 +2170,8 @@ export default function App() {
                                                     </td>}
                                                     {reportTableCols.desconto && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.desconto || ''} onChange={e=>setEditRowData({...editRowData, desconto: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-amber-500 w-12 text-center" placeholder="R$ ou %" /></td>}
                                                     {reportTableCols.corretor && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                                        <select value={editRowData.vendedor || currentEmpresa} onChange={e=>setEditRowData({...editRowData, vendedor: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 min-w-[80px]">
-                                                            <option>{currentEmpresa}</option><option>Assessoria</option><option>Corretor Interno</option>
+                                                        <select value={editRowData.vendedor || 'Protetta'} onChange={e=>setEditRowData({...editRowData, vendedor: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 min-w-[80px]">
+                                                            <option>Protetta</option><option>Proper</option><option>Assessoria</option><option>Corretor Interno</option>
                                                         </select>
                                                     </td>}
                                                     {reportTableCols.parc && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.parcela} onChange={e=>setEditRowData({...editRowData, parcela: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 text-center w-8" placeholder="1"/></td>}
@@ -2264,7 +2214,7 @@ export default function App() {
                                                     {reportTableCols.loja && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center text-slate-500 dark:text-slate-400 text-xs">{linha.loja}</td>}
                                                     {reportTableCols.servico && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[11px]">{linha.servico || 'Plano de Saúde'}</td>}
                                                     {reportTableCols.desconto && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-rose-500 dark:text-rose-400 text-[11px]">{linha.desconto || '-'}</td>}
-                                                    {reportTableCols.corretor && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-indigo-600 dark:text-indigo-400 text-xs">{linha.vendedor || currentEmpresa}</td>}
+                                                    {reportTableCols.corretor && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-indigo-600 dark:text-indigo-400 text-xs">{linha.vendedor || 'Protetta'}</td>}
                                                     {reportTableCols.parc && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-slate-700 dark:text-slate-300 text-xs">{linha.parcela || '-'}</td>}
                                                     {reportTableCols.inicioVig && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[10px]">{linha.inicioVigencia ? formatarDataVisivel(linha.inicioVigencia) : '--/--/----'}</td>}
                                                     {reportTableCols.nfe && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-rose-600 dark:text-rose-400 text-[11px]">{linha.notaFiscal || '-'}</td>}
@@ -2785,7 +2735,7 @@ export default function App() {
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Ano</label><input type="number" value={formData.ano} onChange={(e) => setFormData({...formData, ano: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500" /></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mês</label><select value={formData.mes} onChange={(e) => setFormData({...formData, mes: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{MESES.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Categoria</label><select value={formData.categoria} onChange={(e) => setFormData({...formData, categoria: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label><select disabled value={formData.empresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-500 dark:text-slate-400 outline-none cursor-not-allowed">{empresas.map(e => <option key={e} value={e}>{e}</option>)}</select></div>
+                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label><select disabled value={formData.empresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-500 dark:text-slate-400 outline-none cursor-not-allowed">{EMPRESAS_INTERNAS.map(e => <option key={e} value={e}>{e}</option>)}</select></div>
                             </div>
                             <div className="space-y-2 pt-4 border-t border-slate-200 dark:border-slate-700">
                                 <label className="text-sm font-bold text-blue-600 dark:text-blue-400">NOME DO PARCEIRO / ARQUIVO</label>
@@ -3304,6 +3254,22 @@ export default function App() {
                 )}
 
                 {/* Modais Globais Simplificados (Exemplo) */}
+                {selectedFile && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-sm relative mx-4 transition-colors">
+                            <button onClick={() => setSelectedFile(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white"><X size={20} /></button>
+                            <div className="text-center mb-6">
+                                <div className="mx-auto w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mb-4 text-blue-500 dark:text-blue-400"><FileText size={32} /></div>
+                                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1 truncate px-2">{selectedFile.fileName}</h3>
+                                <p className="text-sm text-slate-500 dark:text-slate-400">Extrato Associado</p>
+                            </div>
+                            <div className="space-y-3">
+                                <button onClick={() => { const url = URL.createObjectURL(selectedFile.fileObj); window.open(url, '_blank'); setTimeout(()=>URL.revokeObjectURL(url), 1000); setSelectedFile(null); }} className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold flex items-center justify-center space-x-2"><Eye size={20} /><span>Visualizar PDF/Excel</span></button>
+                                <button onClick={() => { const url = URL.createObjectURL(selectedFile.fileObj); const a = document.createElement('a'); a.href = url; a.download = selectedFile.fileName; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(()=>URL.revokeObjectURL(url), 1000); setSelectedFile(null); }} className="w-full bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-white py-3 rounded-lg font-bold flex items-center justify-center space-x-2 transition-colors"><Download size={20} /><span>Baixar para o PC</span></button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </main>
         </div>
     );
