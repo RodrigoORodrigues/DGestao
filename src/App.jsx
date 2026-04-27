@@ -10,6 +10,7 @@ import {
     validarCpfCnpj
 } from './utils/helpers';
 import Sidebar from './components/Sidebar';
+import DashboardControle from './components/DashboardControle';
 
 // Ícones importados diretamente do pacote npm que instalámos
 import { 
@@ -1353,7 +1354,7 @@ export default function App() {
             
             {/* ALERTS E LOADING */}
             {alertDialog.isOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4 border border-slate-200 dark:border-slate-700">
                         <h3 className="text-lg font-bold mb-3 text-slate-900 dark:text-white flex items-center"><AlertCircle className="mr-2 text-blue-500"/> Aviso do Sistema</h3>
                         <p className="text-sm text-slate-700 dark:text-slate-300 mb-6 whitespace-pre-wrap">{alertDialog.message}</p>
@@ -1363,7 +1364,7 @@ export default function App() {
             )}
 
             {confirmDialog.isOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4 border border-slate-200 dark:border-slate-700">
                         <h3 className="text-lg font-bold mb-3 text-slate-900 dark:text-white flex items-center"><AlertCircle className="mr-2 text-amber-500"/> Confirmação Necessária</h3>
                         <p className="text-sm text-slate-700 dark:text-slate-300 mb-6 whitespace-pre-wrap">{confirmDialog.message}</p>
@@ -1475,8 +1476,13 @@ export default function App() {
                     </div>
                 )}
                 
-                {/* ECRÃ 1: DASHBOARD */}
+                {/* NOVO DASHBOARD */}
                 {currentView === 'dashboard' && hasAccess('dashboard') && (
+                    <DashboardControle vendasList={vendasList} />
+                )}
+
+                {/* ECRÃ 12: PAINEL DE CONTROLE (ANTIGO DASHBOARD) */}
+                {currentView === 'painel' && hasAccess('dashboard') && (
                     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
                         <header><h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Visão Geral</h2></header>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
