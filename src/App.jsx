@@ -31,6 +31,18 @@ const printColLabels = {
 };
 const defaultPrintCols = Object.keys(printColLabels).reduce((acc, key) => ({ ...acc, [key]: true }), {});
 
+export const getNextSequenceNumber = (list, fieldSelector) => {
+    if (!list || list.length === 0) return '00001';
+    let maxNum = 0;
+    list.forEach(item => {
+        const val = parseInt(fieldSelector(item), 10);
+        if (!isNaN(val) && val > maxNum) {
+            maxNum = val;
+        }
+    });
+    return String(maxNum + 1).padStart(5, '0');
+};
+
 export default function App() {
     const [isDarkMode, setIsDarkMode] = useState(() => {
         const saved = localStorage.getItem('protetta_theme'); return saved ? saved === 'dark' : true; 
@@ -449,7 +461,7 @@ export default function App() {
     const abrirModalVenda = (venda = null) => {
         if (venda) setVendaForm({ ...venda });
         else setVendaForm({ 
-            id: null, numero: Math.floor(10000 + Math.random() * 90000).toString(), cliente: '', dataVenda: dataDeHojeInterna(), situacao: 'FATURADO PROTETTA NF', 
+            id: null, numero: getNextSequenceNumber(vendasList, v => v.numero), cliente: '', dataVenda: dataDeHojeInterna(), situacao: 'FATURADO PROTETTA NF', 
             loja: 'PROTETTA SEGUROS', valor: 0, contrato: '', codigoOperadora: '', vidas: '', parcela: '', inicioVigencia: '', notaFiscal: '', 
             corretor: 'Protetta', vitalicio: 'Não', assessoria: 'Protetta', formaPagamento: 'Crédito em conta',
             servico: 'Plano de Saúde', desconto: '', notas: '' 
@@ -461,7 +473,7 @@ export default function App() {
         const copia = {
             ...venda,
             id: null,
-            numero: Math.floor(10000 + Math.random() * 90000).toString(),
+            numero: getNextSequenceNumber(vendasList, v => v.numero),
             isFromReport: false,
             reportId: null,
             reportRowIndex: null,
@@ -623,7 +635,7 @@ export default function App() {
             } else {
                 const duplicado = clientes.find(c => c.nome.toLowerCase() === clienteParaSalvar.nome.toLowerCase());
                 if (duplicado) { setLoading(false); return showAlert("Não é possível salvar. Já existe um cliente com este nome na base."); }
-                clienteParaSalvar.codigo = Math.floor(10000 + Math.random() * 90000).toString(); clienteParaSalvar.cadastradoEm = dataDeHojeInterna(); delete clienteParaSalvar.id;
+                clienteParaSalvar.codigo = getNextSequenceNumber(clientes, c => c.codigo); clienteParaSalvar.cadastradoEm = dataDeHojeInterna(); delete clienteParaSalvar.id;
                 await supabase.from('clientes').insert([clienteParaSalvar]);
             }
             await loadFromDB(); setModalClienteOpen(false);
@@ -635,12 +647,18 @@ export default function App() {
         setLoading(true); setLoadingMsg("Lendo ficheiro e guardando na nuvem..."); const ext = file.name.split('.').pop().toLowerCase();
         try {
             let novosClientesParaInserir = [];
+            let currentMaxCodigo = clientes.reduce((max, c) => {
+                let v = parseInt(c.codigo, 10);
+                return !isNaN(v) && v > max ? v : max;
+            }, 0);
             if (ext === 'xlsx' || ext === 'csv') {
                 const data = await file.arrayBuffer(); const workbook = XLSX.read(data); const linhasExcel = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
                 linhasExcel.forEach(linha => {
                     let nome = linha['Nome'] || linha['NOME'] || linha['Cliente'] || "Sem Nome"; nome = nome.trim();
                     if(!clientes.find(c => c.nome.toLowerCase() === nome.toLowerCase()) && !novosClientesParaInserir.find(c => c.nome.toLowerCase() === nome.toLowerCase())) {
-                        novosClientesParaInserir.push({ codigo: Math.floor(10000 + Math.random() * 90000).toString(), nome: nome, tipo: linha['Tipo'] || 'Pessoa jurídica', documento: linha['Documento'] || linha['CNPJ'] || linha['NIF'] || '', telefone: linha['Telefone'] || '', celular: linha['Celular'] || '', email: linha['Email'] || linha['E-mail'] || '', situacao: true, cadastradoEm: dataDeHojeInterna() });
+                        currentMaxCodigo++;
+                        let newCodigo = String(currentMaxCodigo).padStart(5, '0');
+                        novosClientesParaInserir.push({ codigo: newCodigo, nome: nome, tipo: linha['Tipo'] || 'Pessoa jurídica', documento: linha['Documento'] || linha['CNPJ'] || linha['NIF'] || '', telefone: linha['Telefone'] || '', celular: linha['Celular'] || '', email: linha['Email'] || linha['E-mail'] || '', situacao: true, cadastradoEm: dataDeHojeInterna() });
                     }
                 });
             }
@@ -677,6 +695,16 @@ export default function App() {
         const clientesParaInserir = []; 
         const nomesClientesExistem = new Set(clientes.map(c => c.nome.toLowerCase()));
         let alertasSequencia = [];
+        
+        let currentMaxVendaCodigo = vendasList.reduce((max, v) => {
+            let num = parseInt(v.numero, 10);
+            return !isNaN(num) && num > max ? num : max;
+        }, 0);
+
+        let currentMaxCodigo = clientes.reduce((max, c) => {
+            let v = parseInt(c.codigo, 10);
+            return !isNaN(v) && v > max ? v : max;
+        }, 0);
 
         for (let bloco of blocosContrato) {
             try {
@@ -693,13 +721,16 @@ export default function App() {
                 }
                 if(!nomeCliente) continue;
 
-                let codRegistro = Math.floor(100000 + Math.random() * 900000).toString(); 
+                currentMaxVendaCodigo++;
+                let codRegistro = String(currentMaxVendaCodigo).padStart(5, '0');
                 let contratoDetectado = codCliente !== "N/D" ? codCliente : "";
 
                 if(!nomesClientesExistem.has(nomeCliente.toLowerCase())) {
                     nomesClientesExistem.add(nomeCliente.toLowerCase());
+                    currentMaxCodigo++;
+                    let newCodigo = String(currentMaxCodigo).padStart(5, '0');
                     clientesParaInserir.push({ 
-                        codigo: contratoDetectado || codRegistro, 
+                        codigo: contratoDetectado || newCodigo, 
                         nome: nomeCliente, 
                         tipo: 'Pessoa jurídica', 
                         documento: contratoDetectado, 
@@ -878,8 +909,18 @@ export default function App() {
         showConfirm("Deseja apagar esta linha do relatório?", () => { setPdfData(prev => prev.filter((_, i) => i !== idx)); if (editRowIndex === idx) setEditRowIndex(-1); else if (editRowIndex > idx) setEditRowIndex(editRowIndex - 1); });
     };
     const addManualRow = () => {
+        let currentMaxVendaCodigo = vendasList.reduce((max, v) => {
+            let num = parseInt(v.numero, 10);
+            return !isNaN(num) && num > max ? num : max;
+        }, 0);
+        let currentPdfMax = pdfData.reduce((max, v) => {
+            let num = parseInt(v.cod, 10);
+            return !isNaN(num) && num > max ? num : max;
+        }, 0);
+        let maxCod = Math.max(currentMaxVendaCodigo, currentPdfMax) + 1;
+
         const novaLinha = { 
-            cod: Math.floor(100000 + Math.random() * 900000).toString(), contrato: '', codigoOperadora: 'AMIL', vidas: '1',
+            cod: String(maxCod).padStart(5, '0'), contrato: '', codigoOperadora: 'AMIL', vidas: '1',
             cliente: 'Novo Cliente', data: '', situacao: 'FATURADO PROTETTA NF', loja: 'PROTETTA', 
             valorTotal: 0, comissao: 0, vendedor: 'Protetta', parcela: '1', inicioVigencia: '', notaFiscal: '',
             vitalicio: 'Não', assessoria: 'Protetta', formaPagamento: 'Crédito em conta',
@@ -1177,7 +1218,7 @@ export default function App() {
                 {/* ECRÃ 1: DASHBOARD */}
                 {currentView === 'dashboard' && hasAccess('dashboard') && (
                     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
-                        <header><h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Visão Geral</h2><p className="text-slate-500 dark:text-slate-400">Resumo do Ecossistema Don Gestão</p></header>
+                        <header><h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Visão Geral</h2></header>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg flex flex-col justify-between transition-colors duration-200">
                                 <div className="flex justify-between items-start mb-4">
@@ -2667,14 +2708,7 @@ export default function App() {
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Comissão (R$)</label>
                                         <input type="number" step="0.01" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.comissao} onChange={e => setVendaForm({...vendaForm, comissao: parseFloat(e.target.value) || 0})} placeholder="0.00" />
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Moeda</label>
-                                        <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.moeda} onChange={e => setVendaForm({...vendaForm, moeda: e.target.value})}>
-                                            <option value="EUR">EUR (€)</option>
-                                            <option value="BRL">BRL (R$)</option>
-                                            <option value="USD">USD ($)</option>
-                                        </select>
-                                    </div>
+
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Tipo de Pagamento</label>
                                         <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.formaPagamento} onChange={e => setVendaForm({...vendaForm, formaPagamento: e.target.value})}>
