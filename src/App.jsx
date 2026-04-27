@@ -80,6 +80,7 @@ export default function App() {
     const [modalBuscaOpen, setModalBuscaOpen] = useState(false);
     const [clienteEditIndex, setClienteEditIndex] = useState(-1);
     const [clienteForm, setClienteForm] = useState({ id: null, nome: '', tipo: 'Pessoa jurídica', documento: '', telefone: '', celular: '', email: '', situacao: true });
+    const [clientSaveSuccess, setClientSaveSuccess] = useState(false);
     
     const [modalArquivosOpen, setModalArquivosOpen] = useState(false);
     
@@ -701,7 +702,12 @@ export default function App() {
                 clienteParaSalvar.codigo = getNextSequenceNumber(clientes, c => c.codigo); clienteParaSalvar.cadastradoEm = dataDeHojeInterna(); delete clienteParaSalvar.id;
                 await supabase.from('clientes').insert([clienteParaSalvar]);
             }
-            await loadFromDB(); setModalClienteOpen(false);
+            await loadFromDB();
+            setClientSaveSuccess(true);
+            setTimeout(() => {
+                setClientSaveSuccess(false);
+                setModalClienteOpen(false);
+            }, 600);
         } catch (err) { showAlert("Erro ao guardar cliente: " + err.message); } finally { setLoading(false); }
     };
 
@@ -2749,7 +2755,9 @@ export default function App() {
                                 </div>
                                 <div className="flex justify-end pt-4 mt-6 border-t border-slate-200 dark:border-slate-700 gap-3">
                                     <button type="button" onClick={() => setModalClienteOpen(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white rounded-lg font-bold">Cancelar</button>
-                                    <button type="submit" className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold flex items-center shadow-lg"><Save size={18} className="mr-2"/> Guardar Cliente</button>
+                                    <button type="submit" className={`px-5 py-2 text-white rounded-lg font-bold flex items-center shadow-lg transition-all duration-300 ${clientSaveSuccess ? 'bg-emerald-500 animate-bounce' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
+                                        {clientSaveSuccess ? <CheckCircle size={18} className="mr-2"/> : <Save size={18} className="mr-2"/>} {clientSaveSuccess ? 'Guardado!' : 'Guardar Cliente'}
+                                    </button>
                                 </div>
                             </form>
                         </div>
