@@ -2,7 +2,7 @@ import React from 'react';
 // Importação direta e nativa dos ícones (muito mais rápida que a versão em HTML)
 import { 
     Home, ShoppingCart, Users, FileCheck, History, Receipt, 
-    Plus, FolderTree, Shield, Settings, User, Moon, Sun, LogOut 
+    Plus, FolderTree, Shield, Settings, User, Moon, Sun, LogOut, Layers
 } from 'lucide-react';
 
 const SidebarItem = ({ icon: Icon, label, active, onClick }) => (
