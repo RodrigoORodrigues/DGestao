@@ -129,10 +129,7 @@ const DashboardControle = ({ vendasList }) => {
             <header className="mb-8">
                 <div className="bg-slate-900 rounded-2xl p-6 md:p-8 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
                     <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-blue-500 rounded-full opacity-10 blur-2xl"></div>
-                    <div className="bg-white p-2 rounded-lg shadow flex items-center justify-center border border-slate-200 z-10">
-                        <span className="text-xl font-bold text-slate-800">PROTETTA</span>
-                    </div>
-                    <div className="text-center md:text-right z-10">
+                    <div className="text-center md:text-left z-10">
                         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Protetta Analytics</h1>
                         <p className="text-slate-400 text-sm md:text-base font-light mt-1">Gestão Estratégica e Evolução</p>
                     </div>
@@ -142,7 +139,7 @@ const DashboardControle = ({ vendasList }) => {
             <div className="mb-8 flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 relative no-print">
                 <div className="flex items-center gap-3">
                     <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="bg-blue-50 text-blue-800 border-none font-bold rounded-lg px-4 py-2 outline-none">
-                        {[2023, 2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+                        {[2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                 </div>
                 
