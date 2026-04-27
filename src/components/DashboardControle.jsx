@@ -7,11 +7,22 @@ import { CheckCircle } from 'lucide-react';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler, ChartDataLabels);
 
-const DashboardControle = ({ vendasList }) => {
+const DashboardControle = ({ vendasList, currentEmpresa }) => {
+    const empUpper = (currentEmpresa || 'PROPER').toUpperCase();
+    const EMP = empUpper;
+    const EMP_ASSESSORIA = `${EMP} - ASSESSORIA`;
+    const TOTAL_EMP = `TOTAL ${EMP}`;
+
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-    const [selectedEntity, setSelectedEntity] = useState('TOTAL PROTETTA');
+    const [selectedEntity, setSelectedEntity] = useState(TOTAL_EMP);
     const [selectedOperatorMonth, setSelectedOperatorMonth] = useState('Todos');
     const reportRef = useRef();
+
+    useEffect(() => {
+        if (selectedEntity !== EMP && selectedEntity !== EMP_ASSESSORIA && selectedEntity !== TOTAL_EMP) {
+            setSelectedEntity(TOTAL_EMP);
+        }
+    }, [EMP, EMP_ASSESSORIA, TOTAL_EMP, selectedEntity]);
 
     const OPERATORS = [
         { key: 'AMIL', color: '#0052cc' }, { key: 'SULAMERICA', color: '#fbbf24' },
@@ -28,9 +39,9 @@ const DashboardControle = ({ vendasList }) => {
 
     // Calculando dados reais da vendasList (filtrando por Vitalícios=Sim e pelo Ano)
     const processedData = {
-        'PROTETTA': Array(12).fill(0),
-        'PROTETTA - ASSESSORIA': Array(12).fill(0),
-        'TOTAL PROTETTA': Array(12).fill(0),
+        [EMP]: Array(12).fill(0),
+        [EMP_ASSESSORIA]: Array(12).fill(0),
+        [TOTAL_EMP]: Array(12).fill(0),
     };
 
     const operatorData = {};
@@ -55,20 +66,17 @@ const DashboardControle = ({ vendasList }) => {
                 val = parseFloat(val) || 0;
             }
 
-            const isProtettaLoja = v.loja && v.loja.toUpperCase().includes('PROTETTA');
-            const isProtettaAssessoria = v.assessoria && v.assessoria.toUpperCase().includes('PROTETTA');
+            const isEmpresaLoja = v.loja && v.loja.toUpperCase().includes(EMP);
+            const isEmpresaAssessoria = v.assessoria && v.assessoria.toUpperCase().includes(EMP);
             
-            // Só conta Protetta
-            if (!isProtettaLoja && !isProtettaAssessoria) return;
+            // Só conta empresa
+            if (!isEmpresaLoja && !isEmpresaAssessoria) return;
 
-            if (isProtettaLoja) processedData['PROTETTA'][monthObj] += val;
-            // Se tiver como separar bem as categorias. Muitas vezes `assessoria` = Protetta mas `loja` != PROTETTA é Assessoria?
-            // "Corretora (Direta)" => PROTETTA, "Assessoria" => PROTETTA - ASSESSORIA
-            // Se for Corretora Direta, será isProtettaLoja.
-            // Se isProtettaLoja e isProtettaAssessoria é ambíguo, mas normalmente consideramos PROTETTA.
-            if (isProtettaAssessoria && !isProtettaLoja) processedData['PROTETTA - ASSESSORIA'][monthObj] += val;
+            if (isEmpresaLoja) processedData[EMP][monthObj] += val;
+            
+            if (isEmpresaAssessoria && !isEmpresaLoja) processedData[EMP_ASSESSORIA][monthObj] += val;
 
-            processedData['TOTAL PROTETTA'][monthObj] += val;
+            processedData[TOTAL_EMP][monthObj] += val;
 
             const opName = (v.codigoOperadora || '').toUpperCase();
             if (operatorData[opName] !== undefined) {
@@ -86,8 +94,8 @@ const DashboardControle = ({ vendasList }) => {
     const maxVal = Math.max(...data, 0);
     const maxIdx = data.indexOf(maxVal);
 
-    const cCorr = processedData['PROTETTA'];
-    const cAss = processedData['PROTETTA - ASSESSORIA'];
+    const cCorr = processedData[EMP];
+    const cAss = processedData[EMP_ASSESSORIA];
     const totCorr = cCorr.reduce((a,b)=>a+b,0);
     const totAss = cAss.reduce((a,b)=>a+b,0);
 
@@ -111,7 +119,7 @@ const DashboardControle = ({ vendasList }) => {
         const element = reportRef.current;
         const opt = {
             margin: 0.3,
-            filename: `Relatorio_Protetta_${selectedYear}.pdf`,
+            filename: `Relatorio_${empUpper}_${selectedYear}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2, useCORS: true },
             jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
@@ -130,7 +138,7 @@ const DashboardControle = ({ vendasList }) => {
                 <div className="bg-slate-900 rounded-2xl p-6 md:p-8 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
                     <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-blue-500 rounded-full opacity-10 blur-2xl"></div>
                     <div className="text-center md:text-left z-10">
-                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Protetta Analytics</h1>
+                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{currentEmpresa} Analytics</h1>
                         <p className="text-slate-400 text-sm md:text-base font-light mt-1">Gestão Estratégica e Evolução</p>
                     </div>
                 </div>
@@ -148,9 +156,9 @@ const DashboardControle = ({ vendasList }) => {
                         Baixar PDF
                     </button>
                     <select value={selectedEntity} onChange={(e) => setSelectedEntity(e.target.value)} className="bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm rounded-lg block w-full md:w-64 p-2.5">
-                        <option value="PROTETTA - ASSESSORIA">PROTETTA - ASSESSORIA</option>
-                        <option value="PROTETTA">PROTETTA (Corretora)</option>
-                        <option value="TOTAL PROTETTA">TOTAL PROTETTA</option>
+                        <option value={EMP_ASSESSORIA}>{EMP_ASSESSORIA}</option>
+                        <option value={EMP}>{EMP} (Corretora)</option>
+                        <option value={TOTAL_EMP}>{TOTAL_EMP}</option>
                     </select>
                 </div>
             </div>
