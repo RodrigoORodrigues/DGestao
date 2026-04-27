@@ -48,9 +48,11 @@ export default function App() {
         const saved = localStorage.getItem('protetta_theme'); return saved ? saved === 'dark' : true; 
     });
     const [currentUser, setCurrentUser] = useState(() => {
-        const saved = localStorage.getItem('protetta_auth_user'); return saved ? JSON.parse(saved) : null;
+        const savedLocal = localStorage.getItem('protetta_auth_user'); 
+        const savedSession = sessionStorage.getItem('protetta_auth_user');
+        return savedLocal ? JSON.parse(savedLocal) : (savedSession ? JSON.parse(savedSession) : null);
     });
-    const [loginData, setLoginData] = useState({ user: '', password: '' });
+    const [loginData, setLoginData] = useState({ user: '', password: '', rememberMe: false });
     const [loginError, setLoginError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
 
@@ -253,8 +255,13 @@ export default function App() {
             if (loginData.user === 'admin' && loginData.password === 'admin') {
                 if (error) console.error("Supabase Error (falling back to local admin):", error);
                 const sessionUser = { id: 1, username: 'admin', role: 'admin', permissions: SYSTEM_MODULES ? SYSTEM_MODULES.map(m => m.id) : [] };
-                setCurrentUser(sessionUser); localStorage.setItem('protetta_auth_user', JSON.stringify(sessionUser));
-                setLoginError(''); setLoginData({ user: '', password: '' }); setShowPassword(false);
+                setCurrentUser(sessionUser); 
+                if (loginData.rememberMe) {
+                    localStorage.setItem('protetta_auth_user', JSON.stringify(sessionUser));
+                } else {
+                    sessionStorage.setItem('protetta_auth_user', JSON.stringify(sessionUser));
+                }
+                setLoginError(''); setLoginData({ user: '', password: '', rememberMe: false }); setShowPassword(false);
                 setCurrentView('dashboard');
                 setLoading(false);
                 return;
@@ -266,8 +273,13 @@ export default function App() {
             } else if (users && users.length > 0 && users[0].password === loginData.password) {
                 const user = users[0];
                 const sessionUser = { id: user.id, username: user.username, role: user.role, permissions: user.permissions || [] };
-                setCurrentUser(sessionUser); localStorage.setItem('protetta_auth_user', JSON.stringify(sessionUser));
-                setLoginError(''); setLoginData({ user: '', password: '' }); setShowPassword(false);
+                setCurrentUser(sessionUser); 
+                if (loginData.rememberMe) {
+                    localStorage.setItem('protetta_auth_user', JSON.stringify(sessionUser));
+                } else {
+                    sessionStorage.setItem('protetta_auth_user', JSON.stringify(sessionUser));
+                }
+                setLoginError(''); setLoginData({ user: '', password: '', rememberMe: false }); setShowPassword(false);
                 
                 if (user.role !== 'admin' && !user.permissions.includes('dashboard')) {
                     if (user.permissions.length > 0) setCurrentView(user.permissions[0]);
@@ -278,7 +290,7 @@ export default function App() {
 
     const handleLogout = () => {
         showConfirm("Tem a certeza que deseja terminar a sessão?", () => {
-            setCurrentUser(null); localStorage.removeItem('protetta_auth_user'); setCurrentView('dashboard');
+            setCurrentUser(null); localStorage.removeItem('protetta_auth_user'); sessionStorage.removeItem('protetta_auth_user'); setCurrentView('dashboard');
         });
     };
 
@@ -317,6 +329,10 @@ export default function App() {
                                 <input type={showPassword ? "text" : "password"} required value={loginData.password} onChange={e => setLoginData({...loginData, password: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg pl-10 pr-10 py-2.5 text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" />
                                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"><Eye size={18} /></button>
                             </div>
+                        </div>
+                        <div className="flex items-center -mt-2 mb-2">
+                            <input type="checkbox" id="rememberMe" checked={loginData.rememberMe} onChange={e => setLoginData({...loginData, rememberMe: e.target.checked})} className="w-4 h-4 text-emerald-600 bg-slate-50 border-slate-300 rounded focus:ring-emerald-500 dark:focus:ring-emerald-600 dark:ring-offset-slate-800 focus:ring-2 dark:bg-slate-900 dark:border-slate-600" />
+                            <label htmlFor="rememberMe" className="ml-2 text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none">Manter sessão iniciada</label>
                         </div>
                         {loginError && <p className="text-rose-500 dark:text-rose-400 text-sm font-bold text-center bg-rose-100 dark:bg-rose-500/10 py-2 rounded-lg border border-rose-200 dark:border-rose-500/20">{loginError}</p>}
                         <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg flex items-center justify-center space-x-2 transition-colors shadow-lg mt-4" disabled={loading}>
@@ -555,7 +571,15 @@ export default function App() {
             const dataToSave = { username: userForm.username, password: userForm.password, role: userForm.role, permissions: userForm.role === 'admin' ? SYSTEM_MODULES.map(m=>m.id) : userForm.permissions };
             if (userForm.id) {
                 await supabase.from('users').update(dataToSave).eq('id', userForm.id);
-                if (currentUser?.id === userForm.id) { const updatedSession = { ...currentUser, ...dataToSave }; setCurrentUser(updatedSession); localStorage.setItem('protetta_auth_user', JSON.stringify(updatedSession)); }
+                if (currentUser?.id === userForm.id) { 
+                    const updatedSession = { ...currentUser, ...dataToSave }; 
+                    setCurrentUser(updatedSession); 
+                    if (localStorage.getItem('protetta_auth_user')) {
+                        localStorage.setItem('protetta_auth_user', JSON.stringify(updatedSession)); 
+                    } else {
+                        sessionStorage.setItem('protetta_auth_user', JSON.stringify(updatedSession));
+                    }
+                }
             } else { await supabase.from('users').insert([dataToSave]); }
             await loadFromDB(); setModalUserOpen(false); showAlert("Utilizador guardado com sucesso!");
         } catch (err) { showAlert("Erro ao guardar: " + err.message); } finally { setLoading(false); }
@@ -617,7 +641,24 @@ export default function App() {
         return matchNome && matchTipo && matchSituacao;
     });
 
-    const apagarCliente = (id) => { showConfirm("Tem a certeza que deseja apagar este cliente?", async () => { setLoading(true); setLoadingMsg("Apagando cliente..."); await supabase.from('clientes').delete().eq('id', id); await loadFromDB(); setLoading(false); }); };
+    const apagarCliente = (id) => { 
+        const clienteParaApagar = clientes.find(c => c.id === id);
+        if(!clienteParaApagar) return;
+        
+        const vendasAssociadas = vendasList.filter(v => v.cliente.toLowerCase() === clienteParaApagar.nome.toLowerCase());
+        let msg = "Tem a certeza absoluta de que deseja apagar este cliente? Esta ação não pode ser desfeita.";
+        if (vendasAssociadas.length > 0) {
+            msg = `ATENÇÃO: Este cliente possui ${vendasAssociadas.length} venda(s) associada(s). Tem a certeza absoluta que quer apagar este registo?`;
+        }
+
+        showConfirm(msg, async () => { 
+            setLoading(true); 
+            setLoadingMsg("Apagando cliente..."); 
+            await supabase.from('clientes').delete().eq('id', id); 
+            await loadFromDB(); 
+            setLoading(false); 
+        }); 
+    };
     const abrirModalAddEdit = (cliente = null) => {
         if (cliente) { setClienteForm({...cliente}); setClienteEditIndex(cliente.id); } 
         else { setClienteForm({ id: null, nome: '', tipo: 'Pessoa jurídica', documento: '', telefone: '', celular: '', email: '', situacao: true }); setClienteEditIndex(-1); }
@@ -625,7 +666,25 @@ export default function App() {
     };
 
     const salvarCliente = async (e) => {
-        e.preventDefault(); setLoading(true); setLoadingMsg("Guardando cliente...");
+        e.preventDefault(); 
+
+        const nomeUpper = clienteForm.nome.trim().toUpperCase();
+        const clienteExistente = clientes.find(c => c.nome.trim().toUpperCase() === nomeUpper && c.id !== clienteForm.id);
+        
+        if (clienteExistente) {
+            return showAlert(`Já existe um cliente registado com o nome "${clienteForm.nome.trim()}". Não é possível guardar clientes com nomes duplicados.`);
+        }
+
+        const doc = clienteForm.documento ? clienteForm.documento.replace(/[^\d]/g, '') : '';
+        if (doc) {
+            if (clienteForm.tipo === 'Pessoa física' && doc.length !== 11) {
+                return showAlert("Atenção: O CPF deve conter 11 dígitos numéricos. (Preencha corretamente ou deixe em branco).");
+            } else if (clienteForm.tipo === 'Pessoa jurídica' && doc.length !== 14) {
+                return showAlert("Atenção: O CNPJ deve conter 14 dígitos numéricos. (Preencha corretamente ou deixe em branco).");
+            }
+        }
+
+        setLoading(true); setLoadingMsg("Guardando cliente...");
         try {
             const clienteParaSalvar = { ...clienteForm }; clienteParaSalvar.nome = clienteParaSalvar.nome.trim();
             if (clienteEditIndex >= 0) {
@@ -961,7 +1020,19 @@ export default function App() {
     };
 
     const enviarNota = async () => {
-        if (!nfeForm.cnpj || !nfeForm.valor || !nfeForm.logradouro) return showAlert("Por favor, preencha pelo menos o CNPJ, Valor e Endereço do cliente para emitir a NF.");
+        const { cep, logradouro, numero, bairro, cidade, uf } = nfeForm;
+        
+        if (!cep?.trim() || !logradouro?.trim() || !numero?.trim() || !bairro?.trim() || !cidade?.trim() || !uf?.trim()) {
+            return showAlert("Por favor, preencha todos os campos do endereço do tomador (CEP, Logradouro, Número, Bairro, Cidade, UF).");
+        }
+        
+        const cepNumeros = cep.replace(/[^\d]/g, '');
+        if (cepNumeros.length !== 8) {
+            return showAlert("CEP inválido. O CEP deve conter 8 dígitos.");
+        }
+
+        if (!nfeForm.cnpj || !nfeForm.valor) return showAlert("Por favor, preencha pelo menos o CNPJ e o Valor para emitir a NF.");
+        
         setIsEmitting(true); setNfeLog(['> Iniciando transmissão segura...', '> Conectando ao Web Service da Prefeitura (RJ)...']);
         try {
             const resposta = await fetch('http://127.0.0.1:5000/emitir', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nfeForm) })
@@ -2142,7 +2213,11 @@ export default function App() {
                                     <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">CEP</label>
                                     <input type="text" value={nfeForm.cep}
                                         onBlur={e => buscarCep(e.target.value)}
-                                        onChange={e => setNfeForm({...nfeForm, cep: e.target.value})}
+                                        onChange={e => { 
+                                            const val = e.target.value; 
+                                            setNfeForm({...nfeForm, cep: val}); 
+                                            if(val.replace(/\D/g, '').length === 8) buscarCep(val); 
+                                        }}
                                         placeholder="00000-000"
                                         className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500"/>
                                 </div>
@@ -2640,8 +2715,8 @@ export default function App() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">NIF / Documento</label>
-                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.documento} onChange={e => setClienteForm({...clienteForm, documento: e.target.value})} />
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">{clienteForm.tipo === 'Pessoa jurídica' ? 'CNPJ' : 'CPF'}</label>
+                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.documento} onChange={e => setClienteForm({...clienteForm, documento: e.target.value})} placeholder={clienteForm.tipo === 'Pessoa jurídica' ? '00.000.000/0000-00' : '000.000.000-00'} />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Telefone</label>
