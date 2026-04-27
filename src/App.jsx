@@ -114,6 +114,7 @@ export default function App() {
     const [showVendasAcoesMenu, setShowVendasAcoesMenu] = useState(false);
 
     const [showClienteSuggestions, setShowClienteSuggestions] = useState(false);
+    const [showFilterClienteSuggestions, setShowFilterClienteSuggestions] = useState(false);
     const [modalVendaOpen, setModalVendaOpen] = useState(false);
     const [vendaForm, setVendaForm] = useState({ 
         id: null, numero: '', cliente: '', dataVenda: dataDeHojeInterna(), situacao: 'FATURADO PROTETTA NF', 
@@ -523,49 +524,88 @@ export default function App() {
     };
 
     const salvarVenda = async (e) => {
-        e.preventDefault(); setLoading(true); setLoadingMsg("Guardando venda...");
-        try {
-            let dataToSave = { ...vendaForm, valor: parseFloat(vendaForm.valor) || 0 };
-            dataToSave.vidas = dataToSave.vidas === '' || dataToSave.vidas === undefined ? null : parseInt(dataToSave.vidas, 10);
-            dataToSave.comissao = dataToSave.comissao === '' || dataToSave.comissao === undefined ? null : parseFloat(dataToSave.comissao);
-            dataToSave.desconto = dataToSave.desconto === '' || dataToSave.desconto === undefined ? null : parseFloat(dataToSave.desconto);
-            
-            delete dataToSave.comissaoPorcentagem;
-            delete dataToSave.isFromReport;
-            delete dataToSave.reportId;
-            delete dataToSave.reportRowIndex;
-            delete dataToSave.created_at;
-            
-            if (vendaForm.isFromReport) {
-                const rep = await supabase.from('savedReports').select('*').eq('id', vendaForm.reportId).single();
-                if (rep.data) {
-                    let dadosAtualizados = [...rep.data.dados];
-                    dadosAtualizados[vendaForm.reportRowIndex] = {
-                        ...dadosAtualizados[vendaForm.reportRowIndex],
-                        cod: dataToSave.numero, cliente: dataToSave.cliente, situacao: dataToSave.situacao, loja: dataToSave.loja, valorTotal: dataToSave.valor, 
-                        vendedor: dataToSave.corretor, parcela: dataToSave.parcela, inicioVigencia: dataToSave.inicioVigencia, notaFiscal: dataToSave.notaFiscal, 
-                        contrato: dataToSave.contrato, codigoOperadora: dataToSave.codigoOperadora, vidas: dataToSave.vidas,
-                        vitalicio: dataToSave.vitalicio, assessoria: dataToSave.assessoria, formaPagamento: dataToSave.formaPagamento,
-                        servico: dataToSave.servico, desconto: dataToSave.desconto, notas: dataToSave.notas 
-                    };
-                    await supabase.from('savedReports').update({ dados: dadosAtualizados }).eq('id', rep.data.id);
+        if (e) e.preventDefault(); 
+        
+        const executarSalvamento = async () => {
+            setLoading(true); setLoadingMsg("Guardando venda...");
+            try {
+                let dataToSave = { ...vendaForm, valor: parseFloat(vendaForm.valor) || 0 };
+                dataToSave.vidas = dataToSave.vidas === '' || dataToSave.vidas === undefined ? null : parseInt(dataToSave.vidas, 10);
+                dataToSave.comissao = dataToSave.comissao === '' || dataToSave.comissao === undefined ? null : parseFloat(dataToSave.comissao);
+                dataToSave.desconto = dataToSave.desconto === '' || dataToSave.desconto === undefined ? null : parseFloat(dataToSave.desconto);
+                
+                delete dataToSave.comissaoPorcentagem;
+                delete dataToSave.isFromReport;
+                delete dataToSave.reportId;
+                delete dataToSave.reportRowIndex;
+                delete dataToSave.created_at;
+                
+                if (vendaForm.isFromReport) {
+                    const rep = await supabase.from('savedReports').select('*').eq('id', vendaForm.reportId).single();
+                    if (rep.data) {
+                        let dadosAtualizados = [...rep.data.dados];
+                        dadosAtualizados[vendaForm.reportRowIndex] = {
+                            ...dadosAtualizados[vendaForm.reportRowIndex],
+                            cod: dataToSave.numero, cliente: dataToSave.cliente, situacao: dataToSave.situacao, loja: dataToSave.loja, valorTotal: dataToSave.valor, 
+                            vendedor: dataToSave.corretor, parcela: dataToSave.parcela, inicioVigencia: dataToSave.inicioVigencia, notaFiscal: dataToSave.notaFiscal, 
+                            contrato: dataToSave.contrato, codigoOperadora: dataToSave.codigoOperadora, vidas: dataToSave.vidas,
+                            vitalicio: dataToSave.vitalicio, assessoria: dataToSave.assessoria, formaPagamento: dataToSave.formaPagamento,
+                            servico: dataToSave.servico, desconto: dataToSave.desconto, notas: dataToSave.notas 
+                        };
+                        await supabase.from('savedReports').update({ dados: dadosAtualizados }).eq('id', rep.data.id);
+                    }
+                } else {
+                    if (vendaForm.id) {
+                        const { error } = await supabase.from('vendas').update(dataToSave).eq('id', vendaForm.id);
+                        if (error) throw error;
+                    } else { 
+                        delete dataToSave.id; 
+                        const { error } = await supabase.from('vendas').insert([dataToSave]); 
+                        if (error) throw error;
+                    }
                 }
-            } else {
-                if (vendaForm.id) {
-                    const { error } = await supabase.from('vendas').update(dataToSave).eq('id', vendaForm.id);
-                    if (error) throw error;
-                } else { 
-                    delete dataToSave.id; 
-                    const { error } = await supabase.from('vendas').insert([dataToSave]); 
-                    if (error) throw error;
+                await loadFromDB(); setModalVendaOpen(false); showAlert("Venda guardada com sucesso!");
+            } catch (err) { showAlert("Erro ao guardar: " + err.message); } finally { setLoading(false); }
+        };
+
+        // Verifica pulo de parcela apenas para novas vendas
+        if (!vendaForm.id && !vendaForm.isFromReport && vendaForm.parcela) {
+            const matchParcelaAtual = vendaForm.parcela.toString().match(/\d+/);
+            if (matchParcelaAtual) {
+                const numParcelaAtual = parseInt(matchParcelaAtual[0], 10);
+                
+                const vendasRelacionadas = vendasList.filter(v => 
+                    (vendaForm.contrato && v.contrato === vendaForm.contrato) || 
+                    (!vendaForm.contrato && vendaForm.cliente && v.cliente === vendaForm.cliente)
+                );
+                
+                let maxParcela = 0;
+                vendasRelacionadas.forEach(v => {
+                    if (v.parcela) {
+                        const m = v.parcela.toString().match(/\d+/);
+                        if (m) {
+                            const num = parseInt(m[0], 10);
+                            if (num > maxParcela) maxParcela = num;
+                        }
+                    }
+                });
+                
+                if (maxParcela > 0 && numParcelaAtual > maxParcela + 1) {
+                    showConfirm(`Atenção: A parcela inserida (${vendaForm.parcela}) parece pular a sequência. A última parcela registada foi a de número ${maxParcela}. Deseja guardar a venda mesmo assim?`, () => {
+                        const alertPrefix = `⚠️ ALERTA DE SISTEMA: Foi detectado um salto no número da parcela ao inserir esta venda (parcela atual é ${vendaForm.parcela}). A anterior registada foi a de número ${maxParcela}.\n\n`;
+                        vendaForm.notas = alertPrefix + (vendaForm.notas || '');
+                        executarSalvamento();
+                    });
+                    return;
                 }
             }
-            await loadFromDB(); setModalVendaOpen(false); showAlert("Venda guardada com sucesso!");
-        } catch (err) { showAlert("Erro ao guardar: " + err.message); } finally { setLoading(false); }
+        }
+        
+        executarSalvamento();
     };
 
     const apagarVenda = (venda) => {
-        showConfirm(`Tem a certeza que deseja apagar permanentemente este registo?`, async () => {
+        showConfirm(`Tem a certeza absoluta de que deseja apagar esta venda? Esta ação é irreversível e não poderá recuperar os dados.`, async () => {
             setLoading(true); setLoadingMsg("Apagando...");
             if (venda.isFromReport) {
                 const rep = await supabase.from('savedReports').select('*').eq('id', venda.reportId).single();
@@ -829,7 +869,7 @@ export default function App() {
                         codigo: contratoDetectado || newCodigo, 
                         nome: nomeCliente, 
                         tipo: 'Pessoa jurídica', 
-                        documento: contratoDetectado, 
+                        documento: '', 
                         telefone: '', 
                         celular: '', 
                         email: '', 
@@ -1354,6 +1394,87 @@ export default function App() {
 
             <main className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900 p-4 md:p-8 relative transition-colors duration-200">
                 
+                {/* ECRÃ 11: INCONSISTÊNCIAS DE PARCELAS */}
+                {currentView === 'inconsistencias' && hasAccess('vendas') && (
+                    <div className="max-w-5xl mx-auto animate-in slide-in-from-right-4 duration-500 pb-20">
+                        <header className="mb-6 border-b border-slate-200 dark:border-slate-700 pb-4">
+                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center"><AlertTriangle className="mr-3 text-amber-500"/> Painel de Inconsistências</h2>
+                            <p className="text-slate-500 dark:text-slate-400 mt-1">Registo de quebras na sequência de parcelas confirmadas durante a inserção de vendas.</p>
+                        </header>
+                        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm overflow-hidden transition-colors duration-200">
+                            {(() => {
+                                const groups = {};
+                                vendasList.forEach(v => {
+                                    const key = v.contrato || v.cliente;
+                                    if (!key || !v.parcela) return;
+                                    const match = v.parcela.toString().match(/\d+/);
+                                    if (match) {
+                                        const num = parseInt(match[0], 10);
+                                        if (!groups[key]) groups[key] = { cliente: v.cliente, contrato: v.contrato, parcelas: [] };
+                                        groups[key].parcelas.push(num);
+                                    }
+                                });
+                                const inconsistencias = [];
+                                Object.keys(groups).forEach(key => {
+                                    const { cliente, contrato, parcelas } = groups[key];
+                                    const uniqueParcelas = [...new Set(parcelas)].sort((a,b) => a-b);
+                                    if (uniqueParcelas.length === 0) return;
+                                    const max = uniqueParcelas[uniqueParcelas.length - 1];
+                                    const missing = [];
+                                    for (let i = 1; i < max; i++) {
+                                        if (!uniqueParcelas.includes(i)) missing.push(i);
+                                    }
+                                    if (missing.length > 0) {
+                                        inconsistencias.push({ cliente, contrato, faltantes: missing });
+                                    }
+                                });
+
+                                if (inconsistencias.length === 0) {
+                                    return <div className="p-12 text-center text-slate-500 italic"><CheckCircle size={48} className="mx-auto text-emerald-500 mb-4 opacity-50"/>Tudo certo! Nenhuma inconsistência ou salto de parcela detetado.</div>;
+                                }
+
+                                return (
+                                    <table className="w-full text-left border-collapse text-sm">
+                                        <thead>
+                                            <tr className="border-b-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750/50">
+                                                <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Cliente</th>
+                                                <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center">Contrato</th>
+                                                <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center text-rose-600 dark:text-rose-400">Parcelas Faltantes</th>
+                                                <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center w-24">Ação</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {inconsistencias.map((inc, i) => (
+                                                <tr key={i} className="border-b border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-750/50 transition-colors">
+                                                    <td className="py-3 px-4 font-medium text-slate-900 dark:text-white">{inc.cliente}</td>
+                                                    <td className="py-3 px-4 text-center text-slate-600 dark:text-slate-400 font-mono">{inc.contrato || '-'}</td>
+                                                    <td className="py-3 px-4 text-center font-bold text-rose-500 dark:text-rose-400">
+                                                        <div className="flex flex-wrap gap-1 justify-center">
+                                                            {inc.faltantes.map(f => <span key={f} className="bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 px-2 py-0.5 rounded text-xs">P: {f}</span>)}
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3 px-4 text-center">
+                                                        <button 
+                                                            onClick={async () => {
+                                                                const vFiltersToUse = { ...defaultVendasFilters, cliente: inc.contrato ? '' : inc.cliente, contrato: inc.contrato || '' };
+                                                                setVendasFilterForm(vFiltersToUse);
+                                                                setShowVendasFilter(true);
+                                                                setAppliedVendasFilters(vFiltersToUse);
+                                                                setCurrentView('vendas');
+                                                            }} 
+                                                            className="text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded transition-colors"
+                                                        >Ver Vendas</button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                );
+                            })()}
+                        </div>
+                    </div>
+                )}
+                
                 {/* ECRÃ 1: DASHBOARD */}
                 {currentView === 'dashboard' && hasAccess('dashboard') && (
                     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
@@ -1401,9 +1522,12 @@ export default function App() {
                                         <Settings size={16} className="mr-2"/> Mais ações <ChevronDown size={16} className="ml-2"/>
                                     </button>
                                     {showVendasAcoesMenu && (
-                                        <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg overflow-hidden text-sm z-50 animate-in fade-in slide-in-from-top-2">
+                                        <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg overflow-hidden text-sm z-50 animate-in fade-in slide-in-from-top-2">
                                             <button onClick={exportarVendasParaExcel} className="w-full text-left px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-600 dark:hover:text-emerald-400 text-slate-700 dark:text-slate-300 font-medium flex items-center transition-colors">
                                                 <FileOutput size={16} className="mr-2"/> Exportar para Excel
+                                            </button>
+                                            <button onClick={() => { setCurrentView('inconsistencias'); setShowVendasAcoesMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:text-amber-600 dark:hover:text-amber-400 text-slate-700 dark:text-slate-300 font-medium flex items-center transition-colors border-t border-slate-100 dark:border-slate-700">
+                                                <AlertTriangle size={16} className="mr-2"/> Painel de Inconsistências
                                             </button>
                                         </div>
                                     )}
@@ -1530,22 +1654,40 @@ export default function App() {
                                     {/* Cliente */}
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Cliente</label>
-                                        <div className="relative">
-                                            <input 
-                                                type="text" 
-                                                placeholder="Nome do cliente..." 
-                                                value={vendasFilterForm.cliente} 
-                                                onChange={e => setVendasFilterForm({...vendasFilterForm, cliente: e.target.value})} 
-                                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 pr-8" 
-                                            />
-                                            {vendasFilterForm.cliente && (
-                                                <Trash2 
-                                                    size={16} 
-                                                    onClick={() => setVendasFilterForm({...vendasFilterForm, cliente: ''})} 
-                                                    className="absolute right-3 top-2.5 text-slate-400 cursor-pointer hover:text-rose-500 transition-colors" 
+                                            <div className="relative">
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="Nome do cliente..." 
+                                                    value={vendasFilterForm.cliente} 
+                                                    onChange={e => { setVendasFilterForm({...vendasFilterForm, cliente: e.target.value}); setShowFilterClienteSuggestions(true); }} 
+                                                    onFocus={() => setShowFilterClienteSuggestions(true)}
+                                                    onBlur={(e) => { if (!e.relatedTarget) setTimeout(() => setShowFilterClienteSuggestions(false), 200); }}
+                                                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 pr-8" 
                                                 />
-                                            )}
-                                        </div>
+                                                {showFilterClienteSuggestions && vendasFilterForm.cliente && (
+                                                    <ul className="absolute z-10 w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg max-h-48 overflow-y-auto shadow-lg mt-1">
+                                                        {clientes.filter(c => c.nome.toLowerCase().includes(vendasFilterForm.cliente.toLowerCase())).map(c => (
+                                                            <li key={c.id} className="px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-700 last:border-0" onMouseDown={() => {
+                                                                setVendasFilterForm({...vendasFilterForm, cliente: c.nome});
+                                                                setShowFilterClienteSuggestions(false);
+                                                            }}>
+                                                                <div className="font-bold">{c.nome}</div>
+                                                                {c.documento && <div className="text-xs text-slate-500 dark:text-slate-400">{c.documento}</div>}
+                                                            </li>
+                                                        ))}
+                                                        {clientes.filter(c => c.nome.toLowerCase().includes(vendasFilterForm.cliente.toLowerCase())).length === 0 && (
+                                                            <li className="px-4 py-3 text-slate-500 dark:text-slate-400 text-sm italic text-center">Nenhum cliente encontrado</li>
+                                                        )}
+                                                    </ul>
+                                                )}
+                                                {vendasFilterForm.cliente && (
+                                                    <Trash2 
+                                                        size={16} 
+                                                        onClick={() => setVendasFilterForm({...vendasFilterForm, cliente: ''})} 
+                                                        className="absolute right-3 top-2.5 text-slate-400 cursor-pointer hover:text-rose-500 transition-colors" 
+                                                    />
+                                                )}
+                                            </div>
                                     </div>
 
                                     {/* Contrato */}
