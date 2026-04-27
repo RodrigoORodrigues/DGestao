@@ -526,6 +526,9 @@ export default function App() {
         try {
             let dataToSave = { ...vendaForm, valor: parseFloat(vendaForm.valor) || 0 };
             delete dataToSave.comissaoPorcentagem;
+            delete dataToSave.isFromReport;
+            delete dataToSave.reportId;
+            delete dataToSave.reportRowIndex;
             
             if (vendaForm.isFromReport) {
                 const rep = await supabase.from('savedReports').select('*').eq('id', vendaForm.reportId).single();
@@ -1895,7 +1898,7 @@ export default function App() {
                     <div className="max-w-full mx-auto animate-in fade-in duration-500 pb-20">
                         <header className="mb-6 border-b border-slate-200 dark:border-slate-700 pb-4">
                             <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center"><FileCheck size={28} className="mr-3 text-sky-500"/> Relatórios de Comissão</h2>
-                            <p className="text-slate-500 dark:text-slate-400 mt-1">Geração e edição de relatórios (Padrão Amil).</p>
+                            <p className="text-slate-500 dark:text-slate-400 mt-1">Geração e edição de relatórios.</p>
                         </header>
                         {successMsg && <div className="mb-4 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 p-3 rounded-lg text-center font-bold">{successMsg}</div>}
                         <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-md mb-6 flex flex-col md:flex-row justify-between items-center gap-4 transition-colors duration-200">
@@ -2987,6 +2990,10 @@ export default function App() {
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Nota Fiscal (NF)</label>
                                         <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.notaFiscal} onChange={e => setVendaForm({...vendaForm, notaFiscal: e.target.value})} placeholder="Número da NF" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Vidas</label>
+                                        <input type="number" min="0" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.vidas} onChange={e => setVendaForm({...vendaForm, vidas: e.target.value})} placeholder="Ex: 2" />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Parcela</label>
