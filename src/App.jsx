@@ -525,10 +525,15 @@ export default function App() {
         e.preventDefault(); setLoading(true); setLoadingMsg("Guardando venda...");
         try {
             let dataToSave = { ...vendaForm, valor: parseFloat(vendaForm.valor) || 0 };
+            dataToSave.vidas = dataToSave.vidas === '' || dataToSave.vidas === undefined ? null : parseInt(dataToSave.vidas, 10);
+            dataToSave.comissao = dataToSave.comissao === '' || dataToSave.comissao === undefined ? null : parseFloat(dataToSave.comissao);
+            dataToSave.desconto = dataToSave.desconto === '' || dataToSave.desconto === undefined ? null : parseFloat(dataToSave.desconto);
+            
             delete dataToSave.comissaoPorcentagem;
             delete dataToSave.isFromReport;
             delete dataToSave.reportId;
             delete dataToSave.reportRowIndex;
+            delete dataToSave.created_at;
             
             if (vendaForm.isFromReport) {
                 const rep = await supabase.from('savedReports').select('*').eq('id', vendaForm.reportId).single();
@@ -545,8 +550,14 @@ export default function App() {
                     await supabase.from('savedReports').update({ dados: dadosAtualizados }).eq('id', rep.data.id);
                 }
             } else {
-                if (vendaForm.id) await supabase.from('vendas').update(dataToSave).eq('id', vendaForm.id);
-                else { delete dataToSave.id; await supabase.from('vendas').insert([dataToSave]); }
+                if (vendaForm.id) {
+                    const { error } = await supabase.from('vendas').update(dataToSave).eq('id', vendaForm.id);
+                    if (error) throw error;
+                } else { 
+                    delete dataToSave.id; 
+                    const { error } = await supabase.from('vendas').insert([dataToSave]); 
+                    if (error) throw error;
+                }
             }
             await loadFromDB(); setModalVendaOpen(false); showAlert("Venda guardada com sucesso!");
         } catch (err) { showAlert("Erro ao guardar: " + err.message); } finally { setLoading(false); }
@@ -1763,7 +1774,7 @@ export default function App() {
                                         <tr><td colSpan={Object.values(vendasTableCols).filter(Boolean).length + 1} className="py-8 text-center text-slate-500 italic">Nenhum registo de venda encontrado.</td></tr>
                                     ) : (
                                         displayedVendas.map((venda) => (
-                                            <tr key={venda.id} className="border-b border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-750/50 transition-colors">
+                                            <tr key={venda.id} onClick={() => abrirModalVenda(venda)} className="border-b border-slate-200 dark:border-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-750 transition-colors cursor-pointer">
                                                 {vendasTableCols.numero && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.numero || '-'}</td>}
                                                 {vendasTableCols.contrato && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.contrato || '-'}</td>}
                                                 {vendasTableCols.codigoOperadora && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.codigoOperadora || 'AMIL'}</td>}
@@ -1785,10 +1796,10 @@ export default function App() {
                                                 {vendasTableCols.notas && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.notas || '-'}</td>}
                                                 <td className="py-4 px-4 text-center">
                                                     <div className="flex gap-1.5 justify-center">
-                                                        <button onClick={() => abrirModalVenda(venda)} className="bg-sky-500 hover:bg-sky-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Visualizar / Editar Detalhes"><Search size={14}/></button>
-                                                        <button onClick={() => duplicarVenda(venda)} className="bg-amber-500 hover:bg-amber-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Duplicar Venda"><Copy size={14}/></button>
-                                                        <button onClick={() => { setNfeForm(prev => ({ ...prev, nome: venda.cliente, valor: venda.valor, desc: `Referente a comissão / serviços prestados para ${venda.cliente}.` })); setCurrentView('nfe'); setNfeTab('emitir'); setNfeLog([]); }} className="bg-indigo-500 hover:bg-indigo-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Emitir NF-e"><Receipt size={14}/></button>
-                                                        <button onClick={() => apagarVenda(venda)} className="bg-rose-500 hover:bg-rose-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Apagar Venda"><Trash2 size={14}/></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); abrirModalVenda(venda); }} className="bg-sky-500 hover:bg-sky-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Visualizar / Editar Detalhes"><Search size={14}/></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); duplicarVenda(venda); }} className="bg-amber-500 hover:bg-amber-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Duplicar Venda"><Copy size={14}/></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); setNfeForm(prev => ({ ...prev, nome: venda.cliente, valor: venda.valor, desc: `Referente a comissão / serviços prestados para ${venda.cliente}.` })); setCurrentView('nfe'); setNfeTab('emitir'); setNfeLog([]); }} className="bg-indigo-500 hover:bg-indigo-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Emitir NF-e"><Receipt size={14}/></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); apagarVenda(venda); }} className="bg-rose-500 hover:bg-rose-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Apagar Venda"><Trash2 size={14}/></button>
                                                     </div>
                                                 </td>
                                             </tr>
