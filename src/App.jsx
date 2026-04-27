@@ -256,6 +256,10 @@ export default function App() {
         else { document.documentElement.classList.remove('dark'); localStorage.setItem('protetta_theme', 'light'); }
     }, [isDarkMode]);
 
+    useEffect(() => {
+        setClientesCurrentPage(1);
+    }, [filtroNomeCliente, filtrosCli]);
+
     const handleLogin = async (e) => {
         e.preventDefault(); setLoading(true); setLoadingMsg("Autenticando...");
         try {
@@ -703,10 +707,6 @@ export default function App() {
         const matchSituacao = filtrosCli.situacao === 'Todos' || (filtrosCli.situacao === 'Ativo' ? cli.situacao : !cli.situacao);
         return matchNome && matchTipo && matchSituacao;
     });
-
-    useEffect(() => {
-        setClientesCurrentPage(1);
-    }, [filtroNomeCliente, filtrosCli]);
 
     const clientesPerPage = 20;
     const totalPagesClientes = Math.ceil(clientesFiltrados.length / clientesPerPage);
