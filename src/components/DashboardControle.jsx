@@ -213,7 +213,7 @@ const DashboardControle = ({ vendasList }) => {
                 <div className="aspect-[21/9]">
                     <Bar 
                         data={{ labels: OPERATORS.map(op=>op.key), datasets: [{ label: 'Valor (R$)', data: opChartData, backgroundColor: OPERATORS.map(op=>op.color), borderRadius: 6 }] }}
-                        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'top', formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v), font: {size: 10} } }, scales: { y: { display: false }, x: { title: { display: true, text: 'Operadoras' }, grid: { display: false }, ticks: { font: {size: 9} } } } }}
+                        options={{ layout: { padding: { top: 30 } }, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, color: '#64748b', anchor: 'end', align: 'top', formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v), font: {size: 11, weight: 'bold'} } }, scales: { y: { display: false }, x: { title: { display: true, text: 'Operadoras' }, grid: { display: false }, ticks: { font: {size: 9} } } } }}
                     />
                 </div>
             </div>
