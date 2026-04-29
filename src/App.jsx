@@ -3307,7 +3307,7 @@ export default function App() {
 
                 {/* Footer fixo */}
                 <footer className="shrink-0 z-10 py-3 px-4 md:px-8 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs sm:text-sm flex flex-col sm:flex-row items-center justify-between gap-4 transition-colors duration-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] dark:shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.2)]">
-                    <p className="font-medium">Desenvolvido por <span className="text-blue-600 dark:text-blue-400 font-bold">Donfim Tech</span> copyright 2025 - 2026</p>
+                    <p className="font-medium">Desenvolvido por <a href="https://donfim.com.br" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 font-bold hover:underline transition-colors">Donfim Tech</a> copyright © 2026</p>
                     <div className="flex items-center gap-6">
                         <a href="tel:#" className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Suporte por Telefone">
                             <Phone size={16} className="text-blue-500" />
