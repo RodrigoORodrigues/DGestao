@@ -19,7 +19,7 @@ import {
     Layers, Settings, Database, RefreshCw, Trash2, HardDrive, Users, FileCheck, 
     CheckCircle, XCircle, Edit, ListFilter, Upload, Sun, Moon, Printer, Archive, 
     History, AlertCircle, Lock, User, Key, LogOut, Shield, ShoppingCart, Receipt, 
-    Send, Percent, DollarSign, FileOutput, Copy, Info, Tag, AlertTriangle
+    Send, Percent, DollarSign, FileOutput, Copy, Info, Tag, AlertTriangle, LayoutGrid, List
 } from 'lucide-react';
 
 import * as XLSX from 'xlsx';
@@ -86,6 +86,7 @@ export default function App() {
     const [clientesCurrentPage, setClientesCurrentPage] = useState(1);
     
     const [modalArquivosOpen, setModalArquivosOpen] = useState(false);
+    const [extratosModalViewMode, setExtratosModalViewMode] = useState('cards'); // 'cards' ou 'lines'
     
     const [modalPrintOpen, setModalPrintOpen] = useState(false);
     const [printConfig, setPrintConfig] = useState({ orientation: 'landscape', scale: 100 });
@@ -176,7 +177,6 @@ export default function App() {
     const [nfeTab, setNfeTab] = useState('emitir');
     const [showImpostos, setShowImpostos] = useState(false);
     const [isEmitting, setIsEmitting] = useState(false);
-    const [nfeLog, setNfeLog] = useState([]);
     const [nfeHistorico, setNfeHistorico] = useState([]);
     
     const [nfeForm, setNfeForm] = useState({
@@ -248,6 +248,25 @@ export default function App() {
         };
         initAdminSupabase();
     }, []);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (showVendasAcoesMenu && !event.target.closest('.vendas-acoes-menu')) {
+                setShowVendasAcoesMenu(false);
+            }
+            if (showVendasPeriodMenu && !event.target.closest('.vendas-period-menu')) {
+                setShowVendasPeriodMenu(false);
+            }
+            if (showReportColsMenu && !event.target.closest('.report-cols-menu')) {
+                setShowReportColsMenu(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showVendasAcoesMenu, showVendasPeriodMenu, showReportColsMenu]);
 
     useEffect(() => { if(currentUser) loadFromDB(); }, [currentUser]);
     
@@ -328,16 +347,16 @@ export default function App() {
                         <div className="bg-emerald-600 p-3 rounded-xl font-bold text-white text-3xl leading-none border border-emerald-400/50 mb-4 shadow-lg">D</div>
                         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Don Gestão</h1>
                     </div>
-                    <form onSubmit={handleLogin} className="space-y-5">
+                    <form onSubmit={handleLogin} onInvalid={(e) => e.currentTarget.classList.add('show-errors')} className="space-y-5">
                         <div>
-                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Utilizador</label>
+                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Usuário</label>
                             <div className="relative">
                                 <User size={18} className="absolute left-3 top-3 text-slate-400" />
                                 <input type="text" required value={loginData.user} onChange={e => setLoginData({...loginData, user: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg pl-10 pr-4 py-2.5 text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" />
                             </div>
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Palavra-passe</label>
+                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Senha</label>
                             <div className="relative">
                                 <Key size={18} className="absolute left-3 top-3 text-slate-400" />
                                 <input type={showPassword ? "text" : "password"} required value={loginData.password} onChange={e => setLoginData({...loginData, password: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg pl-10 pr-10 py-2.5 text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" />
@@ -630,10 +649,10 @@ export default function App() {
     };
 
     const salvarUsuario = async (e) => {
-        e.preventDefault(); setLoading(true); setLoadingMsg("Guardando utilizador...");
+        e.preventDefault(); setLoading(true); setLoadingMsg("Guardando usuário...");
         try {
             const { data: existing } = await supabase.from('users').select('*').eq('username', userForm.username);
-            if (existing && existing.length > 0 && existing[0].id !== userForm.id) { setLoading(false); return showAlert("Já existe um utilizador registado com este nome."); }
+            if (existing && existing.length > 0 && existing[0].id !== userForm.id) { setLoading(false); return showAlert("Já existe um usuário registado com este nome."); }
             
             const dataToSave = { username: userForm.username, password: userForm.password, role: userForm.role, permissions: userForm.role === 'admin' ? SYSTEM_MODULES.map(m=>m.id) : userForm.permissions };
             if (userForm.id) {
@@ -648,14 +667,14 @@ export default function App() {
                     }
                 }
             } else { await supabase.from('users').insert([dataToSave]); }
-            await loadFromDB(); setModalUserOpen(false); showAlert("Utilizador guardado com sucesso!");
+            await loadFromDB(); setModalUserOpen(false); showAlert("Usuário guardado com sucesso!");
         } catch (err) { showAlert("Erro ao guardar: " + err.message); } finally { setLoading(false); }
     };
 
     const apagarUsuario = (u) => {
         if (u.username === 'admin') return showAlert("Não é possível apagar admin.");
         if (currentUser?.id === u.id) return showAlert("Você não pode apagar a sua própria conta.");
-        showConfirm(`Tem a certeza que deseja apagar o utilizador '${u.username}'?`, async () => { await supabase.from('users').delete().eq('id', u.id); await loadFromDB(); });
+        showConfirm(`Tem a certeza que deseja apagar o usuário '${u.username}'?`, async () => { await supabase.from('users').delete().eq('id', u.id); await loadFromDB(); });
     };
 
     const getFileColorClass = (fileName) => {
@@ -665,7 +684,7 @@ export default function App() {
     };
 
     const getItemsAtCurrentPath = () => {
-        if (searchTerm.trim() !== '') { const term = searchTerm.toLowerCase(); return dbReports.filter(r => r.parceiro.toLowerCase().includes(term) || (r.fileName || '').toLowerCase().includes(term) || r.empresa.toLowerCase().includes(term)).map(f => ({ ...f, type: 'file', pathInfo: `${f.ano} / ${f.mes} / ${f.empresa}` })); }
+        if (searchTerm.trim() !== '') { const term = searchTerm.toLowerCase(); return dbReports.filter(r => r.parceiro.toLowerCase().includes(term) || (r.fileName || '').toLowerCase().includes(term) || r.empresa.toLowerCase().includes(term)).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro, pathInfo: `${f.ano} / ${f.mes} / ${f.empresa}` })); }
         if (currentPath.length === 0) return [...new Set(dbReports.map(r => r.ano))].sort().map(y => ({ id: y, name: y, type: 'folder' }));
         if (currentPath.length === 1) return [...new Set(dbReports.filter(r => r.ano === currentPath[0]).map(r => r.mes))].sort((a, b) => MESES.indexOf(a) - MESES.indexOf(b)).map(m => ({ id: m, name: m, type: 'folder' }));
         if (currentPath.length === 2) return CATEGORIAS.map(c => ({ id: c, name: c, type: 'folder' }));
@@ -1020,7 +1039,7 @@ export default function App() {
             valor: valorTotalComissao.toFixed(2), 
             desc: descLote 
         }));
-        setCurrentView('nfe'); setNfeTab('emitir'); setNfeLog([]);
+        setCurrentView('nfe'); setNfeTab('emitir');
     };
 
     const prepararEmissaoNF = (linha) => {
@@ -1032,7 +1051,6 @@ export default function App() {
         }));
         setCurrentView('nfe'); 
         setNfeTab('emitir'); 
-        setNfeLog([]);
     };
 
     const startEditingRow = (idx, linha) => { setEditRowIndex(idx); setEditRowData({...linha}); };
@@ -1088,7 +1106,7 @@ export default function App() {
     };
 
     const carregarRelatorioSalvo = (report) => { setPdfData((report.dados || []).map(r => ({...r, selected: true}))); setReportName(report.nome); setReportPeriod(report.periodo || ''); setCurrentReportId(report.id); setCurrentView('processar'); };
-    const apagarRelatorioSalvo = (id) => { showConfirm("Tem certeza que deseja excluir permanentemente este relatório da nuvem?", async () => { setLoading(true); setLoadingMsg("A apagar..."); await supabase.from('savedReports').delete().eq('id', id); if(currentReportId === id) { setPdfData([]); setCurrentReportId(null); } await loadFromDB(); setLoading(false); }); };
+    const apagarRelatorioSalvo = (id) => { showConfirm("ATENÇÃO: Tem certeza absoluta que deseja apagar permanentemente este relatório da nuvem e do cache local? Esta ação é totalmente irreversível e os dados serão perdidos.", async () => { setLoading(true); setLoadingMsg("A apagar..."); await supabase.from('savedReports').delete().eq('id', id); if(currentReportId === id) { setPdfData([]); setCurrentReportId(null); } await loadFromDB(); setLoading(false); }); };
 
     const buscarCep = async (cep) => {
         const cepLimpo = cep.replace(/\D/g, '');
@@ -1142,19 +1160,18 @@ export default function App() {
             return showAlert("CPF / CNPJ inválido. Por favor verifique os dígitos digitados.");
         }
         
-        setIsEmitting(true); setNfeLog(['> Iniciando transmissão segura...', '> Conectando ao Web Service da Prefeitura (RJ)...']);
+        setIsEmitting(true);
         try {
             const resposta = await fetch('http://127.0.0.1:5000/emitir', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nfeForm) })
                 .catch(() => new Promise(resolve => setTimeout(() => resolve({ ok: true, json: () => ({ protocolo: 'RIO-' + Math.floor(Math.random()*100000) }) }), 2000)));
             if (!resposta.ok) throw new Error("Erro no servidor da prefeitura."); 
             const resultado = await resposta.json();
             
-            setNfeLog(prev => [...prev, '> XML Assinado Digitalmente.', `> Protocolo: ${resultado.protocolo}`, '> SUCESSO: Nota Emitida!']); 
             const novaNF = { id: Date.now(), cliente: nfeForm.nome, valor: nfeForm.valor, data: new Date().toISOString(), protocolo: resultado.protocolo, status: 'Emitida' };
             setNfeHistorico(prev => [novaNF, ...prev]);
 
             showAlert(`Nota transmitida com Sucesso!\nProtocolo da Prefeitura: ${resultado.protocolo}`);
-        } catch (erro) { setNfeLog(prev => [...prev, `> ERRO CRÍTICO: ${erro.message}`]); } finally { setIsEmitting(false); }
+        } catch (erro) { showAlert(`> ERRO CRÍTICO: ${erro.message}`); } finally { setIsEmitting(false); }
     };
 
     const exportarNotasHistory = () => {
@@ -1355,18 +1372,18 @@ export default function App() {
             {/* ALERTS E LOADING */}
             {alertDialog.isOpen && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4 border border-slate-200 dark:border-slate-700">
-                        <h3 className="text-lg font-bold mb-3 text-slate-900 dark:text-white flex items-center"><AlertCircle className="mr-2 text-blue-500"/> Aviso do Sistema</h3>
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4 border-l-4 border-rose-500 shadow-rose-500/20">
+                        <h3 className="text-xl font-black mb-3 text-rose-600 dark:text-rose-500 flex items-center"><AlertCircle className="mr-2 text-rose-600"/> ATENÇÃO</h3>
                         <p className="text-sm text-slate-700 dark:text-slate-300 mb-6 whitespace-pre-wrap">{alertDialog.message}</p>
-                        <div className="flex justify-end"><button onClick={() => setAlertDialog({ isOpen: false, message: '' })} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-bold transition-colors">OK</button></div>
+                        <div className="flex justify-end"><button onClick={() => setAlertDialog({ isOpen: false, message: '' })} className="bg-rose-600 hover:bg-rose-500 text-white px-6 py-2 rounded-lg font-bold transition-colors">OK</button></div>
                     </div>
                 </div>
             )}
 
             {confirmDialog.isOpen && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4 border border-slate-200 dark:border-slate-700">
-                        <h3 className="text-lg font-bold mb-3 text-slate-900 dark:text-white flex items-center"><AlertCircle className="mr-2 text-amber-500"/> Confirmação Necessária</h3>
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4 border-l-4 border-rose-500 shadow-rose-500/20">
+                        <h3 className="text-xl font-black mb-3 text-rose-600 dark:text-rose-500 flex items-center"><AlertCircle className="mr-2 text-rose-600"/> ATENÇÃO</h3>
                         <p className="text-sm text-slate-700 dark:text-slate-300 mb-6 whitespace-pre-wrap">{confirmDialog.message}</p>
                         <div className="flex justify-end gap-3">
                             <button onClick={() => setConfirmDialog({ isOpen: false, message: '', onConfirm: null })} className="bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white px-4 py-2 rounded-lg font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">Cancelar</button>
@@ -1405,7 +1422,10 @@ export default function App() {
                         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm overflow-hidden transition-colors duration-200">
                             {(() => {
                                 const groups = {};
-                                vendasList.forEach(v => {
+                                vendasList.filter(v => {
+                                    const dv = v.dataVenda || v.dataCadastro || '';
+                                    return dv >= '2026-01-01' && dv <= dataDeHojeInterna();
+                                }).forEach(v => {
                                     const key = v.contrato || v.cliente;
                                     if (!key || !v.parcela) return;
                                     const match = v.parcela.toString().match(/\d+/);
@@ -1431,7 +1451,7 @@ export default function App() {
                                 });
 
                                 if (inconsistencias.length === 0) {
-                                    return <div className="p-12 text-center text-slate-500 italic"><CheckCircle size={48} className="mx-auto text-emerald-500 mb-4 opacity-50"/>Tudo certo! Nenhuma inconsistência ou salto de parcela detetado.</div>;
+                                    return <div className="p-12 text-center text-slate-500 italic"><CheckCircle size={48} className="mx-auto text-emerald-500 mb-4 opacity-50"/>Tudo certo! Nenhuma inconsistência ou salto de parcela detectado.</div>;
                                 }
 
                                 return (
@@ -1523,7 +1543,7 @@ export default function App() {
                         <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 mb-4 flex flex-col md:flex-row justify-between items-center gap-4 shadow-sm transition-colors duration-200">
                             <div className="flex gap-2 w-full md:w-auto relative">
                                 <button onClick={() => abrirModalVenda()} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold flex items-center shadow-md transition-colors"><Plus size={16} className="mr-2"/> Adicionar</button>
-                                <div className="relative">
+                                <div className="relative vendas-acoes-menu">
                                     <button onClick={() => setShowVendasAcoesMenu(!showVendasAcoesMenu)} className="bg-slate-900 dark:bg-black hover:bg-slate-800 text-white px-4 py-2 rounded text-sm font-bold flex items-center transition-colors border border-slate-700 shadow-md">
                                         <Settings size={16} className="mr-2"/> Mais ações <ChevronDown size={16} className="ml-2"/>
                                     </button>
@@ -1569,7 +1589,7 @@ export default function App() {
                                 </div>
                             </div>
                             <div className="flex w-full md:w-auto gap-2">
-                                <div className="relative z-30">
+                                <div className="relative z-30 vendas-period-menu">
                                     <button onClick={() => setShowVendasPeriodMenu(!showVendasPeriodMenu)} className="bg-slate-900 dark:bg-black text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center transition-colors shadow-md border border-slate-700 h-full">
                                         {displayPeriodLabel} <ChevronDown size={14} className="ml-2"/>
                                     </button>
@@ -1589,7 +1609,7 @@ export default function App() {
                             </div>
                         </div>
                         {showVendasFilter && (
-                            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => { if(e.target === e.currentTarget) setShowVendasFilter(false); }}>
                                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl relative w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
                                     <button onClick={() => setShowVendasFilter(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"><X size={20}/></button>
                                     <h3 className="text-xl font-bold mb-6 text-slate-800 dark:text-white flex items-center"><Search className="mr-2"/> Busca Avançada de Vendas</h3>
@@ -1947,7 +1967,7 @@ export default function App() {
                                                     <div className="flex gap-1.5 justify-center">
                                                         <button onClick={(e) => { e.stopPropagation(); abrirModalVenda(venda); }} className="bg-sky-500 hover:bg-sky-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Visualizar / Editar Detalhes"><Search size={14}/></button>
                                                         <button onClick={(e) => { e.stopPropagation(); duplicarVenda(venda); }} className="bg-amber-500 hover:bg-amber-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Duplicar Venda"><Copy size={14}/></button>
-                                                        <button onClick={(e) => { e.stopPropagation(); setNfeForm(prev => ({ ...prev, nome: venda.cliente, valor: venda.valor, desc: `Referente a comissão / serviços prestados para ${venda.cliente}.` })); setCurrentView('nfe'); setNfeTab('emitir'); setNfeLog([]); }} className="bg-indigo-500 hover:bg-indigo-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Emitir NF-e"><Receipt size={14}/></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); setNfeForm(prev => ({ ...prev, nome: venda.cliente, valor: venda.valor, desc: `Referente a comissão / serviços prestados para ${venda.cliente}.` })); setCurrentView('nfe'); setNfeTab('emitir'); }} className="bg-indigo-500 hover:bg-indigo-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Emitir NF-e"><Receipt size={14}/></button>
                                                         <button onClick={(e) => { e.stopPropagation(); apagarVenda(venda); }} className="bg-rose-500 hover:bg-rose-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Apagar Venda"><Trash2 size={14}/></button>
                                                     </div>
                                                 </td>
@@ -2074,7 +2094,7 @@ export default function App() {
                                                 <button onClick={deleteSelectedRows} className="bg-rose-500 hover:bg-rose-400 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"><Trash2 size={18} className="mr-2"/> Apagar Seleção</button>
                                             </React.Fragment>
                                         )}
-                                        <div className="relative">
+                                        <div className="relative report-cols-menu">
                                             <button onClick={() => setShowReportColsMenu(!showReportColsMenu)} className="bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 py-2.5 px-4 rounded-lg font-bold flex items-center transition-colors" title="Colunas">
                                                 <Layers size={18} />
                                             </button>
@@ -2256,11 +2276,29 @@ export default function App() {
             <button onClick={() => setModalArquivosOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
                 <X size={20} />
             </button>
-            <div className="mb-4 border-b border-slate-200 dark:border-slate-700 pb-4">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center">
-                    <Database className="mr-2 text-indigo-500" /> Buscar Extratos no Sistema
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Selecione um extrato para processar</p>
+            <div className="mb-4 border-b border-slate-200 dark:border-slate-700 pb-4 flex justify-between items-end pr-8">
+                <div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center">
+                        <Database className="mr-2 text-indigo-500" /> Buscar Extratos no Sistema
+                    </h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Selecione um extrato para processar</p>
+                </div>
+                <div className="flex bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
+                    <button 
+                        onClick={() => setExtratosModalViewMode('cards')} 
+                        className={`p-1.5 rounded-md transition-colors ${extratosModalViewMode === 'cards' ? 'bg-white dark:bg-slate-600 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+                        title="Visualização em Cards"
+                    >
+                        <LayoutGrid size={16} />
+                    </button>
+                    <button 
+                        onClick={() => setExtratosModalViewMode('lines')} 
+                        className={`p-1.5 rounded-md transition-colors ${extratosModalViewMode === 'lines' ? 'bg-white dark:bg-slate-600 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+                        title="Visualização em Linhas"
+                    >
+                        <List size={16} />
+                    </button>
+                </div>
             </div>
             
             <div className="flex-1 overflow-y-auto">
@@ -2270,21 +2308,22 @@ export default function App() {
                         Vá em "Gestor de Extratos" &gt; "Incluir Extrato" para adicionar.
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className={extratosModalViewMode === 'cards' ? "grid grid-cols-1 md:grid-cols-2 gap-3" : "space-y-2"}>
                         {dbReports.map((report, idx) => (
                             <div 
                                 key={idx}
                                 onClick={() => processarArquivoDoBanco(report)}
-                                className="p-4 border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                                className={`group border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors ${extratosModalViewMode === 'cards' ? 'p-4' : 'flex items-center justify-between p-3'}`}
                             >
-                                <div className="flex items-center gap-3">
-                                    <FileText size={24} className="text-blue-500" />
-                                    <div className="flex-1">
-                                        <p className="font-medium text-slate-900 dark:text-white truncate">{report.parceiro}</p>
-                                        <p className="text-xs text-slate-500">{report.ano} / {report.mes} / {report.empresa}</p>
-                                        <p className="text-xs text-slate-400 truncate">{report.fileName}</p>
+                                <div className={`flex items-center gap-3 ${extratosModalViewMode === 'cards' ? '' : 'flex-1 overflow-hidden'}`}>
+                                    <FileText size={extratosModalViewMode === 'cards' ? 24 : 18} className="text-blue-500 shrink-0" />
+                                    <div className={`flex-1 ${extratosModalViewMode === 'lines' ? 'flex items-center gap-4 min-w-0' : ''}`}>
+                                        <p className="font-medium text-slate-900 dark:text-white truncate min-w-[120px]">{report.parceiro}</p>
+                                        <p className={`text-slate-500 ${extratosModalViewMode === 'cards' ? 'text-xs' : 'text-sm whitespace-nowrap'}`}>{report.ano} / {report.mes} / {report.empresa}</p>
+                                        {extratosModalViewMode === 'lines' && <p className="text-sm text-slate-400 truncate flex-1 md:block hidden">{report.fileName}</p>}
                                     </div>
                                 </div>
+                                {extratosModalViewMode === 'cards' && <p className="text-xs text-slate-400 mt-2 truncate max-w-full block">{report.fileName}</p>}
                             </div>
                         ))}
                     </div>
@@ -2390,7 +2429,7 @@ export default function App() {
         </div>
 
         {nfeTab === 'emitir' && (
-            <div className="bg-white dark:bg-slate-800 p-4 md:p-6 rounded-b-xl shadow-lg border border-slate-200 dark:border-slate-700 space-y-6">
+            <form onSubmit={enviarNota} onInvalid={(e) => e.currentTarget.classList.add('show-errors')} className="bg-white dark:bg-slate-800 p-4 md:p-6 rounded-b-xl shadow-lg border border-slate-200 dark:border-slate-700 space-y-6">
 
                 {/* BLOCO 1 — DADOS DA DPS */}
                 <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
@@ -2400,7 +2439,7 @@ export default function App() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">Data de Competência</label>
-                            <input type="date" value={nfeForm.dataEmissao} 
+                            <input required type="date" value={nfeForm.dataEmissao} 
                                 onChange={e => setNfeForm({...nfeForm, dataEmissao: e.target.value})}
                                 max={new Date().toISOString().split('T')[0]}
                                 min={`${new Date().getFullYear()}-01-01`}
@@ -2435,7 +2474,7 @@ export default function App() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
                                 <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">CPF / CNPJ</label>
-                                <input type="text" value={nfeForm.cnpj} onChange={e => {
+                                <input required type="text" value={nfeForm.cnpj} onChange={e => {
                                         let val = e.target.value.replace(/\D/g, '');
                                         if (val.length > 14) val = val.slice(0, 14);
                                         if (val.length > 11) {
@@ -2451,14 +2490,14 @@ export default function App() {
                             </div>
                             <div className="md:col-span-2">
                                 <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">Razão Social / Nome</label>
-                                <input type="text" value={nfeForm.nome} onChange={e => setNfeForm({...nfeForm, nome: e.target.value})}
+                                <input required type="text" value={nfeForm.nome} onChange={e => setNfeForm({...nfeForm, nome: e.target.value})}
                                     placeholder="Nome Completo"
                                     className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500"/>
                             </div>
                         </div>
                         <div>
                             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">E-mail do Tomador</label>
-                            <input type="email" value={nfeForm.emailTomador} onChange={e => setNfeForm({...nfeForm, emailTomador: e.target.value})}
+                            <input required type="email" value={nfeForm.emailTomador} onChange={e => setNfeForm({...nfeForm, emailTomador: e.target.value})}
                                 placeholder="email@exemplo.com"
                                 className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500"/>
                         </div>
@@ -2467,7 +2506,7 @@ export default function App() {
                             <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                                 <div className="md:col-span-1">
                                     <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">CEP</label>
-                                    <input type="text" value={nfeForm.cep}
+                                    <input required type="text" value={nfeForm.cep}
                                         onBlur={e => buscarCep(e.target.value)}
                                         onChange={e => { 
                                             let val = e.target.value.replace(/\D/g, ''); 
@@ -2482,31 +2521,31 @@ export default function App() {
                                 </div>
                                 <div className="md:col-span-3">
                                     <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">Logradouro</label>
-                                    <input type="text" value={nfeForm.logradouro} onChange={e => setNfeForm({...nfeForm, logradouro: e.target.value})}
+                                    <input required type="text" value={nfeForm.logradouro} onChange={e => setNfeForm({...nfeForm, logradouro: e.target.value})}
                                         placeholder="Rua, Av..."
                                         className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500"/>
                                 </div>
                                 <div className="md:col-span-2">
                                     <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">Número / Comp.</label>
-                                    <input type="text" value={nfeForm.numero} onChange={e => setNfeForm({...nfeForm, numero: e.target.value})}
+                                    <input required type="text" value={nfeForm.numero} onChange={e => setNfeForm({...nfeForm, numero: e.target.value})}
                                         placeholder="Nº, Apto..."
                                         className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500"/>
                                 </div>
                                 <div className="md:col-span-2">
                                     <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">Bairro</label>
-                                    <input type="text" value={nfeForm.bairro} onChange={e => setNfeForm({...nfeForm, bairro: e.target.value})}
+                                    <input required type="text" value={nfeForm.bairro} onChange={e => setNfeForm({...nfeForm, bairro: e.target.value})}
                                         placeholder="Bairro"
                                         className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500"/>
                                 </div>
                                 <div className="md:col-span-3">
                                     <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">Cidade</label>
-                                    <input type="text" value={nfeForm.cidade} onChange={e => setNfeForm({...nfeForm, cidade: e.target.value})}
+                                    <input required type="text" value={nfeForm.cidade} onChange={e => setNfeForm({...nfeForm, cidade: e.target.value})}
                                         placeholder="Cidade"
                                         className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500"/>
                                 </div>
                                 <div className="md:col-span-1">
                                     <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">UF</label>
-                                    <input type="text" value={nfeForm.uf} onChange={e => setNfeForm({...nfeForm, uf: e.target.value})}
+                                    <input required type="text" value={nfeForm.uf} onChange={e => setNfeForm({...nfeForm, uf: e.target.value})}
                                         placeholder="UF"
                                         maxLength="2"
                                         className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500 uppercase"/>
@@ -2555,14 +2594,14 @@ export default function App() {
                     <div className="space-y-4">
                         <div>
                             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">Discriminação do Serviço</label>
-                            <textarea value={nfeForm.desc} onChange={e => setNfeForm({...nfeForm, desc: e.target.value})}
+                            <textarea required value={nfeForm.desc} onChange={e => setNfeForm({...nfeForm, desc: e.target.value})}
                                 rows="3" placeholder="Descreva o serviço prestado..."
                                 className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500 resize-none"/>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">Valor Bruto do Serviço (R$)</label>
-                                <input type="number" step="0.01" value={nfeForm.valor} onChange={e => setNfeForm({...nfeForm, valor: e.target.value})}
+                                <input required type="number" step="0.01" value={nfeForm.valor} onChange={e => setNfeForm({...nfeForm, valor: e.target.value})}
                                     placeholder="0.00"
                                     className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-slate-900 dark:text-white outline-none focus:border-emerald-500 font-bold text-lg"/>
                             </div>
@@ -2642,24 +2681,14 @@ export default function App() {
                     </div>
                 </div>
 
-                <button onClick={enviarNota} disabled={isEmitting}
+                <button type="submit" disabled={isEmitting}
                     className={`w-full py-4 rounded-xl font-bold text-white shadow-lg flex items-center justify-center gap-2 mt-4 transition-all ${isEmitting ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 active:scale-95'}`}>
                     {isEmitting
                         ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                         : <Send size={20}/>}
                     {isEmitting ? 'Transmitindo DPS ao ADN...' : 'Transmitir DPS — Padrão Nacional 2026'}
                 </button>
-
-                {nfeLog.length > 0 && (
-                    <div className="bg-slate-900 dark:bg-black rounded-xl p-4 font-mono text-xs text-emerald-400 border border-slate-700 h-32 overflow-y-auto mt-4 leading-relaxed">
-                        {nfeLog.map((line, i) => (
-                            <div key={i} className={line.includes('ERRO') ? 'text-rose-400' : (line.includes('SUCESSO') ? 'font-bold' : '')}>
-                                {line}
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
+            </form>
         )}
 
         {nfeTab === 'historico' && (
@@ -2730,7 +2759,7 @@ export default function App() {
                             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2 flex items-center"><FolderTree className="mr-3 text-amber-500"/>Arquivar Novo Extrato</h2>
                             <p className="text-slate-500 dark:text-slate-400">Guarde ficheiros no Gestor organizados por data e parceiro.</p>
                         </header>
-                        <form onSubmit={handleSubmitExtrato} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 shadow-xl space-y-6 transition-colors duration-200">
+                        <form onSubmit={handleSubmitExtrato} onInvalid={(e) => e.currentTarget.classList.add('show-errors')} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 shadow-xl space-y-6 transition-colors duration-200">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Ano</label><input type="number" value={formData.ano} onChange={(e) => setFormData({...formData, ano: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500" /></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mês</label><select value={formData.mes} onChange={(e) => setFormData({...formData, mes: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{MESES.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
@@ -2782,7 +2811,10 @@ export default function App() {
                                     <div className={`p-3 rounded-full ${item.type === 'folder' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-slate-100 dark:bg-slate-700 ' + getFileColorClass(item.fileName)}`}>
                                         {item.type === 'folder' ? <Folder size={32} /> : ((item.fileName || '').toLowerCase().endsWith('pdf') ? <FileText size={32} /> : <FileSpreadsheet size={32} />)}
                                     </div>
-                                    <div className="w-full"><p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{item.name}</p></div>
+                                    <div className="w-full">
+                                        <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{item.name}</p>
+                                        {item.pathInfo && <p className="text-[10px] text-slate-400 truncate mt-1">{item.pathInfo}</p>}
+                                    </div>
                                 </div>
                             ))}
                             {getItemsAtCurrentPath().length === 0 && <div className="col-span-full py-12 text-center text-slate-500 font-medium">Pasta Vazia ou Sem Resultados.</div>}
@@ -2798,14 +2830,14 @@ export default function App() {
                             <p className="text-slate-500 dark:text-slate-400 mt-1">Gerencie quem pode acessar o sistema e quais abas podem ver.</p>
                         </header>
                         <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-md mb-6 flex justify-between items-center transition-colors">
-                            <div className="text-sm text-slate-600 dark:text-slate-400">Total de Utilizadores: <strong className="text-slate-900 dark:text-white">{usersList.length}</strong></div>
-                            <button onClick={() => abrirModalUsuario()} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded font-bold flex items-center shadow transition-colors text-sm"><Plus size={16} className="mr-2"/> Novo Utilizador</button>
+                            <div className="text-sm text-slate-600 dark:text-slate-400">Total de usuários: <strong className="text-slate-900 dark:text-white">{usersList.length}</strong></div>
+                            <button onClick={() => abrirModalUsuario()} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded font-bold flex items-center shadow transition-colors text-sm"><Plus size={16} className="mr-2"/> Novo Usuário</button>
                         </div>
                         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm overflow-x-auto transition-colors duration-200">
                             <table className="w-full text-left border-collapse text-sm whitespace-nowrap">
                                 <thead>
                                     <tr className="border-b-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750/50 transition-colors duration-200">
-                                        <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Utilizador (Login)</th>
+                                        <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Usuário (Login)</th>
                                         <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Perfil de Acesso</th>
                                         <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Acessos Permitidos</th>
                                         <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center">Ações</th>
@@ -2823,8 +2855,8 @@ export default function App() {
                                             <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{user.role === 'admin' ? 'Acesso Total' : `${(user.permissions || []).length} Módulos`}</td>
                                             <td className="py-3 px-4 text-center">
                                                 <div className="flex gap-2 justify-center">
-                                                    <button onClick={() => abrirModalUsuario(user)} className="text-amber-500 hover:text-amber-400 bg-amber-100 dark:bg-amber-400/10 p-1.5 rounded transition-colors" title="Editar Utilizador"><Edit size={16}/></button>
-                                                    <button onClick={() => apagarUsuario(user)} className="text-rose-500 hover:text-rose-400 bg-rose-100 dark:bg-rose-400/10 p-1.5 rounded transition-colors" title="Apagar Utilizador"><Trash2 size={16}/></button>
+                                                    <button onClick={() => abrirModalUsuario(user)} className="text-amber-500 hover:text-amber-400 bg-amber-100 dark:bg-amber-400/10 p-1.5 rounded transition-colors" title="Editar Usuário"><Edit size={16}/></button>
+                                                    <button onClick={() => apagarUsuario(user)} className="text-rose-500 hover:text-rose-400 bg-rose-100 dark:bg-rose-400/10 p-1.5 rounded transition-colors" title="Apagar Usuário"><Trash2 size={16}/></button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -2960,7 +2992,7 @@ export default function App() {
                                     {clienteEditIndex >= 0 ? "Editar Cliente" : "Novo Cliente"}
                                 </h3>
                             </div>
-                            <form onSubmit={salvarCliente} className="space-y-4">
+                            <form onSubmit={salvarCliente} onInvalid={(e) => e.currentTarget.classList.add('show-errors')} className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Nome / Designação</label>
@@ -3071,7 +3103,7 @@ export default function App() {
                                     {vendaForm.id || vendaForm.isFromReport ? "Detalhes da Venda" : "Nova Venda / Extrato"}
                                 </h3>
                             </div>
-                            <form onSubmit={salvarVenda} className="flex flex-col h-full overflow-hidden">
+                            <form onSubmit={salvarVenda} onInvalid={(e) => e.currentTarget.classList.add('show-errors')} className="flex flex-col h-full overflow-hidden">
                                 <div className="overflow-y-auto pr-2 -mr-2 flex-1 space-y-4">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
@@ -3209,23 +3241,23 @@ export default function App() {
                             <div className="mb-6 pb-4 border-b border-slate-200 dark:border-slate-700">
                                 <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center">
                                     <User className="mr-3 text-indigo-500" />
-                                    {userForm.id ? "Editar Utilizador" : "Novo Utilizador"}
+                                    {userForm.id ? "Editar Usuário" : "Novo Usuário"}
                                 </h3>
                             </div>
-                            <form onSubmit={salvarUsuario} className="space-y-4">
+                            <form onSubmit={salvarUsuario} onInvalid={(e) => e.currentTarget.classList.add('show-errors')} className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Nome de Utilizador</label>
+                                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Nome do Usuário</label>
                                     <input required type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={userForm.username} onChange={e => setUserForm({...userForm, username: e.target.value})} />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Palavra-passe</label>
+                                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Senha</label>
                                     <input required type="password" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Papel</label>
+                                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Função</label>
                                     <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})}>
                                         <option value="admin">Administrador</option>
-                                        <option value="operador">Operador (Limitado)</option>
+                                        <option value="operador">Colaborador</option>
                                     </select>
                                 </div>
                                 {userForm.role !== 'admin' && (

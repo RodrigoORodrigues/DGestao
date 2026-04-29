@@ -36,3 +36,33 @@
 body {
   @apply bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-200 selection:bg-blue-500 selection:text-white;
 }
+
+.show-errors input:invalid, 
+.show-errors select:invalid, 
+.show-errors textarea:invalid {
+  border-color: #f43f5e !important;
+  color: #e11d48 !important;
+  background-color: #fff1f2 !important;
+  box-shadow: 0 0 0 1px #f43f5e !important;
+}
+
+.dark .show-errors input:invalid, 
+.dark .show-errors select:invalid, 
+.dark .show-errors textarea:invalid {
+  border-color: #f43f5e !important;
+  color: #fda4af !important;
+  background-color: rgba(159, 18, 57, 0.2) !important;
+  box-shadow: 0 0 0 1px #f43f5e !important;
+}
+
+.show-errors input:invalid::placeholder,
+.show-errors textarea:invalid::placeholder {
+  color: #f43f5e !important;
+  opacity: 0.7;
+}
+
+.dark .show-errors input:invalid::placeholder,
+.dark .show-errors textarea:invalid::placeholder {
+  color: #fda4af !important;
+  opacity: 0.7;
+}

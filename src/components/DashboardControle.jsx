@@ -179,23 +179,23 @@ const DashboardControle = ({ vendasList }) => {
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-6"><span className="w-2 h-6 bg-blue-600 rounded-full"></span> Evolução Mensal</h3>
                     <div className="aspect-[21/9]">
                         <Line
-                            data={{ labels: months.map(m=>m.substring(0,3)), datasets: [{ data, borderColor: '#2563eb', backgroundColor: '#eff6ff', fill: true, tension: 0.3 }] }}
-                            options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, align: 'top', formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v) } }, scales: { y: { beginAtZero: true, grace: '10%' } } }}
+                            data={{ labels: months.map(m=>m.substring(0,3)), datasets: [{ label: 'Valor (R$)', data, borderColor: '#2563eb', backgroundColor: '#eff6ff', fill: true, tension: 0.3 }] }}
+                            options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, align: 'top', formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v) } }, scales: { y: { title: { display: true, text: 'Valor (R$)' }, beginAtZero: true, grace: '10%' }, x: { title: { display: true, text: 'Mês' } } } }}
                         />
                     </div>
                 </div>
                 
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4"><span className="w-2 h-6 bg-emerald-500 rounded-full"></span> Trimestral</h3>
-                    <div className="aspect-square"><Bar data={{ labels: ['1º T', '2º T', '3º T', '4º T'], datasets: [{ data: quarterData, backgroundColor: ['#60a5fa', '#34d399', '#facc15', '#f87171'], borderRadius: 6 }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { color: '#fff', font: { weight: 'bold' }, formatter: (v,c) => total>0 ? (v*100/total).toFixed(0)+'%' : '0%' } }, scales: { y: {display:false}, x: {grid:{display:false}} } }} /></div>
+                    <div className="aspect-square"><Bar data={{ labels: ['1º T', '2º T', '3º T', '4º T'], datasets: [{ label: 'Valor (R$)', data: quarterData, backgroundColor: ['#60a5fa', '#34d399', '#facc15', '#f87171'], borderRadius: 6 }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, color: '#fff', font: { weight: 'bold' }, formatter: (v,c) => total>0 ? (v*100/total).toFixed(0)+'%' : '0%' } }, scales: { y: {display:false}, x: {grid:{display:false}} } }} /></div>
                 </div>
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4"><span className="w-2 h-6 bg-teal-500 rounded-full"></span> Semestral</h3>
-                    <div className="aspect-square"><Pie data={{ labels: ['1º Sem', '2º Sem'], datasets: [{ data: semesterData, backgroundColor: ['#2dd4bf', '#0d9488'] }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, datalabels: { color: '#fff', font: { weight: 'bold' }, formatter: (v,c) => total>0 ? (v*100/total).toFixed(0)+'%' : '0%' } } }} /></div>
+                    <div className="aspect-square"><Pie data={{ labels: ['1º Sem', '2º Sem'], datasets: [{ label: 'Valor (R$)', data: semesterData, backgroundColor: ['#2dd4bf', '#0d9488'] }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, datalabels: { display: true, color: '#fff', font: { weight: 'bold' }, formatter: (v,c) => total>0 ? (v*100/total).toFixed(0)+'%' : '0%' } } }} /></div>
                 </div>
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4"><span className="w-2 h-6 bg-indigo-500 rounded-full"></span> Mix</h3>
-                    <div className="aspect-square"><Doughnut data={{ labels: ['Corretora', 'Assessoria'], datasets: [{ data: [totCorr, totAss], backgroundColor: ['#2563eb', '#a855f7'], borderWidth: 0 }] }} options={{ responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom' }, datalabels: { color: '#fff', font: { weight: 'bold' }, formatter: (v,c) => (v/(totCorr+totAss)*100 || 0).toFixed(0)+'%' } } }} /></div>
+                    <div className="aspect-square"><Doughnut data={{ labels: ['Corretora', 'Assessoria'], datasets: [{ label: 'Valor (R$)', data: [totCorr, totAss], backgroundColor: ['#2563eb', '#a855f7'], borderWidth: 0 }] }} options={{ responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom' }, datalabels: { display: true, color: '#fff', font: { weight: 'bold' }, formatter: (v,c) => (v/(totCorr+totAss)*100 || 0).toFixed(0)+'%' } } }} /></div>
                 </div>
             </div>
 
@@ -212,8 +212,8 @@ const DashboardControle = ({ vendasList }) => {
                 </div>
                 <div className="aspect-[21/9]">
                     <Bar 
-                        data={{ labels: OPERATORS.map(op=>op.key), datasets: [{ data: opChartData, backgroundColor: OPERATORS.map(op=>op.color), borderRadius: 6 }] }}
-                        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { anchor: 'end', align: 'top', formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v), font: {size: 10} } }, scales: { y: { display: false }, x: { grid: { display: false }, ticks: { font: {size: 9} } } } }}
+                        data={{ labels: OPERATORS.map(op=>op.key), datasets: [{ label: 'Valor (R$)', data: opChartData, backgroundColor: OPERATORS.map(op=>op.color), borderRadius: 6 }] }}
+                        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'top', formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v), font: {size: 10} } }, scales: { y: { display: false }, x: { title: { display: true, text: 'Operadoras' }, grid: { display: false }, ticks: { font: {size: 9} } } } }}
                     />
                 </div>
             </div>
@@ -223,7 +223,7 @@ const DashboardControle = ({ vendasList }) => {
                 <div className="aspect-[21/9]">
                     <Bar 
                         data={{ labels: months.map(m=>m.substring(0,3)), datasets: [{ label: 'Corretora', data: cCorr, backgroundColor: '#2563eb', stack: '0' }, { label: 'Assessoria', data: cAss, backgroundColor: '#a855f7', stack: '0' }] }}
-                        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, datalabels: { display: c => c.dataset.data[c.dataIndex] > 5000, color: '#fff', font: {size:9}, formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v) } }, scales: { x: { stacked: true, grid: {display:false} }, y: { stacked: true, display: false } } }}
+                        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, datalabels: { display: c => c.dataset.data[c.dataIndex] > 5000, color: '#fff', font: {size:9}, formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v) } }, scales: { x: { title: { display: true, text: 'Mês' }, stacked: true, grid: {display:false} }, y: { title: { display: true, text: 'Valor (R$)' }, stacked: true, display: false } } }}
                     />
                 </div>
             </div>
