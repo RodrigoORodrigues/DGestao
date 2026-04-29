@@ -180,7 +180,7 @@ const DashboardControle = ({ vendasList }) => {
                     <div className="aspect-[21/9]">
                         <Line
                             data={{ labels: months.map(m=>m.substring(0,3)), datasets: [{ label: 'Valor (R$)', data, borderColor: '#2563eb', backgroundColor: '#eff6ff', fill: true, tension: 0.3 }] }}
-                            options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, align: 'top', formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v) } }, scales: { y: { title: { display: true, text: 'Valor (R$)' }, beginAtZero: true, grace: '10%' }, x: { title: { display: true, text: 'Mês' } } } }}
+                            options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, align: 'top', formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v) } }, scales: { y: { title: { display: false, text: 'Valor (R$)' }, beginAtZero: true, grace: '10%' }, x: { title: { display: false, text: 'Mês' } } } }}
                         />
                     </div>
                 </div>
@@ -223,7 +223,7 @@ const DashboardControle = ({ vendasList }) => {
                 <div className="aspect-[21/9]">
                     <Bar 
                         data={{ labels: months.map(m=>m.substring(0,3)), datasets: [{ label: 'Corretora', data: cCorr, backgroundColor: '#2563eb', stack: '0' }, { label: 'Assessoria', data: cAss, backgroundColor: '#a855f7', stack: '0' }] }}
-                        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, datalabels: { display: c => c.dataset.data[c.dataIndex] > 5000, color: '#fff', font: {size:9}, formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v) } }, scales: { x: { title: { display: true, text: 'Mês' }, stacked: true, grid: {display:false} }, y: { title: { display: true, text: 'Valor (R$)' }, stacked: true, display: false } } }}
+                        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, datalabels: { display: c => c.dataset.data[c.dataIndex] > 5000, color: '#fff', font: {size:9}, formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v) } }, scales: { x: { title: { display: false, text: 'Mês' }, stacked: true, grid: {display:false} }, y: { title: { display: false, text: 'Valor (R$)' }, stacked: true, display: false } } }}
                     />
                 </div>
             </div>
