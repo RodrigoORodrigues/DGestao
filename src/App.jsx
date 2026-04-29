@@ -19,7 +19,7 @@ import {
     Layers, Settings, Database, RefreshCw, Trash2, HardDrive, Users, FileCheck, 
     CheckCircle, XCircle, Edit, ListFilter, Upload, Sun, Moon, Printer, Archive, 
     History, AlertCircle, Lock, User, Key, LogOut, Shield, ShoppingCart, Receipt, 
-    Send, Percent, DollarSign, FileOutput, Copy, Info, Tag, AlertTriangle, LayoutGrid, List
+    Send, Percent, DollarSign, FileOutput, Copy, Info, Tag, AlertTriangle, LayoutGrid, List, Phone, Mail
 } from 'lucide-react';
 
 import * as XLSX from 'xlsx';
@@ -786,7 +786,7 @@ export default function App() {
             } else {
                 const duplicado = clientes.find(c => c.nome.toLowerCase() === clienteParaSalvar.nome.toLowerCase());
                 if (duplicado) { setLoading(false); return showAlert("Não é possível salvar. Já existe um cliente com este nome na base."); }
-                clienteParaSalvar.codigo = getNextSequenceNumber(clientes, c => c.codigo); clienteParaSalvar.cadastradoEm = dataDeHojeInterna(); delete clienteParaSalvar.id;
+                clienteParaSalvar.codigo = getNextSequenceNumber(clientes, c => c.codigo); delete clienteParaSalvar.id;
                 await supabase.from('clientes').insert([clienteParaSalvar]);
             }
             await loadFromDB();
@@ -814,7 +814,7 @@ export default function App() {
                     if(!clientes.find(c => c.nome.toLowerCase() === nome.toLowerCase()) && !novosClientesParaInserir.find(c => c.nome.toLowerCase() === nome.toLowerCase())) {
                         currentMaxCodigo++;
                         let newCodigo = String(currentMaxCodigo).padStart(5, '0');
-                        novosClientesParaInserir.push({ codigo: newCodigo, nome: nome, tipo: linha['Tipo'] || 'Pessoa jurídica', documento: linha['Documento'] || linha['CNPJ'] || linha['NIF'] || '', telefone: linha['Telefone'] || '', celular: linha['Celular'] || '', email: linha['Email'] || linha['E-mail'] || '', situacao: true, cadastradoEm: dataDeHojeInterna() });
+                        novosClientesParaInserir.push({ codigo: newCodigo, nome: nome, tipo: linha['Tipo'] || 'Pessoa jurídica', documento: linha['Documento'] || linha['CNPJ'] || linha['NIF'] || '', telefone: linha['Telefone'] || '', celular: linha['Celular'] || '', email: linha['Email'] || linha['E-mail'] || '', situacao: true });
                     }
                 });
             }
@@ -893,8 +893,7 @@ export default function App() {
                         telefone: '', 
                         celular: '', 
                         email: '', 
-                        situacao: true, 
-                        cadastradoEm: dataDeHojeInterna() 
+                        situacao: true
                     });
                 }
 
@@ -1410,7 +1409,8 @@ export default function App() {
                 handleLogout={handleLogout}
             />
 
-            <main className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900 p-4 md:p-8 relative transition-colors duration-200">
+            <div className="flex-1 flex flex-col h-full overflow-hidden">
+                <main className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900 p-4 md:p-8 relative transition-colors duration-200">
                 
                 {/* ECRÃ 11: INCONSISTÊNCIAS DE PARCELAS */}
                 {currentView === 'inconsistencias' && hasAccess('vendas') && (
@@ -3302,7 +3302,24 @@ export default function App() {
                         </div>
                     </div>
                 )}
-            </main>
+
+                </main>
+
+                {/* Footer fixo */}
+                <footer className="shrink-0 z-10 py-3 px-4 md:px-8 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs sm:text-sm flex flex-col sm:flex-row items-center justify-between gap-4 transition-colors duration-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] dark:shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.2)]">
+                    <p className="font-medium">Desenvolvido por <span className="text-blue-600 dark:text-blue-400 font-bold">Donfim Tech</span> copyright 2025 - 2026</p>
+                    <div className="flex items-center gap-6">
+                        <a href="tel:#" className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Suporte por Telefone">
+                            <Phone size={16} className="text-blue-500" />
+                            <span className="hidden sm:inline">Suporte</span>
+                        </a>
+                        <a href="mailto:suporte@donfim.tech" className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Suporte por Email">
+                            <Mail size={16} className="text-blue-500" />
+                            <span className="hidden sm:inline">Email</span>
+                        </a>
+                    </div>
+                </footer>
+            </div>
         </div>
     );
 }
