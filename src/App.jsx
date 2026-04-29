@@ -1366,7 +1366,7 @@ export default function App() {
     };
 
     return (
-        <div className="flex h-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans overflow-hidden transition-colors duration-200">
+        <div className="flex h-[100dvh] w-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans overflow-hidden transition-colors duration-200">
             
             {/* ALERTS E LOADING */}
             {alertDialog.isOpen && (
