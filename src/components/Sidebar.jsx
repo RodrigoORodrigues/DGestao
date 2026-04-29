@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
     Home, ShoppingCart, Users, FileCheck, History, Receipt, 
     Plus, FolderTree, Shield, Settings, User, Moon, Sun, LogOut, Layers,
-    ChevronLeft, ChevronRight, GripVertical
+    ChevronLeft, ChevronRight, GripVertical, Building
 } from 'lucide-react';
 
 const SidebarItem = ({ icon: Icon, label, active, onClick, collapsed }) => (
@@ -13,7 +13,7 @@ const SidebarItem = ({ icon: Icon, label, active, onClick, collapsed }) => (
     </button>
 );
 
-export default function Sidebar({ currentUser, currentView, setCurrentView, hasAccess, isDarkMode, setIsDarkMode, handleLogout }) {
+export default function Sidebar({ currentUser, currentView, setCurrentView, hasAccess, isDarkMode, setIsDarkMode, handleLogout, defaultEmpresa }) {
     const [width, setWidth] = useState(() => {
         const saved = localStorage.getItem('protetta_sidebar_width');
         return saved ? parseInt(saved, 10) : 256;
@@ -77,16 +77,55 @@ export default function Sidebar({ currentUser, currentView, setCurrentView, hasA
             className="bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex flex-col hidden md:flex shrink-0 transition-colors duration-200 z-20 relative"
             style={{ width: collapsed ? '80px' : `${width}px`, transition: isResizing.current ? 'none' : 'width 0.2s ease-in-out' }}
         >
-            <div className={`flex items-center space-x-2 ${collapsed ? 'px-2 py-4 justify-center' : 'px-4 py-4'} mb-4 mt-2 overflow-hidden relative`}>
-                <div className="bg-emerald-600 p-2 rounded-lg font-bold text-white leading-none border border-emerald-400/50 shrink-0">D</div>
-                {!collapsed && (
-                    <div className="min-w-0 pr-4">
-                        <h1 className="text-lg font-bold text-slate-900 dark:text-white leading-tight truncate">Don Gestão</h1>
-                        <p className="text-xs text-slate-500 flex items-center mt-0.5 truncate">
-                            <User size={12} className="mr-1 shrink-0"/> <span className="truncate">{currentUser?.username}</span>
-                        </p>
+            <div className={`flex flex-col ${collapsed ? 'px-2 py-4 items-center' : 'px-4 py-4'} mb-2 mt-2 relative`}>
+                <div className={`flex items-center space-x-2 w-full ${collapsed ? 'justify-center' : ''}`}>
+                    <div className="h-10 w-10 bg-emerald-600 rounded-lg font-bold text-white flex items-center justify-center text-lg border border-emerald-400/50 shrink-0">
+                        D
                     </div>
-                )}
+                    {!collapsed && (
+                        <div className="min-w-0 pr-4">
+                            <h1 className="text-lg font-bold text-slate-900 dark:text-white leading-tight truncate">Don Gestão</h1>
+                            <p className="text-xs text-slate-500 flex items-center mt-0.5 truncate">
+                                <User size={12} className="mr-1 shrink-0"/> <span className="truncate">{currentUser?.username}</span>
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Empresa Logada */}
+                <div className={`mt-5 ${collapsed ? 'w-full flex justify-center' : 'w-full'}`}>
+                    {!collapsed ? (
+                        <div className="flex items-center space-x-3 bg-slate-50 dark:bg-slate-900 rounded-lg p-2 border border-slate-200 dark:border-slate-800">
+                            {defaultEmpresa?.logo ? (
+                                <div className="h-8 w-8 shrink-0 flex items-center justify-center p-0.5 bg-white rounded shadow-sm border border-slate-200">
+                                    <img src={defaultEmpresa.logo} alt={defaultEmpresa.nome} className="h-full w-full object-contain" />
+                                </div>
+                            ) : (
+                                <div className="h-8 w-8 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded flex items-center justify-center text-sm font-bold shrink-0 border border-indigo-200 dark:border-indigo-800 border-opacity-50">
+                                    {defaultEmpresa?.nome?.charAt(0) || 'E'}
+                                </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider mb-0.5">Empresa Ativa</p>
+                                <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate leading-tight mt-0.5">
+                                    {defaultEmpresa?.nome || 'Empresa Padrão'}
+                                </p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="relative group cursor-pointer" title={defaultEmpresa?.nome || 'Empresa Padrão'}>
+                            {defaultEmpresa?.logo ? (
+                                <div className="h-10 w-10 shrink-0 flex items-center justify-center p-1 bg-white rounded-lg shadow-sm border border-slate-200 dark:border-slate-800">
+                                    <img src={defaultEmpresa.logo} alt={defaultEmpresa.nome} className="h-full w-full object-contain" />
+                                </div>
+                            ) : (
+                                <div className="h-10 w-10 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center text-lg font-bold shrink-0 border border-indigo-200 dark:border-indigo-800 border-opacity-50">
+                                    {defaultEmpresa?.nome?.charAt(0) || 'E'}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
             
             <nav className={`flex-1 space-y-1 overflow-y-auto overflow-x-hidden ${collapsed ? 'px-2' : 'px-4'} scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700`}>
@@ -111,9 +150,10 @@ export default function Sidebar({ currentUser, currentView, setCurrentView, hasA
                 {hasAccess('gestor') && <SidebarItem collapsed={collapsed} icon={Plus} label="Incluir Extrato" active={currentView === 'gestor-add'} onClick={() => setCurrentView('gestor-add')} />}
                 {hasAccess('gestor') && <SidebarItem collapsed={collapsed} icon={FolderTree} label="Consultar Extratos" active={currentView === 'gestor-browse'} onClick={() => setCurrentView('gestor-browse')} />}
                 
-                {(hasAccess('settings') || hasAccess('usuarios')) && <p className={`text-xs font-bold text-slate-400 dark:text-slate-500 uppercase pt-6 mb-2 truncate ${collapsed ? 'text-center' : ''}`}>
+                {(hasAccess('settings') || hasAccess('usuarios') || hasAccess('empresas')) && <p className={`text-xs font-bold text-slate-400 dark:text-slate-500 uppercase pt-6 mb-2 truncate ${collapsed ? 'text-center' : ''}`}>
                     {collapsed ? '...' : 'Sistema'}
                 </p>}
+                {hasAccess('empresas') && <SidebarItem collapsed={collapsed} icon={Building} label="Gestão de Empresas" active={currentView === 'empresas'} onClick={() => setCurrentView('empresas')} />}
                 {hasAccess('usuarios') && <SidebarItem collapsed={collapsed} icon={Shield} label="Controle de Acessos" active={currentView === 'usuarios'} onClick={() => setCurrentView('usuarios')} />}
                 {hasAccess('settings') && <SidebarItem collapsed={collapsed} icon={Settings} label="Configurações" active={currentView === 'settings'} onClick={() => setCurrentView('settings')} />}
             </nav>

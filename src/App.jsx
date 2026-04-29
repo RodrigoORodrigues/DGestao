@@ -11,6 +11,7 @@ import {
 } from './utils/helpers';
 import Sidebar from './components/Sidebar';
 import DashboardControle from './components/DashboardControle';
+import EmpresasGestao from './components/EmpresasGestao';
 
 // Ícones importados diretamente do pacote npm que instalámos
 import { 
@@ -77,6 +78,22 @@ export default function App() {
     const [filtroNomeCliente, setFiltroNomeCliente] = useState('');
     const [filtrosCli, setFiltrosCli] = useState({ tipo: 'Todos', situacao: 'Todos' });
     
+    // Empresas Gestão
+    const [empresasList, setEmpresasList] = useState(() => {
+        try {
+            const saved = localStorage.getItem('protetta_empresas');
+            const parsed = saved ? JSON.parse(saved) : null;
+            if (parsed && parsed.length > 0) {
+                // Ensure default PROTETTA has CNPJ
+                return parsed.map(e => (e.id === 1 && e.nome === 'PROTETTA' && !e.cnpj) ? { ...e, cnpj: '28.291.926/0001-00' } : e);
+            }
+            return [{ id: 1, nome: 'PROTETTA', cnpj: '28.291.926/0001-00', isDefault: true }];
+        } catch { return [{ id: 1, nome: 'PROTETTA', cnpj: '28.291.926/0001-00', isDefault: true }]; }
+    });
+    const defaultEmpresa = empresasList.find(e => e.isDefault) || empresasList[0] || { nome: 'PROTETTA' };
+    const nomeEmpresa = defaultEmpresa.nome;
+    const nomeEmpresaUpper = nomeEmpresa.toUpperCase();
+
     const [cols, setCols] = useState({ codigo: false, nome: true, tipo: true, documento: true, telefone: true, celular: true, email: true, situacao: true, cadastrado_em: true, acoes: true });
     const [modalClienteOpen, setModalClienteOpen] = useState(false);
     const [modalBuscaOpen, setModalBuscaOpen] = useState(false);
@@ -119,10 +136,10 @@ export default function App() {
     const [showFilterClienteSuggestions, setShowFilterClienteSuggestions] = useState(false);
     const [modalVendaOpen, setModalVendaOpen] = useState(false);
     const [vendaForm, setVendaForm] = useState({ 
-        id: null, numero: '', cliente: '', dataVenda: dataDeHojeInterna(), situacao: 'FATURADO PROTETTA NF', 
-        loja: 'PROTETTA SEGUROS', valor: 0, contrato: '', codigoOperadora: '', vidas: '', 
-        parcela: '', inicioVigencia: '', notaFiscal: '', corretor: 'Protetta',
-        vitalicio: 'Não', assessoria: 'Protetta', formaPagamento: 'Crédito em conta',
+        id: null, numero: '', cliente: '', dataVenda: dataDeHojeInterna(), situacao: `FATURADO ${nomeEmpresaUpper} NF`, 
+        loja: `${nomeEmpresaUpper} SEGUROS`, valor: 0, contrato: '', codigoOperadora: '', vidas: '', 
+        parcela: '', inicioVigencia: '', notaFiscal: '', corretor: nomeEmpresa,
+        vitalicio: 'Não', assessoria: nomeEmpresa, formaPagamento: 'Crédito em conta',
         servico: 'Plano de Saúde', desconto: '', notas: '', comissao: 0, comissaoPorcentagem: ''
     });
 
@@ -186,7 +203,7 @@ export default function App() {
         pis: '', cofins: '', inss: '', ir: '', csll: ''
     });
 
-    const [formData, setFormData] = useState({ ano: new Date().getFullYear().toString(), mes: MESES[0], categoria: CATEGORIAS[0], empresa: EMPRESAS_INTERNAS[0], parceiro: '', arquivos: [] });
+    const [formData, setFormData] = useState({ ano: new Date().getFullYear().toString(), mes: MESES[0], categoria: CATEGORIAS[0], empresa: nomeEmpresa, parceiro: '', arquivos: [] });
     const [formError, setFormError] = useState(''); 
     const [successMsg, setSuccessMsg] = useState(''); 
     const fileInputRef = useRef(null);
@@ -412,7 +429,7 @@ export default function App() {
                         situacao: dado.situacao, loja: dado.loja, valor: dado.valorTotal, parcela: dado.parcela || '', 
                         corretor: dado.vendedor || '', inicioVigencia: dado.inicioVigencia || '', notaFiscal: dado.notaFiscal || '',
                         contrato: dado.contrato || '', codigoOperadora: dado.codigoOperadora || 'AMIL', vidas: dado.vidas || '', 
-                        vitalicio: dado.vitalicio || 'Não', assessoria: dado.assessoria || 'Protetta', formaPagamento: dado.formaPagamento || 'Crédito em conta',
+                        vitalicio: dado.vitalicio || 'Não', assessoria: dado.assessoria || nomeEmpresa, formaPagamento: dado.formaPagamento || 'Crédito em conta',
                         servico: dado.servico || 'Plano de Saúde', desconto: dado.desconto || '' 
                     });
                 });
@@ -513,9 +530,9 @@ export default function App() {
     const abrirModalVenda = (venda = null) => {
         if (venda) setVendaForm({ ...venda });
         else setVendaForm({ 
-            id: null, numero: getNextSequenceNumber(vendasList, v => v.numero), cliente: '', dataVenda: dataDeHojeInterna(), situacao: 'FATURADO PROTETTA NF', 
-            loja: 'PROTETTA SEGUROS', valor: 0, contrato: '', codigoOperadora: '', vidas: '', parcela: '', inicioVigencia: '', notaFiscal: '', 
-            corretor: 'Protetta', vitalicio: 'Não', assessoria: 'Protetta', formaPagamento: 'Crédito em conta',
+            id: null, numero: getNextSequenceNumber(vendasList, v => v.numero), cliente: '', dataVenda: dataDeHojeInterna(), situacao: `FATURADO ${nomeEmpresaUpper} NF`, 
+            loja: `${nomeEmpresaUpper} SEGUROS`, valor: 0, contrato: '', codigoOperadora: '', vidas: '', parcela: '', inicioVigencia: '', notaFiscal: '', 
+            corretor: nomeEmpresa, vitalicio: 'Não', assessoria: nomeEmpresa, formaPagamento: 'Crédito em conta',
             servico: 'Plano de Saúde', desconto: '', notas: '' 
         });
         setModalVendaOpen(true);
@@ -691,7 +708,7 @@ export default function App() {
         if (currentPath.length === 0) return [...new Set(dbReports.map(r => r.ano))].sort().map(y => ({ id: y, name: y, type: 'folder' }));
         if (currentPath.length === 1) return [...new Set(dbReports.filter(r => r.ano === currentPath[0]).map(r => r.mes))].sort((a, b) => MESES.indexOf(a) - MESES.indexOf(b)).map(m => ({ id: m, name: m, type: 'folder' }));
         if (currentPath.length === 2) return CATEGORIAS.map(c => ({ id: c, name: c, type: 'folder' }));
-        if (currentPath.length === 3) return EMPRESAS_INTERNAS.map(e => ({ id: e, name: e, type: 'folder' }));
+        if (currentPath.length === 3) return empresasList.map(e => ({ id: e.nome, name: e.nome, type: 'folder' }));
         if (currentPath.length === 4) return dbReports.filter(r => r.ano === currentPath[0] && r.mes === currentPath[1] && r.categoria === currentPath[2] && r.empresa === currentPath[3]).map(f => ({ ...f, type: 'file', name: f.parceiro }));
         return [];
     };
@@ -971,16 +988,16 @@ export default function App() {
                         vidas: vidasDetectadas,
                         cliente: nomeCliente, 
                         data: dataDeHojeInterna(), 
-                        situacao: "FATURADO PROTETTA NF", 
-                        loja: "PROTETTA", 
+                        situacao: `FATURADO ${nomeEmpresaUpper} NF`, 
+                        loja: nomeEmpresaUpper, 
                         valorTotal, 
                         comissao, 
-                        vendedor: vendedorDetectado, 
+                        vendedor: vendedorDetectado || nomeEmpresa, 
                         parcela: parcelaDetectada,
                         inicioVigencia: inicioVigenciaDetectada, 
                         notaFiscal: '', 
                         vitalicio: 'Não', 
-                        assessoria: 'Protetta', 
+                        assessoria: nomeEmpresa, 
                         formaPagamento: 'Crédito em conta',
                         servico: 'Plano de Saúde', 
                         desconto: '', 
@@ -1078,9 +1095,9 @@ export default function App() {
 
         const novaLinha = { 
             cod: String(maxCod).padStart(5, '0'), contrato: '', codigoOperadora: 'AMIL', vidas: '1',
-            cliente: 'Novo Cliente', data: '', situacao: 'FATURADO PROTETTA NF', loja: 'PROTETTA', 
-            valorTotal: 0, comissao: 0, vendedor: 'Protetta', parcela: '1', inicioVigencia: '', notaFiscal: '',
-            vitalicio: 'Não', assessoria: 'Protetta', formaPagamento: 'Crédito em conta',
+            cliente: 'Novo Cliente', data: '', situacao: `FATURADO ${nomeEmpresaUpper} NF`, loja: nomeEmpresaUpper, 
+            valorTotal: 0, comissao: 0, vendedor: nomeEmpresa, parcela: '1', inicioVigencia: '', notaFiscal: '',
+            vitalicio: 'Não', assessoria: nomeEmpresa, formaPagamento: 'Crédito em conta',
             servico: 'Plano de Saúde', desconto: '', selected: true 
         };
         const newData = [...pdfData, novaLinha]; setPdfData(newData); setEditRowIndex(newData.length - 1); setEditRowData(novaLinha);
@@ -1410,10 +1427,21 @@ export default function App() {
                 isDarkMode={isDarkMode}
                 setIsDarkMode={setIsDarkMode}
                 handleLogout={handleLogout}
+                defaultEmpresa={defaultEmpresa}
             />
 
             <div className="flex-1 flex flex-col h-full overflow-hidden">
                 <main className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900 p-4 md:p-8 relative transition-colors duration-200">
+
+                {/* ECRÃ DE EMPRESAS */}
+                {currentView === 'empresas' && hasAccess('empresas') && (
+                    <EmpresasGestao 
+                        empresasList={empresasList} 
+                        setEmpresasList={setEmpresasList} 
+                        showAlert={showAlert} 
+                        showConfirm={showConfirm} 
+                    />
+                )}
                 
                 {/* ECRÃ 11: INCONSISTÊNCIAS DE PARCELAS */}
                 {currentView === 'inconsistencias' && hasAccess('vendas') && (
@@ -1501,7 +1529,7 @@ export default function App() {
                 
                 {/* NOVO DASHBOARD */}
                 {currentView === 'dashboard' && hasAccess('dashboard') && (
-                    <DashboardControle vendasList={vendasList} />
+                    <DashboardControle vendasList={vendasList} nomeEmpresa={nomeEmpresa} nomeEmpresaUpper={nomeEmpresaUpper} />
                 )}
 
                 {/* ECRÃ 12: PAINEL DE CONTROLE (ANTIGO DASHBOARD) */}
@@ -1719,8 +1747,8 @@ export default function App() {
                                             className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500"
                                         >
                                             <option value="Todos">Todos</option>
-                                            <option value="PROTETTA SEGUROS">PROTETTA SEGUROS</option>
-                                            <option value="PROTETTA">PROTETTA</option>
+                                            <option value={`${nomeEmpresaUpper} SEGUROS`}>{`${nomeEmpresaUpper} SEGUROS`}</option>
+                                            <option value={nomeEmpresaUpper}>{nomeEmpresaUpper}</option>
                                         </select>
                                     </div>
 
@@ -1767,7 +1795,7 @@ export default function App() {
                                             className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500"
                                         >
                                             <option value="Todos">Todos</option>
-                                            <option value="FATURADO PROTETTA NF">FATURADO PROTETTA NF</option>
+                                            <option value={`FATURADO ${nomeEmpresaUpper} NF`}>FATURADO {nomeEmpresaUpper} NF</option>
                                             <option value="PENDENTE">PENDENTE</option>
                                             <option value="CANCELADO">CANCELADO</option>
                                         </select>
@@ -2286,8 +2314,8 @@ export default function App() {
                                                     </td>}
                                                     {reportTableCols.desconto && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.desconto || ''} onChange={e=>setEditRowData({...editRowData, desconto: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-amber-500 w-12 text-center" placeholder="R$ ou %" /></td>}
                                                     {reportTableCols.corretor && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                                        <select value={editRowData.vendedor || 'Protetta'} onChange={e=>setEditRowData({...editRowData, vendedor: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 min-w-[80px]">
-                                                            <option>Protetta</option><option>Proper</option><option>Assessoria</option><option>Corretor Interno</option>
+                                                        <select value={editRowData.vendedor || nomeEmpresa} onChange={e=>setEditRowData({...editRowData, vendedor: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 min-w-[80px]">
+                                                            <option>{nomeEmpresa}</option><option>Proper</option><option>Assessoria</option><option>Corretor Interno</option>
                                                         </select>
                                                     </td>}
                                                     {reportTableCols.parc && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.parcela} onChange={e=>setEditRowData({...editRowData, parcela: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 text-center w-8" placeholder="1"/></td>}
@@ -2860,7 +2888,7 @@ export default function App() {
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Ano</label><input type="number" value={formData.ano} onChange={(e) => setFormData({...formData, ano: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500" /></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mês</label><select value={formData.mes} onChange={(e) => setFormData({...formData, mes: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{MESES.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Categoria</label><select value={formData.categoria} onChange={(e) => setFormData({...formData, categoria: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label><select disabled value={formData.empresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-500 dark:text-slate-400 outline-none cursor-not-allowed">{EMPRESAS_INTERNAS.map(e => <option key={e} value={e}>{e}</option>)}</select></div>
+                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label><select disabled value={formData.empresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-500 dark:text-slate-400 outline-none cursor-not-allowed">{empresasList.map(e => <option key={e.nome} value={e.nome}>{e.nome}</option>)}</select></div>
                             </div>
                             <div className="space-y-2 pt-4 border-t border-slate-200 dark:border-slate-700">
                                 <label className="text-sm font-bold text-blue-600 dark:text-blue-400">NOME DO PARCEIRO / ARQUIVO</label>

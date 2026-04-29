@@ -7,6 +7,7 @@ export const SYSTEM_MODULES = [
     { id: 'nfe', label: 'Emissor NFS-e (Prefeitura)' },
     { id: 'historico', label: 'Histórico de Relatórios Salvos' },
     { id: 'gestor', label: 'Gestor de Extratos (Arquivos Internos)' },
+    { id: 'empresas', label: 'Gestão de Empresas' },
     { id: 'usuarios', label: 'Controle de Acessos e Permissões' },
     { id: 'settings', label: 'Configurações do Sistema e Backups' }
 ];
