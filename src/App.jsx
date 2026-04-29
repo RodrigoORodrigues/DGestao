@@ -1505,7 +1505,7 @@ export default function App() {
                 {currentView === 'painel' && hasAccess('dashboard') && (
                     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
                         <header><h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Visão Geral</h2></header>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg flex flex-col justify-between transition-colors duration-200">
                                 <div className="flex justify-between items-start mb-4">
                                     <div><h3 className="text-slate-500 dark:text-slate-400 font-medium">Clientes na Base</h3><p className="text-4xl font-bold text-slate-900 dark:text-white mt-1">{clientes.length}</p></div>
@@ -1520,14 +1520,107 @@ export default function App() {
                                 </div>
                                 {hasAccess('gestor') && <button onClick={()=>setCurrentView('gestor-browse')} className="text-sm font-bold text-blue-600 dark:text-blue-400 hover:text-blue-500 flex items-center">Explorar Gestor <ChevronRight size={16}/></button>}
                             </div>
-                            <div className="bg-gradient-to-br from-indigo-600 to-blue-800 p-6 rounded-xl shadow-lg text-white flex flex-col justify-center">
-                                <h3 className="font-bold mb-3 text-lg">Acesso Rápido</h3>
-                                <div className="space-y-2">
-                                    {hasAccess('vendas') && <button onClick={() => setCurrentView('vendas')} className="w-full bg-white/20 hover:bg-white/30 text-white py-2 rounded-lg font-bold transition-colors text-sm flex items-center justify-center"><ShoppingCart size={16} className="mr-2"/> Painel de Vendas</button>}
-                                    {hasAccess('processar') && <button onClick={() => setCurrentView('processar')} className="w-full bg-black/20 hover:bg-black/30 text-white py-2 rounded-lg font-bold transition-colors text-sm flex items-center justify-center"><Upload size={16} className="mr-2"/> Relatórios de Comissão</button>}
+                        </div>
+
+                        {/* ULTIMAS VENDAS */}
+                        {hasAccess('vendas') && vendasList.length > 0 && (
+                            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg transition-colors duration-200 animate-in fade-in slide-in-from-bottom-4">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center">
+                                        <ShoppingCart size={20} className="mr-2 text-indigo-500 dark:text-indigo-400"/>
+                                        Últimas Vendas
+                                    </h3>
+                                    <button onClick={() => setCurrentView('vendas')} className="text-sm font-bold text-indigo-600 dark:text-indigo-400 hover:underline transition-all">
+                                        Ver todas
+                                    </button>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                                        <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-200 font-semibold border-b border-slate-200 dark:border-slate-700">
+                                            <tr>
+                                                <th className="py-3 px-4 rounded-tl-lg">Data</th>
+                                                <th className="py-3 px-4">Cliente</th>
+                                                <th className="py-3 px-4">Operadora</th>
+                                                <th className="py-3 px-4">Valor</th>
+                                                <th className="py-3 px-4 rounded-tr-lg">Situação</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {[...vendasList].reverse().slice(0, 5).map((venda, idx) => (
+                                                <tr key={idx} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                                    <td className="py-3 px-4">
+                                                        {venda.dataVenda ? new Date(venda.dataVenda + "T12:00:00").toLocaleDateString('pt-BR') : '-'}
+                                                    </td>
+                                                    <td className="py-3 px-4 font-medium text-slate-900 dark:text-white">{venda.cliente}</td>
+                                                    <td className="py-3 px-4">{venda.operadora}</td>
+                                                    <td className="py-3 px-4 font-medium">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(venda.valorBruto || 0)}</td>
+                                                    <td className="py-3 px-4">
+                                                        <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded text-xs font-semibold whitespace-nowrap">
+                                                            {venda.situacao}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
-                        </div>
+                        )}
+                        
+                        {hasAccess('vendas') && vendasList.length === 0 && (
+                             <div className="bg-slate-50 dark:bg-slate-800/50 border border-dashed border-slate-300 dark:border-slate-700 p-8 rounded-xl text-center text-slate-500 dark:text-slate-400">
+                                 <ShoppingCart size={48} className="mx-auto mb-4 text-slate-400 dark:text-slate-500 opacity-50"/>
+                                 <p className="font-medium text-lg mb-1">Nenhuma venda registrada ainda</p>
+                                 <p className="text-sm opacity-80">Comece a adicionar vendas para ver o histórico aqui.</p>
+                                 <button onClick={() => setCurrentView('vendas')} className="mt-4 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded shadow-sm text-sm font-bold transition-colors">Acessar Painel de Vendas</button>
+                             </div>
+                        )}
+
+                        {/* ULTIMOS RELATORIOS */}
+                        {hasAccess('processar') && savedReportsList.length > 0 && (
+                            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg transition-colors duration-200 animate-in fade-in slide-in-from-bottom-4 mt-8">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center">
+                                        <FileText size={20} className="mr-2 text-blue-500 dark:text-blue-400"/>
+                                        Últimos Relatórios
+                                    </h3>
+                                    <button onClick={() => setCurrentView('processar')} className="text-sm font-bold text-blue-600 dark:text-blue-400 hover:underline transition-all">
+                                        Ver todos
+                                    </button>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                                        <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-200 font-semibold border-b border-slate-200 dark:border-slate-700">
+                                            <tr>
+                                                <th className="py-3 px-4 rounded-tl-lg">Data de Criação</th>
+                                                <th className="py-3 px-4">Nome do Relatório</th>
+                                                <th className="py-3 px-4 rounded-tr-lg">Período</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {[...savedReportsList].reverse().slice(0, 5).map((rep) => (
+                                                <tr key={rep.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                                    <td className="py-3 px-4">
+                                                        {new Date(rep.dataCriacao).toLocaleDateString('pt-BR')} às {new Date(rep.dataCriacao).toLocaleTimeString('pt-BR').slice(0,5)}
+                                                    </td>
+                                                    <td className="py-3 px-4 font-medium text-slate-900 dark:text-white">{rep.nome}</td>
+                                                    <td className="py-3 px-4">{rep.periodo || '-'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {hasAccess('processar') && savedReportsList.length === 0 && (
+                             <div className="bg-slate-50 dark:bg-slate-800/50 border border-dashed border-slate-300 dark:border-slate-700 p-8 rounded-xl text-center text-slate-500 dark:text-slate-400 mt-8">
+                                 <FileText size={48} className="mx-auto mb-4 text-slate-400 dark:text-slate-500 opacity-50"/>
+                                 <p className="font-medium text-lg mb-1">Nenhum relatório salvo</p>
+                                 <p className="text-sm opacity-80">Gere e salve relatórios na área de relatórios de comissão.</p>
+                                 <button onClick={() => setCurrentView('processar')} className="mt-4 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded shadow-sm text-sm font-bold transition-colors">Acessar Relatórios</button>
+                             </div>
+                        )}
                     </div>
                 )}
 
@@ -2603,7 +2696,7 @@ export default function App() {
                                 <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">Valor Bruto do Serviço (R$)</label>
                                 <input required type="number" step="0.01" value={nfeForm.valor} onChange={e => setNfeForm({...nfeForm, valor: e.target.value})}
                                     placeholder="0.00"
-                                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-slate-900 dark:text-white outline-none focus:border-emerald-500 font-bold text-lg"/>
+                                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500"/>
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">Deduções / Descontos (R$)</label>
