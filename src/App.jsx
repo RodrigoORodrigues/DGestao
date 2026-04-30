@@ -137,7 +137,7 @@ export default function App() {
     const [modalVendaOpen, setModalVendaOpen] = useState(false);
     const [vendaForm, setVendaForm] = useState({ 
         id: null, numero: '', cliente: '', dataVenda: dataDeHojeInterna(), situacao: `FATURADO ${nomeEmpresaUpper} NF`, 
-        loja: `${nomeEmpresaUpper} SEGUROS`, valor: 0, contrato: '', codigoOperadora: '', vidas: '', 
+        loja: `${nomeEmpresaUpper} SEGUROS`, valor: 0, contrato: '', codOperadora: '', codigoOperadora: '', vidas: '', 
         parcela: '', inicioVigencia: '', notaFiscal: '', corretor: nomeEmpresa,
         vitalicio: 'Não', assessoria: nomeEmpresa, formaPagamento: 'Crédito em conta',
         servico: 'Plano de Saúde', desconto: '', notas: '', comissao: 0, comissaoPorcentagem: ''
@@ -150,7 +150,7 @@ export default function App() {
 
     const vendasColLabels = {
         numero: 'Registo', cliente: 'Cliente', dataVenda: 'Data', situacao: 'Situação', valor: 'Valor',
-        contrato: 'Contrato', codigoOperadora: 'Operadora', vidas: 'Vidas', loja: 'Loja',
+        contrato: 'Contrato', codOperadora: 'Cód. Op.', codigoOperadora: 'Operadora', vidas: 'Vidas', loja: 'Loja',
         servico: 'Serviço', corretor: 'Corretor', parcela: 'Parcela', inicioVigencia: 'Início Vigência',
         notaFiscal: 'NF', vitalicio: 'Vitalício', assessoria: 'Assessoria', formaPagamento: 'Pagamento',
         desconto: 'Desconto'
@@ -159,7 +159,7 @@ export default function App() {
     // As colunas originais padrão para Vendas
     const defaultVendasCols = {
         numero: true, cliente: true, dataVenda: true, situacao: true, valor: true,
-        contrato: false, codigoOperadora: false, vidas: false, loja: false,
+        contrato: false, codOperadora: false, codigoOperadora: false, vidas: false, loja: false,
         servico: false, corretor: false, parcela: false, inicioVigencia: false,
         notaFiscal: true, vitalicio: false, assessoria: false, formaPagamento: false,
         desconto: false
@@ -203,7 +203,7 @@ export default function App() {
         pis: '', cofins: '', inss: '', ir: '', csll: ''
     });
 
-    const [formData, setFormData] = useState({ ano: new Date().getFullYear().toString(), mes: MESES[0], categoria: CATEGORIAS[0], empresa: nomeEmpresa, parceiro: '', arquivos: [] });
+    const [formData, setFormData] = useState({ ano: new Date().getFullYear().toString(), mes: MESES[0], categoria: CATEGORIAS[0], empresa: nomeEmpresa, parceiro: '', codigoOperadora: '', codigoOperadoraOutra: '', arquivos: [] });
     const [formError, setFormError] = useState(''); 
     const [successMsg, setSuccessMsg] = useState(''); 
     const fileInputRef = useRef(null);
@@ -531,7 +531,7 @@ export default function App() {
         if (venda) setVendaForm({ ...venda });
         else setVendaForm({ 
             id: null, numero: getNextSequenceNumber(vendasList, v => v.numero), cliente: '', dataVenda: dataDeHojeInterna(), situacao: `FATURADO ${nomeEmpresaUpper} NF`, 
-            loja: `${nomeEmpresaUpper} SEGUROS`, valor: 0, contrato: '', codigoOperadora: '', vidas: '', parcela: '', inicioVigencia: '', notaFiscal: '', 
+            loja: `${nomeEmpresaUpper} SEGUROS`, valor: 0, contrato: '', codOperadora: '', codigoOperadora: '', vidas: '', parcela: '', inicioVigencia: '', notaFiscal: '', 
             corretor: nomeEmpresa, vitalicio: 'Não', assessoria: nomeEmpresa, formaPagamento: 'Crédito em conta',
             servico: 'Plano de Saúde', desconto: '', notas: '' 
         });
@@ -592,7 +592,7 @@ export default function App() {
                             ...dadosAtualizados[vendaForm.reportRowIndex],
                             cod: dataToSave.numero, cliente: dataToSave.cliente, situacao: dataToSave.situacao, loja: dataToSave.loja, valorTotal: dataToSave.valor, 
                             vendedor: dataToSave.corretor, parcela: dataToSave.parcela, inicioVigencia: dataToSave.inicioVigencia, notaFiscal: dataToSave.notaFiscal, 
-                            contrato: dataToSave.contrato, codigoOperadora: dataToSave.codigoOperadora, vidas: dataToSave.vidas,
+                            contrato: dataToSave.contrato, codOperadora: dataToSave.codOperadora, codigoOperadora: dataToSave.codigoOperadora, vidas: dataToSave.vidas,
                             vitalicio: dataToSave.vitalicio, assessoria: dataToSave.assessoria, formaPagamento: dataToSave.formaPagamento,
                             servico: dataToSave.servico, desconto: dataToSave.desconto, notas: dataToSave.notas 
                         };
@@ -721,9 +721,10 @@ export default function App() {
                 const filePath = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
                 const { error: uploadErr } = await supabase.storage.from('arquivos_extratos').upload(filePath, file);
                 if(uploadErr) throw uploadErr;
-                await supabase.from('reports').insert([{ ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, parceiro: formData.parceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath }]);
+                const finalOperadora = formData.codigoOperadora === 'OUTRA' ? formData.codigoOperadoraOutra : formData.codigoOperadora;
+                await supabase.from('reports').insert([{ ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, codigoOperadora: finalOperadora, parceiro: formData.parceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath }]);
             }
-            await loadFromDB(); setSuccessMsg(`${formData.arquivos.length} extratos guardados!`); setFormData(prev => ({ ...prev, parceiro: '', arquivos: [] })); setTimeout(() => setSuccessMsg(''), 4000);
+            await loadFromDB(); setSuccessMsg(`${formData.arquivos.length} extratos guardados!`); setFormData(prev => ({ ...prev, parceiro: '', codigoOperadora: '', codigoOperadoraOutra: '', arquivos: [] })); setTimeout(() => setSuccessMsg(''), 4000);
         } catch (error) { showAlert("Erro ao enviar ficheiro para a Cloud: " + error.message); } finally { setLoading(false); }
     };
 
@@ -1997,6 +1998,11 @@ export default function App() {
                                                 Contrato {getSortIcon('contrato')}
                                             </th>
                                         )}
+                                        {vendasTableCols.codOperadora && (
+                                            <th onClick={() => handleSortVendas('codOperadora')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">
+                                                Cód. Op. {getSortIcon('codOperadora')}
+                                            </th>
+                                        )}
                                         {vendasTableCols.codigoOperadora && (
                                             <th onClick={() => handleSortVendas('codigoOperadora')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">
                                                 Operadora {getSortIcon('codigoOperadora')}
@@ -2093,6 +2099,7 @@ export default function App() {
                                             <tr key={venda.id} onClick={() => abrirModalVenda(venda)} className="border-b border-slate-200 dark:border-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-750 transition-colors cursor-pointer">
                                                 {vendasTableCols.numero && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.numero || '-'}</td>}
                                                 {vendasTableCols.contrato && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.contrato || '-'}</td>}
+                                                {vendasTableCols.codOperadora && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.codOperadora || '-'}</td>}
                                                 {vendasTableCols.codigoOperadora && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.codigoOperadora || 'AMIL'}</td>}
                                                 {vendasTableCols.vidas && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.vidas || '-'}</td>}
                                                 {vendasTableCols.cliente && <td className="py-4 px-4 border-r border-slate-200 dark:border-slate-700"><div className="font-bold text-slate-900 dark:text-slate-100">{venda.cliente}</div></td>}
@@ -2912,6 +2919,36 @@ export default function App() {
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mês</label><select value={formData.mes} onChange={(e) => setFormData({...formData, mes: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{MESES.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Categoria</label><select value={formData.categoria} onChange={(e) => setFormData({...formData, categoria: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label><select disabled value={formData.empresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-500 dark:text-slate-400 outline-none cursor-not-allowed">{empresasList.map(e => <option key={e.nome} value={e.nome}>{e.nome}</option>)}</select></div>
+                                <div className="space-y-2 md:col-span-2">
+                                    <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Operadora | Seguradora</label>
+                                    <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={formData.codigoOperadora || ''} onChange={e => setFormData({...formData, codigoOperadora: e.target.value})}>
+                                        <option value="">Selecione uma Operadora | Seguradora</option>
+                                        <option value="AMIL">AMIL</option>
+                                        <option value="ASSIM">ASSIM</option>
+                                        <option value="BRADESCO">BRADESCO</option>
+                                        <option value="HAPVIDA">HAPVIDA</option>
+                                        <option value="ICATU">ICATU</option>
+                                        <option value="LEVE SAUDE">LEVE SAÚDE</option>
+                                        <option value="MEDSENIOR">MEDSÊNIOR</option>
+                                        <option value="NOTRE DAME INTERMEDICA">NOTRE DAME INTERMÉDICA</option>
+                                        <option value="PORTO SEGURO">PORTO SEGURO</option>
+                                        <option value="QUALICORP">QUALICORP</option>
+                                        <option value="SULAMERICA">SULAMÉRICA</option>
+                                        <option value="SUPERMED">SUPERMED</option>
+                                        <option value="OUTRA">OUTRA</option>
+                                    </select>
+                                    {formData.codigoOperadora === 'OUTRA' && (
+                                        <div className="mt-2">
+                                            <input 
+                                                type="text" 
+                                                placeholder="Digite o nome da Operadora / Seguradora" 
+                                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" 
+                                                value={formData.codigoOperadoraOutra || ''} 
+                                                onChange={e => setFormData({...formData, codigoOperadoraOutra: e.target.value})} 
+                                            />
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             <div className="space-y-2 pt-4 border-t border-slate-200 dark:border-slate-700">
                                 <label className="text-sm font-bold text-blue-600 dark:text-blue-400">NOME DO PARCEIRO / ARQUIVO</label>
@@ -3274,6 +3311,14 @@ export default function App() {
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Nº Venda</label>
                                         <input required type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.numero} onChange={e => setVendaForm({...vendaForm, numero: e.target.value})} />
                                     </div>
+                                    <div className="md:col-span-1">
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Contrato</label>
+                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Opcional. Ex: 123456" value={vendaForm.contrato} onChange={e => setVendaForm({...vendaForm, contrato: e.target.value})} />
+                                    </div>
+                                    <div className="md:col-span-1">
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Cód. Operadora</label>
+                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Módulo opcional" value={vendaForm.codOperadora || ''} onChange={e => setVendaForm({...vendaForm, codOperadora: e.target.value})} />
+                                    </div>
                                     <div className="md:col-span-2 relative">
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Cliente / Parceiro</label>
                                         <input required type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" 
@@ -3330,6 +3375,26 @@ export default function App() {
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Empresa / Loja</label>
                                         <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.loja} onChange={e => setVendaForm({...vendaForm, loja: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Operadora | Seguradora</label>
+                                        <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.codigoOperadora || ''} onChange={e => setVendaForm({...vendaForm, codigoOperadora: e.target.value})}>
+                                            <option value="">Selecione uma Operadora | Seguradora</option>
+                                            <option value="AMIL">AMIL</option>
+                                            <option value="ASSIM">ASSIM</option>
+                                            <option value="BRADESCO">BRADESCO</option>
+                                            <option value="HAPVIDA">HAPVIDA</option>
+                                            <option value="ICATU">ICATU</option>
+                                            <option value="KLINI">KLINI</option>
+                                            <option value="LEVE">LEVE</option>
+                                            <option value="OMINT">OMINT</option>
+                                            <option value="PORTO">PORTO</option>
+                                            <option value="PREVENT">PREVENT</option>
+                                            <option value="QUALICORP">QUALICORP</option>
+                                            <option value="SULAMERICA">SULAMERICA</option>
+                                            <option value="SUPERMED">SUPERMED</option>
+                                            <option value="TOKIO">TOKIO</option>
+                                        </select>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Início da Vigência</label>
