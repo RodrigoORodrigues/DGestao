@@ -5,7 +5,7 @@ import ptBR from 'date-fns/locale/pt-BR';
 registerLocale('pt-BR', ptBR);
 import { supabase } from './config/supabase';
 import { 
-    SYSTEM_MODULES, EMPRESAS_INTERNAS, CATEGORIAS, MESES, 
+    SYSTEM_MODULES, EMPRESAS_INTERNAS, CATEGORIAS, MESES, LISTA_OPERADORAS, LISTA_SEGURADORAS,
     dataDeHojeInterna, formatarMoeda, formatarDataVisivel, calcularParcelaDaVigencia,
     validarCpfCnpj
 } from './utils/helpers';
@@ -711,7 +711,8 @@ export default function App() {
         if (currentPath.length === 1) return [...new Set(dbReports.filter(r => r.ano === currentPath[0]).map(r => r.mes))].sort((a, b) => MESES.indexOf(a) - MESES.indexOf(b)).map(m => ({ id: m, name: m, type: 'folder' }));
         if (currentPath.length === 2) return CATEGORIAS.map(c => ({ id: c, name: c, type: 'folder' }));
         if (currentPath.length === 3) return empresasList.map(e => ({ id: e.nome, name: e.nome, type: 'folder' }));
-        if (currentPath.length === 4) return dbReports.filter(r => r.ano === currentPath[0] && r.mes === currentPath[1] && r.categoria === currentPath[2] && r.empresa === currentPath[3]).map(f => ({ ...f, type: 'file', name: f.parceiro }));
+        if (currentPath.length === 4) return [...new Set(dbReports.filter(r => r.ano === currentPath[0] && r.mes === currentPath[1] && r.categoria === currentPath[2] && r.empresa === currentPath[3]).map(r => r.codigoOperadora))].filter(Boolean).sort().map(op => ({ id: op, name: op, type: 'folder' }));
+        if (currentPath.length === 5) return dbReports.filter(r => r.ano === currentPath[0] && r.mes === currentPath[1] && r.categoria === currentPath[2] && r.empresa === currentPath[3] && r.codigoOperadora === currentPath[4]).map(f => ({ ...f, type: 'file', name: f.parceiro }));
         return [];
     };
 
@@ -723,7 +724,8 @@ export default function App() {
                 const filePath = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
                 const { error: uploadErr } = await supabase.storage.from('arquivos_extratos').upload(filePath, file);
                 if(uploadErr) throw uploadErr;
-                await supabase.from('reports').insert([{ ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, parceiro: formData.parceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath }]);
+                const finalOperadora = formData.codigoOperadora === 'OUTRA' ? formData.codigoOperadoraOutra : formData.codigoOperadora;
+                await supabase.from('reports').insert([{ ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, codigoOperadora: finalOperadora, codOperadora: formData.codOperadora, parceiro: formData.parceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath }]);
             }
             await loadFromDB(); setSuccessMsg(`${formData.arquivos.length} extratos guardados!`); setFormData(prev => ({ ...prev, parceiro: '', codOperadora: '', codigoOperadora: '', codigoOperadoraOutra: '', arquivos: [] })); setTimeout(() => setSuccessMsg(''), 4000);
         } catch (error) { showAlert("Erro ao enviar ficheiro para a Cloud: " + error.message); } finally { setLoading(false); }
@@ -1920,14 +1922,20 @@ export default function App() {
 
                                     {/* Código Operadora */}
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Código Operadora</label>
-                                        <input 
-                                            type="text" 
+                                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Operadora / Seguradora</label>
+                                        <select
                                             value={vendasFilterForm.codigoOperadora} 
                                             onChange={e => setVendasFilterForm({...vendasFilterForm, codigoOperadora: e.target.value})} 
-                                            placeholder="Ex: AMIL, Bradesco..."
                                             className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500" 
-                                        />
+                                        >
+                                            <option value="">Todas</option>
+                                            <optgroup label="Operadoras">
+                                                {LISTA_OPERADORAS.map(op => <option key={op} value={op}>{op}</option>)}
+                                            </optgroup>
+                                            <optgroup label="Seguradoras">
+                                                {LISTA_SEGURADORAS.map(seg => <option key={seg} value={seg}>{seg}</option>)}
+                                            </optgroup>
+                                        </select>
                                     </div>
 
                                     {/* Nº Vidas */}
@@ -2991,18 +2999,10 @@ export default function App() {
                                     <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Operadora | Seguradora</label>
                                     <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={formData.codigoOperadora || ''} onChange={e => setFormData({...formData, codigoOperadora: e.target.value})}>
                                         <option value="">Selecione uma Operadora | Seguradora</option>
-                                        <option value="AMIL">AMIL</option>
-                                        <option value="ASSIM">ASSIM</option>
-                                        <option value="BRADESCO">BRADESCO</option>
-                                        <option value="HAPVIDA">HAPVIDA</option>
-                                        <option value="ICATU">ICATU</option>
-                                        <option value="LEVE SAUDE">LEVE SAÚDE</option>
-                                        <option value="MEDSENIOR">MEDSÊNIOR</option>
-                                        <option value="NOTRE DAME INTERMEDICA">NOTRE DAME INTERMÉDICA</option>
-                                        <option value="PORTO SEGURO">PORTO SEGURO</option>
-                                        <option value="QUALICORP">QUALICORP</option>
-                                        <option value="SULAMERICA">SULAMÉRICA</option>
-                                        <option value="SUPERMED">SUPERMED</option>
+                                        {formData.categoria === 'Operadoras' 
+                                            ? LISTA_OPERADORAS.map(op => <option key={op} value={op}>{op}</option>)
+                                            : LISTA_SEGURADORAS.map(seg => <option key={seg} value={seg}>{seg}</option>)
+                                        }
                                         <option value="OUTRA">OUTRA</option>
                                     </select>
                                     {formData.codigoOperadora === 'OUTRA' && (
@@ -3448,20 +3448,12 @@ export default function App() {
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Operadora | Seguradora</label>
                                         <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.codigoOperadora || ''} onChange={e => setVendaForm({...vendaForm, codigoOperadora: e.target.value})}>
                                             <option value="">Selecione uma Operadora | Seguradora</option>
-                                            <option value="AMIL">AMIL</option>
-                                            <option value="ASSIM">ASSIM</option>
-                                            <option value="BRADESCO">BRADESCO</option>
-                                            <option value="HAPVIDA">HAPVIDA</option>
-                                            <option value="ICATU">ICATU</option>
-                                            <option value="KLINI">KLINI</option>
-                                            <option value="LEVE">LEVE</option>
-                                            <option value="OMINT">OMINT</option>
-                                            <option value="PORTO">PORTO</option>
-                                            <option value="PREVENT">PREVENT</option>
-                                            <option value="QUALICORP">QUALICORP</option>
-                                            <option value="SULAMERICA">SULAMERICA</option>
-                                            <option value="SUPERMED">SUPERMED</option>
-                                            <option value="TOKIO">TOKIO</option>
+                                            <optgroup label="Operadoras">
+                                                {LISTA_OPERADORAS.map(op => <option key={op} value={op}>{op}</option>)}
+                                            </optgroup>
+                                            <optgroup label="Seguradoras">
+                                                {LISTA_SEGURADORAS.map(seg => <option key={seg} value={seg}>{seg}</option>)}
+                                            </optgroup>
                                         </select>
                                     </div>
                                     <div>

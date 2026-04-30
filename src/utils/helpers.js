@@ -14,6 +14,8 @@ export const SYSTEM_MODULES = [
 
 export const EMPRESAS_INTERNAS = ["Protetta"];
 export const CATEGORIAS = ["Operadoras", "Seguradoras"];
+export const LISTA_OPERADORAS = ['AMIL', 'ASSIM', 'HAPVIDA', 'KLINI', 'LEVE SAUDE', 'PREVENT', 'QUALICORP', 'SUPERMED', 'MED SENIOR'];
+export const LISTA_SEGURADORAS = ['ALLIANZ', 'ASSIST CARD', 'AZUL', 'BRADESCO', 'HDI', 'ICATU', 'MONGERAL', 'OMINT', 'PETLOVE', 'PORTO SEGURO', 'SUHAI', 'SULAMERICA', 'TOKIO MARINE'];
 export const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 export const dataDeHojeInterna = () => new Date().toISOString().split('T')[0];
