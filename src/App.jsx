@@ -203,7 +203,7 @@ export default function App() {
         pis: '', cofins: '', inss: '', ir: '', csll: ''
     });
 
-    const [formData, setFormData] = useState({ ano: new Date().getFullYear().toString(), mes: MESES[0], categoria: CATEGORIAS[0], empresa: nomeEmpresa, parceiro: '', codigoOperadora: '', codigoOperadoraOutra: '', arquivos: [] });
+    const [formData, setFormData] = useState({ ano: new Date().getFullYear().toString(), mes: MESES[0], categoria: CATEGORIAS[0], empresa: nomeEmpresa, parceiro: '', codOperadora: '', codigoOperadora: '', codigoOperadoraOutra: '', arquivos: [] });
     const [formError, setFormError] = useState(''); 
     const [successMsg, setSuccessMsg] = useState(''); 
     const fileInputRef = useRef(null);
@@ -721,10 +721,9 @@ export default function App() {
                 const filePath = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
                 const { error: uploadErr } = await supabase.storage.from('arquivos_extratos').upload(filePath, file);
                 if(uploadErr) throw uploadErr;
-                const finalOperadora = formData.codigoOperadora === 'OUTRA' ? formData.codigoOperadoraOutra : formData.codigoOperadora;
-                await supabase.from('reports').insert([{ ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, codigoOperadora: finalOperadora, parceiro: formData.parceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath }]);
+                await supabase.from('reports').insert([{ ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, parceiro: formData.parceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath }]);
             }
-            await loadFromDB(); setSuccessMsg(`${formData.arquivos.length} extratos guardados!`); setFormData(prev => ({ ...prev, parceiro: '', codigoOperadora: '', codigoOperadoraOutra: '', arquivos: [] })); setTimeout(() => setSuccessMsg(''), 4000);
+            await loadFromDB(); setSuccessMsg(`${formData.arquivos.length} extratos guardados!`); setFormData(prev => ({ ...prev, parceiro: '', codOperadora: '', codigoOperadora: '', codigoOperadoraOutra: '', arquivos: [] })); setTimeout(() => setSuccessMsg(''), 4000);
         } catch (error) { showAlert("Erro ao enviar ficheiro para a Cloud: " + error.message); } finally { setLoading(false); }
     };
 
@@ -2919,7 +2918,11 @@ export default function App() {
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mês</label><select value={formData.mes} onChange={(e) => setFormData({...formData, mes: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{MESES.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Categoria</label><select value={formData.categoria} onChange={(e) => setFormData({...formData, categoria: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label><select disabled value={formData.empresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-500 dark:text-slate-400 outline-none cursor-not-allowed">{empresasList.map(e => <option key={e.nome} value={e.nome}>{e.nome}</option>)}</select></div>
-                                <div className="space-y-2 md:col-span-2">
+                                <div className="space-y-2 md:col-span-1">
+                                    <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Cód. Operadora</label>
+                                    <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Módulo opcional" value={formData.codOperadora || ''} onChange={e => setFormData({...formData, codOperadora: e.target.value})} />
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
                                     <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Operadora | Seguradora</label>
                                     <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={formData.codigoOperadora || ''} onChange={e => setFormData({...formData, codigoOperadora: e.target.value})}>
                                         <option value="">Selecione uma Operadora | Seguradora</option>
