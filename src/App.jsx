@@ -584,6 +584,7 @@ export default function App() {
                 delete dataToSave.reportId;
                 delete dataToSave.reportRowIndex;
                 delete dataToSave.created_at;
+                delete dataToSave.codOperadora;
                 
                 if (vendaForm.isFromReport) {
                     const rep = await supabase.from('savedReports').select('*').eq('id', vendaForm.reportId).single();
