@@ -712,8 +712,14 @@ export default function App() {
         if (currentPath.length === 1) return [...new Set(dbReports.filter(r => String(r.ano) === String(currentPath[0])).map(r => r.mes))].sort((a, b) => MESES.indexOf(a) - MESES.indexOf(b)).map(m => ({ id: m, name: m, type: 'folder' }));
         if (currentPath.length === 2) return CATEGORIAS.map(c => ({ id: c, name: c, type: 'folder' }));
         if (currentPath.length === 3) return empresasList.map(e => ({ id: e.nome, name: e.nome, type: 'folder' }));
-        if (currentPath.length === 4) return [...new Set(dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3])).map(r => r.codigoOperadora || 'Geral'))].filter(Boolean).sort().map(op => ({ id: op, name: op, type: 'folder' }));
-        if (currentPath.length === 5) return dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && String(r.codigoOperadora || 'Geral') === String(currentPath[4])).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro }));
+        if (currentPath.length === 4) {
+            const cat = currentPath[2];
+            const baseFolders = cat === 'Operadoras' ? LISTA_OPERADORAS : (cat === 'Seguradoras' ? LISTA_SEGURADORAS : []);
+            const existingOps = dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3])).map(r => (r.codigoOperadora || 'Geral').trim());
+            const allOps = [...new Set(['Geral', ...baseFolders, ...existingOps])].filter(Boolean).sort();
+            return allOps.map(op => ({ id: op, name: op, type: 'folder' }));
+        }
+        if (currentPath.length === 5) return dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && (r.codigoOperadora || 'Geral').trim().toLowerCase() === String(currentPath[4]).toLowerCase()).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro }));
         return [];
     };
 
@@ -723,12 +729,12 @@ export default function App() {
         try {
             for (const file of formData.arquivos) {
                 const finalOperadora = formData.codigoOperadora === 'OUTRA' ? formData.codigoOperadoraOutra : formData.codigoOperadora;
-                const safeOp = (finalOperadora || 'Geral').replace(/[^a-zA-Z0-9 _-]/g, '').trim();
-                const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+                const saveOperadora = (finalOperadora || 'Geral').trim();
+                const safeFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
                 const filePath = `${Date.now()}_${safeFileName}`;
                 const { error: uploadErr } = await supabase.storage.from('arquivos_extratos').upload(filePath, file);
                 if(uploadErr) throw uploadErr;
-                await supabase.from('reports').insert([{ ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, codigoOperadora: finalOperadora, codOperadora: formData.codOperadora, parceiro: formData.parceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath }]);
+                await supabase.from('reports').insert([{ ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, codigoOperadora: saveOperadora, codOperadora: formData.codOperadora, parceiro: formData.parceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath }]);
             }
             await loadFromDB(); setSuccessMsg(`${formData.arquivos.length} extratos guardados!`); setFormData(prev => ({ ...prev, parceiro: '', codOperadora: '', codigoOperadora: '', codigoOperadoraOutra: '', arquivos: [] })); setTimeout(() => setSuccessMsg(''), 4000);
         } catch (error) { showAlert("Erro ao enviar ficheiro para a Cloud: " + error.message); } finally { setLoading(false); }
