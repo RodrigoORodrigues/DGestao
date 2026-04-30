@@ -740,6 +740,29 @@ export default function App() {
         }
     };
 
+    const handleDeleteExtrato = async (item) => {
+        if (!item) return;
+        showConfirm(`Tem certeza que deseja apagar o extrato "${item.fileName}"? Esta ação removerá o arquivo da nuvem irreversivelmente.`, async () => {
+            setLoading(true); setLoadingMsg("A apagar extrato...");
+            try {
+                const pathTarget = item.filePath || item.fileName;
+                if (pathTarget) {
+                    await supabase.storage.from('arquivos_extratos').remove([pathTarget]);
+                }
+                if (item.id) {
+                    await supabase.from('reports').delete().eq('id', item.id);
+                }
+                setSelectedFile(null);
+                await loadFromDB();
+                showAlert("Extrato apagado com sucesso.");
+            } catch (err) {
+                showAlert("Erro ao apagar extrato: " + err.message);
+            } finally {
+                setLoading(false);
+            }
+        });
+    };
+
     const clientesFiltrados = clientes.filter(cli => {
         const matchNome = cli.nome.toLowerCase().includes(filtroNomeCliente.toLowerCase()) || (cli.documento && cli.documento.includes(filtroNomeCliente));
         const matchTipo = filtrosCli.tipo === 'Todos' || cli.tipo === filtrosCli.tipo;
@@ -3422,6 +3445,7 @@ export default function App() {
                             <div className="space-y-3">
                                 <button onClick={() => { const url = URL.createObjectURL(selectedFile.fileObj); window.open(url, '_blank'); setTimeout(()=>URL.revokeObjectURL(url), 1000); setSelectedFile(null); }} className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold flex items-center justify-center space-x-2"><Eye size={20} /><span>Visualizar PDF/Excel</span></button>
                                 <button onClick={() => { const url = URL.createObjectURL(selectedFile.fileObj); const a = document.createElement('a'); a.href = url; a.download = selectedFile.fileName; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(()=>URL.revokeObjectURL(url), 1000); setSelectedFile(null); }} className="w-full bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-white py-3 rounded-lg font-bold flex items-center justify-center space-x-2 transition-colors"><Download size={20} /><span>Baixar para o PC</span></button>
+                                <button onClick={() => handleDeleteExtrato(selectedFile)} className="w-full bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/20 dark:hover:bg-rose-800/30 text-rose-600 dark:text-rose-400 py-3 rounded-lg font-bold flex items-center justify-center space-x-2 transition-colors"><Trash2 size={20} /><span>Apagar Extrato</span></button>
                             </div>
                         </div>
                     </div>
