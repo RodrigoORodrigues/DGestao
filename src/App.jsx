@@ -75,6 +75,7 @@ export default function App() {
     const [selectedFile, setSelectedFile] = useState(null);
 
     const [clientes, setClientes] = useState([]);
+    const [selectedClientes, setSelectedClientes] = useState([]);
     const [filtroNomeCliente, setFiltroNomeCliente] = useState('');
     const [filtrosCli, setFiltrosCli] = useState({ tipo: 'Todos', situacao: 'Todos' });
     
@@ -790,10 +791,51 @@ export default function App() {
             setLoading(true); 
             setLoadingMsg("Apagando cliente..."); 
             await supabase.from('clientes').delete().eq('id', id); 
+            setSelectedClientes(prev => prev.filter(cId => cId !== id));
             await loadFromDB(); 
             setLoading(false); 
         }); 
     };
+
+    const apagarClientesSelecionados = () => {
+        if (selectedClientes.length === 0) return showAlert("Selecione pelo menos um cliente para apagar.");
+        showConfirm(`Tem a certeza que deseja apagar os ${selectedClientes.length} clientes selecionados?`, async () => {
+            setLoading(true);
+            setLoadingMsg("Apagando clientes...");
+            try {
+                for (const id of selectedClientes) {
+                    await supabase.from('clientes').delete().eq('id', id);
+                }
+                setSelectedClientes([]);
+                await loadFromDB();
+            } catch (e) {
+                showAlert("Erro ao apagar clientes: " + e.message);
+            } finally {
+                setLoading(false);
+            }
+        });
+    };
+
+    const toggleClienteSelection = (id) => {
+        if (selectedClientes.includes(id)) {
+            setSelectedClientes(selectedClientes.filter(cId => cId !== id));
+        } else {
+            setSelectedClientes([...selectedClientes, id]);
+        }
+    };
+
+    const toggleAllClientes = () => {
+        const idsPagina = currentClientes.map(c => c.id);
+        const allSelected = idsPagina.every(id => selectedClientes.includes(id));
+        if (allSelected) {
+            setSelectedClientes(selectedClientes.filter(id => !idsPagina.includes(id)));
+        } else {
+            const onlyNewIds = idsPagina.filter(id => !selectedClientes.includes(id));
+            setSelectedClientes([...selectedClientes, ...onlyNewIds]);
+        }
+    };
+
+    const isAllClientesSelected = currentClientes.length > 0 && currentClientes.every(c => selectedClientes.includes(c.id));
     const abrirModalAddEdit = (cliente = null) => {
         if (cliente) { setClienteForm({...cliente}); setClienteEditIndex(cliente.id); } 
         else { setClienteForm({ id: null, nome: '', tipo: 'Pessoa jurídica', documento: '', telefone: '', celular: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '', email: '', situacao: true }); setClienteEditIndex(-1); }
@@ -2148,6 +2190,11 @@ export default function App() {
                                         <input type="file" accept=".xlsx, .csv" className="hidden" onChange={importarClientes} />
                                     </label>
                                 </div>
+                                {selectedClientes.length > 0 && (
+                                    <button onClick={apagarClientesSelecionados} className="bg-rose-500 hover:bg-rose-400 text-white px-4 py-2 rounded text-sm font-bold flex items-center shadow-md transition-colors animate-in fade-in zoom-in duration-200">
+                                        <Trash2 size={16} className="mr-2"/> Eliminar ({selectedClientes.length})
+                                    </button>
+                                )}
                             </div>
                             <div className="flex w-full md:w-auto">
                                 <div className="relative w-full md:w-64">
@@ -2161,6 +2208,15 @@ export default function App() {
                             <table className="w-full text-left border-collapse text-sm whitespace-nowrap">
                                 <thead>
                                     <tr className="border-b-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750/50 transition-colors duration-200">
+                                        <th className="py-3 px-4 w-10">
+                                            <input 
+                                                type="checkbox" 
+                                                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:checked:bg-blue-600"
+                                                checked={isAllClientesSelected}
+                                                onChange={toggleAllClientes}
+                                                disabled={currentClientes.length === 0}
+                                            />
+                                        </th>
                                         {cols.codigo && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Código</th>}
                                         {cols.nome && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Nome</th>}
                                         {cols.tipo && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Tipo</th>}
@@ -2173,10 +2229,18 @@ export default function App() {
                                 </thead>
                                 <tbody>
                                     {currentClientes.length === 0 ? (
-                                        <tr><td colSpan="10" className="py-8 text-center text-slate-500 italic">Nenhum cliente encontrado com os filtros atuais.</td></tr>
+                                        <tr><td colSpan="11" className="py-8 text-center text-slate-500 italic">Nenhum cliente encontrado com os filtros atuais.</td></tr>
                                     ) : (
                                         currentClientes.map((cli) => (
                                             <tr key={cli.id} className="border-b border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-750/50 transition-colors">
+                                                <td className="py-3 px-4">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:checked:bg-blue-600"
+                                                        checked={selectedClientes.includes(cli.id)}
+                                                        onChange={() => toggleClienteSelection(cli.id)}
+                                                    />
+                                                </td>
                                                 {cols.codigo && <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{cli.codigo || '-'}</td>}
                                                 {cols.nome && <td className="py-3 px-4 font-medium text-slate-900 dark:text-slate-100">{cli.nome}</td>}
                                                 {cols.tipo && <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{cli.tipo}</td>}
