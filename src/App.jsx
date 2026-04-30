@@ -725,7 +725,7 @@ export default function App() {
                 const finalOperadora = formData.codigoOperadora === 'OUTRA' ? formData.codigoOperadoraOutra : formData.codigoOperadora;
                 const safeOp = (finalOperadora || 'Geral').replace(/[^a-zA-Z0-9 _-]/g, '').trim();
                 const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-                const filePath = `${formData.ano}/${formData.mes}/${formData.categoria}/${formData.empresa}/${safeOp}/${Date.now()}_${safeFileName}`;
+                const filePath = `${Date.now()}_${safeFileName}`;
                 const { error: uploadErr } = await supabase.storage.from('arquivos_extratos').upload(filePath, file);
                 if(uploadErr) throw uploadErr;
                 await supabase.from('reports').insert([{ ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, codigoOperadora: finalOperadora, codOperadora: formData.codOperadora, parceiro: formData.parceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath }]);
