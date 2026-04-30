@@ -1876,7 +1876,7 @@ export default function App() {
                                                     value={vendasFilterForm.cliente} 
                                                     onChange={e => { setVendasFilterForm({...vendasFilterForm, cliente: e.target.value}); setShowFilterClienteSuggestions(true); }} 
                                                     onFocus={() => setShowFilterClienteSuggestions(true)}
-                                                    onBlur={(e) => { if (!e.relatedTarget) setTimeout(() => setShowFilterClienteSuggestions(false), 200); }}
+                                                    onBlur={() => setTimeout(() => setShowFilterClienteSuggestions(false), 200)}
                                                     className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 pr-8" 
                                                 />
                                                 {showFilterClienteSuggestions && vendasFilterForm.cliente && (
@@ -3392,7 +3392,7 @@ export default function App() {
                                             value={vendaForm.cliente} 
                                             onChange={e => { setVendaForm({...vendaForm, cliente: e.target.value}); setShowClienteSuggestions(true); }}
                                             onFocus={() => setShowClienteSuggestions(true)}
-                                            onBlur={(e) => { if (!e.relatedTarget) setTimeout(() => setShowClienteSuggestions(false), 200); }}
+                                            onBlur={() => setTimeout(() => setShowClienteSuggestions(false), 200)}
                                         />
                                         {showClienteSuggestions && vendaForm.cliente && (
                                             <ul className="absolute z-10 w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg max-h-48 overflow-y-auto shadow-lg mt-1">
