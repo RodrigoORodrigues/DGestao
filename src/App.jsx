@@ -72,6 +72,7 @@ export default function App() {
     const [dbReports, setDbReports] = useState([]);
     const [currentPath, setCurrentPath] = useState([]); 
     const [searchTerm, setSearchTerm] = useState('');
+    const [fileViewMode, setFileViewMode] = useState('grid');
     const [selectedFile, setSelectedFile] = useState(null);
 
     const [clientes, setClientes] = useState([]);
@@ -707,12 +708,12 @@ export default function App() {
 
     const getItemsAtCurrentPath = () => {
         if (searchTerm.trim() !== '') { const term = searchTerm.toLowerCase(); return dbReports.filter(r => r.parceiro.toLowerCase().includes(term) || (r.fileName || '').toLowerCase().includes(term) || r.empresa.toLowerCase().includes(term)).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro, pathInfo: `${f.ano} / ${f.mes} / ${f.empresa}` })); }
-        if (currentPath.length === 0) return [...new Set(dbReports.map(r => r.ano))].sort().map(y => ({ id: y, name: y, type: 'folder' }));
-        if (currentPath.length === 1) return [...new Set(dbReports.filter(r => r.ano === currentPath[0]).map(r => r.mes))].sort((a, b) => MESES.indexOf(a) - MESES.indexOf(b)).map(m => ({ id: m, name: m, type: 'folder' }));
+        if (currentPath.length === 0) return [...new Set(dbReports.map(r => String(r.ano)))].sort().map(y => ({ id: y, name: y, type: 'folder' }));
+        if (currentPath.length === 1) return [...new Set(dbReports.filter(r => String(r.ano) === String(currentPath[0])).map(r => r.mes))].sort((a, b) => MESES.indexOf(a) - MESES.indexOf(b)).map(m => ({ id: m, name: m, type: 'folder' }));
         if (currentPath.length === 2) return CATEGORIAS.map(c => ({ id: c, name: c, type: 'folder' }));
         if (currentPath.length === 3) return empresasList.map(e => ({ id: e.nome, name: e.nome, type: 'folder' }));
-        if (currentPath.length === 4) return [...new Set(dbReports.filter(r => r.ano === currentPath[0] && r.mes === currentPath[1] && r.categoria === currentPath[2] && r.empresa === currentPath[3]).map(r => r.codigoOperadora))].filter(Boolean).sort().map(op => ({ id: op, name: op, type: 'folder' }));
-        if (currentPath.length === 5) return dbReports.filter(r => r.ano === currentPath[0] && r.mes === currentPath[1] && r.categoria === currentPath[2] && r.empresa === currentPath[3] && r.codigoOperadora === currentPath[4]).map(f => ({ ...f, type: 'file', name: f.parceiro }));
+        if (currentPath.length === 4) return [...new Set(dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3])).map(r => r.codigoOperadora || 'Geral'))].filter(Boolean).sort().map(op => ({ id: op, name: op, type: 'folder' }));
+        if (currentPath.length === 5) return dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && String(r.codigoOperadora || 'Geral') === String(currentPath[4])).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro }));
         return [];
     };
 
@@ -3043,7 +3044,13 @@ export default function App() {
                 {currentView === 'gestor-browse' && hasAccess('gestor') && (
                     <div className="max-w-6xl mx-auto animate-in fade-in duration-500 pb-20">
                         <header className="mb-6 flex flex-col gap-4 border-b border-slate-200 dark:border-slate-700 pb-4">
-                            <div><h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center"><Database className="mr-3 text-indigo-500 dark:text-indigo-400"/>Gestor de Extratos</h2><p className="text-slate-500 dark:text-slate-400 mt-1">Navegação segura pelos arquivos salvos internamente.</p></div>
+                            <div className="flex justify-between items-start">
+                                <div><h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center"><Database className="mr-3 text-indigo-500 dark:text-indigo-400"/>Gestor de Extratos</h2><p className="text-slate-500 dark:text-slate-400 mt-1">Navegação segura pelos arquivos salvos internamente.</p></div>
+                                <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1 border border-slate-200 dark:border-slate-700">
+                                    <button onClick={() => setFileViewMode('grid')} className={`p-2 rounded-md transition-colors ${fileViewMode === 'grid' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}><LayoutGrid size={18} /></button>
+                                    <button onClick={() => setFileViewMode('list')} className={`p-2 rounded-md transition-colors ${fileViewMode === 'list' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}><List size={18} /></button>
+                                </div>
+                            </div>
                             <div className="flex gap-2">
                                 <div className="relative flex-1">
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><Search size={18} /></div>
@@ -3059,19 +3066,19 @@ export default function App() {
                                 {currentPath.map((folder, index) => <React.Fragment key={index}><ChevronRight size={14} /><button onClick={() => { setCurrentPath(currentPath.slice(0, index + 1)); setSearchTerm(''); }} className="hover:text-blue-600 dark:hover:text-blue-400 font-medium">{folder}</button></React.Fragment>)}
                             </div>
                         )}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        <div className={fileViewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4" : "flex flex-col gap-2"}>
                             {getItemsAtCurrentPath().map((item, idx) => (
-                                <div key={idx} onClick={() => handleNavigate(item)} className={`p-4 rounded-xl border cursor-pointer flex flex-col items-center text-center space-y-3 transition-colors ${item.type === 'folder' ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-emerald-500/50 hover:bg-white dark:hover:bg-slate-800'}`}>
-                                    <div className={`p-3 rounded-full ${item.type === 'folder' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-slate-100 dark:bg-slate-700 ' + getFileColorClass(item.fileName)}`}>
-                                        {item.type === 'folder' ? <Folder size={32} /> : ((item.fileName || '').toLowerCase().endsWith('pdf') ? <FileText size={32} /> : <FileSpreadsheet size={32} />)}
+                                <div key={idx} onClick={() => handleNavigate(item)} className={fileViewMode === 'grid' ? `p-4 rounded-xl border cursor-pointer flex flex-col items-center text-center space-y-3 transition-colors ${item.type === 'folder' ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-emerald-500/50 hover:bg-white dark:hover:bg-slate-800'}` : `p-3 rounded-lg border cursor-pointer flex flex-row items-center space-x-4 transition-colors ${item.type === 'folder' ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-emerald-500/50 hover:bg-white dark:hover:bg-slate-800'}`}>
+                                    <div className={`p-2 rounded-full ${item.type === 'folder' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-slate-100 dark:bg-slate-700 ' + getFileColorClass(item.fileName)}`}>
+                                        {item.type === 'folder' ? <Folder size={24} /> : ((item.fileName || '').toLowerCase().endsWith('pdf') ? <FileText size={24} /> : <FileSpreadsheet size={24} />)}
                                     </div>
-                                    <div className="w-full">
+                                    <div className={fileViewMode === 'grid' ? "w-full" : "flex-1 min-w-0"}>
                                         <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{item.name}</p>
                                         {item.pathInfo && <p className="text-[10px] text-slate-400 truncate mt-1">{item.pathInfo}</p>}
                                     </div>
                                 </div>
                             ))}
-                            {getItemsAtCurrentPath().length === 0 && <div className="col-span-full py-12 text-center text-slate-500 font-medium">Pasta Vazia ou Sem Resultados.</div>}
+                            {getItemsAtCurrentPath().length === 0 && <div className={fileViewMode === 'grid' ? "col-span-full py-12 text-center text-slate-500 font-medium" : "py-12 w-full text-center text-slate-500 font-medium"}>Pasta Vazia ou Sem Resultados.</div>}
                         </div>
                     </div>
                 )}
