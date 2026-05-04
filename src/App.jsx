@@ -208,6 +208,28 @@ export default function App() {
     });
 
     const [formData, setFormData] = useState({ ano: new Date().getFullYear().toString(), mes: MESES[0], categoria: CATEGORIAS[0], empresa: nomeEmpresa, parceiro: '', codOperadora: '', codigoOperadora: '', codigoOperadoraOutra: '', arquivos: [] });
+    
+    // Sincronizar Inclusão de Extrato com o Gestor de Extratos
+    useEffect(() => {
+        if (currentView === 'gestor-add') {
+            const opPath = (formData.codigoOperadora === 'OUTRA' ? formData.codigoOperadoraOutra : formData.codigoOperadora) || 'Geral';
+            setCurrentPath([formData.ano.toString(), formData.mes, formData.categoria, formData.empresa, opPath]);
+        }
+    }, [formData.ano, formData.mes, formData.categoria, formData.empresa, formData.codigoOperadora, formData.codigoOperadoraOutra, currentView]);
+
+    useEffect(() => {
+        if (currentView === 'gestor-browse' && currentPath.length > 0) {
+            setFormData(prev => ({
+                ...prev,
+                ano: currentPath[0] || prev.ano,
+                mes: currentPath[1] || prev.mes,
+                categoria: currentPath[2] || prev.categoria,
+                empresa: currentPath[3] || prev.empresa,
+                codigoOperadora: currentPath[4] || prev.codigoOperadora
+            }));
+        }
+    }, [currentPath, currentView]);
+
     const [formError, setFormError] = useState(''); 
     const [successMsg, setSuccessMsg] = useState(''); 
     const fileInputRef = useRef(null);
