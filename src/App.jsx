@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import ptBR from 'date-fns/locale/pt-BR';
@@ -78,6 +78,7 @@ export default function App() {
     const [clientes, setClientes] = useState([]);
     const [selectedClientes, setSelectedClientes] = useState([]);
     const [filtroNomeCliente, setFiltroNomeCliente] = useState('');
+    const [showMainClienteSuggestions, setShowMainClienteSuggestions] = useState(false);
     const [filtrosCli, setFiltrosCli] = useState({ tipo: 'Todos', situacao: 'Todos' });
     
     // Empresas Gestão
@@ -149,6 +150,7 @@ export default function App() {
     const [vendasFilterForm, setVendasFilterForm] = useState(defaultVendasFilters);
     const [appliedVendasFilters, setAppliedVendasFilters] = useState(null);
     const [vendasSortConfig, setVendasSortConfig] = useState({ key: 'dataVenda', direction: 'desc' });
+    const [selectedInconsistencias, setSelectedInconsistencias] = useState([]);
 
     const vendasColLabels = {
         numero: 'Registo', cliente: 'Cliente', dataVenda: 'Data', situacao: 'Situação', valor: 'Valor',
@@ -493,6 +495,104 @@ export default function App() {
         return <ChevronDown size={14} className={`inline ml-1 transition-transform ${vendasSortConfig.direction === 'asc' ? 'rotate-180' : ''}`} />;
     };
 
+    const inconsistenciasList = useMemo(() => {
+        const groups = {};
+        vendasList.filter(v => {
+            const dv = v.dataVenda || v.dataCadastro || '';
+            return dv >= '2026-01-01' && dv <= dataDeHojeInterna();
+        }).forEach(v => {
+            const key = v.contrato || v.cliente;
+            if (!key || !v.parcela) return;
+            const match = v.parcela.toString().match(/\d+/);
+            if (match) {
+                const num = parseInt(match[0], 10);
+                if (!groups[key]) groups[key] = { cliente: v.cliente, contrato: v.contrato, parcelas: [] };
+                groups[key].parcelas.push(num);
+            }
+        });
+        const inconsistencias = [];
+        Object.keys(groups).forEach(key => {
+            const { cliente, contrato, parcelas } = groups[key];
+            const uniqueParcelas = [...new Set(parcelas)].sort((a,b) => a-b);
+            if (uniqueParcelas.length === 0) return;
+            const max = uniqueParcelas[uniqueParcelas.length - 1];
+            const missing = [];
+            for (let i = 1; i < max; i++) {
+                if (!uniqueParcelas.includes(i)) missing.push(i);
+            }
+            if (missing.length > 0) {
+                inconsistencias.push({ id: key, cliente, contrato, faltantes: missing });
+            }
+        });
+        return inconsistencias;
+    }, [vendasList]);
+
+    const handleSelectAllInconsistencias = () => {
+        if (selectedInconsistencias.length === inconsistenciasList.length && inconsistenciasList.length > 0) {
+            setSelectedInconsistencias([]);
+        } else {
+            setSelectedInconsistencias(inconsistenciasList.map(i => i.id));
+        }
+    };
+
+    const exportarInconsistenciasParaExcel = () => {
+        const toExport = inconsistenciasList.filter(i => selectedInconsistencias.length === 0 || selectedInconsistencias.includes(i.id));
+        if (toExport.length === 0) return showAlert('Nenhuma inconsistência para exportar.');
+        const dadosTratados = toExport.map(inc => ({
+            'Cliente': inc.cliente,
+            'Contrato': inc.contrato || '-',
+            'Parcelas Faltantes': inc.faltantes.join(', ')
+        }));
+        const ws = XLSX.utils.json_to_sheet(dadosTratados);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Inconsistencias");
+        XLSX.writeFile(wb, `Inconsistencias_${dataDeHojeInterna()}.xlsx`);
+    };
+
+    const imprimirInconsistencias = () => {
+        const toExport = inconsistenciasList.filter(i => selectedInconsistencias.length === 0 || selectedInconsistencias.includes(i.id));
+        if (toExport.length === 0) return showAlert('Nenhuma inconsistência para imprimir.');
+        const windowToPrint = window.open('', '_blank');
+        const content = `
+            <html>
+            <head>
+                <title>Impressão - Inconsistências</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; text-transform: uppercase; }
+                    th { background-color: #f2f2f2; }
+                </style>
+            </head>
+            <body>
+                <h2>Relatório de Inconsistências</h2>
+                <p>Data: ${new Date().toLocaleDateString('pt-PT')}</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Contrato</th>
+                            <th>Parcelas Faltantes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${toExport.map(inc => `
+                            <tr>
+                                <td>${inc.cliente}</td>
+                                <td>${inc.contrato || '-'}</td>
+                                <td>${inc.faltantes.map(f => `P: ${f}`).join(', ')}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <script>window.print(); window.close();</script>
+            </body>
+            </html>
+        `;
+        windowToPrint.document.write(content);
+        windowToPrint.document.close();
+    };
+
     const displayedVendas = getFilteredVendas();
     let displayPeriodLabel = vendasPeriodLabel;
     if (vendasPeriodLabel === 'Escolha o período' && appliedVendasFilters?.dataInicio && appliedVendasFilters?.dataFim) { displayPeriodLabel = `${formatarDataVisivel(appliedVendasFilters.dataInicio)} - ${formatarDataVisivel(appliedVendasFilters.dataFim)}`; } 
@@ -708,8 +808,8 @@ export default function App() {
 
     const getItemsAtCurrentPath = () => {
         if (searchTerm.trim() !== '') { const term = searchTerm.toLowerCase(); return dbReports.filter(r => r.parceiro.toLowerCase().includes(term) || (r.fileName || '').toLowerCase().includes(term) || r.empresa.toLowerCase().includes(term)).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro, pathInfo: `${f.ano} / ${f.mes} / ${f.empresa}` })); }
-        if (currentPath.length === 0) return [...new Set(dbReports.map(r => String(r.ano)))].sort().map(y => ({ id: y, name: y, type: 'folder' }));
-        if (currentPath.length === 1) return [...new Set(dbReports.filter(r => String(r.ano) === String(currentPath[0])).map(r => r.mes))].sort((a, b) => MESES.indexOf(a) - MESES.indexOf(b)).map(m => ({ id: m, name: m, type: 'folder' }));
+        if (currentPath.length === 0) return [...new Set([String(new Date().getFullYear()), ...dbReports.map(r => String(r.ano))])].sort().map(y => ({ id: y, name: y, type: 'folder' }));
+        if (currentPath.length === 1) return MESES.map(m => ({ id: m, name: m, type: 'folder' }));
         if (currentPath.length === 2) return CATEGORIAS.map(c => ({ id: c, name: c, type: 'folder' }));
         if (currentPath.length === 3) return empresasList.map(e => ({ id: e.nome, name: e.nome, type: 'folder' }));
         if (currentPath.length === 4) {
@@ -929,11 +1029,14 @@ export default function App() {
             setLoadingMsg("A processar dados do PDF..."); const arrayBuffer = await fileBlob.arrayBuffer(); const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
             let textoCompleto = "";
             for (let i = 1; i <= pdf.numPages; i++) { const page = await pdf.getPage(i); const textContent = await page.getTextContent(); textoCompleto += textContent.items.map(item => item.str).join(" ") + " "; }
-            await extrairDadosDoTexto(textoCompleto);
+            await extrairDadosDoTexto(textoCompleto, report);
         } catch (error) { showAlert("Erro ao ler o PDF: " + error.message); } finally { setLoading(false); }
     };
 
-    const extrairDadosDoTexto = async (texto) => {
+    const extrairDadosDoTexto = async (texto, reportDoc = null) => {
+        const empresaContexto = reportDoc?.empresa || nomeEmpresa;
+        const empresaContextoUpper = empresaContexto.toUpperCase();
+
         setCurrentReportId(null); 
         setReportName(`Relatório Automático - ${new Date().toLocaleDateString('pt-PT')}`); 
         setReportPeriod('');
@@ -1065,16 +1168,16 @@ export default function App() {
                         vidas: vidasDetectadas,
                         cliente: nomeCliente, 
                         data: dataDeHojeInterna(), 
-                        situacao: `FATURADO ${nomeEmpresaUpper} NF`, 
-                        loja: nomeEmpresaUpper, 
+                        situacao: `FATURADO ${empresaContextoUpper} NF`, 
+                        loja: empresaContextoUpper, 
                         valorTotal, 
                         comissao, 
-                        vendedor: vendedorDetectado || nomeEmpresa, 
+                        vendedor: vendedorDetectado || empresaContexto, 
                         parcela: parcelaDetectada,
                         inicioVigencia: inicioVigenciaDetectada, 
                         notaFiscal: '', 
                         vitalicio: 'Não', 
-                        assessoria: nomeEmpresa, 
+                        assessoria: empresaContexto, 
                         formaPagamento: 'Crédito em conta',
                         servico: 'Plano de Saúde', 
                         desconto: '', 
@@ -1523,42 +1626,25 @@ export default function App() {
                 {/* ECRÃ 11: INCONSISTÊNCIAS DE PARCELAS */}
                 {currentView === 'inconsistencias' && hasAccess('vendas') && (
                     <div className="max-w-5xl mx-auto animate-in slide-in-from-right-4 duration-500 pb-20">
-                        <header className="mb-6 border-b border-slate-200 dark:border-slate-700 pb-4">
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center"><AlertTriangle className="mr-3 text-amber-500"/> Painel de Inconsistências</h2>
-                            <p className="text-slate-500 dark:text-slate-400 mt-1">Registo de quebras na sequência de parcelas confirmadas durante a inserção de vendas.</p>
+                        <header className="mb-6 border-b border-slate-200 dark:border-slate-700 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <div>
+                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center"><AlertTriangle className="mr-3 text-amber-500"/> Painel de Inconsistências</h2>
+                                <p className="text-slate-500 dark:text-slate-400 mt-1">Registo de quebras na sequência de parcelas confirmadas durante a inserção de vendas.</p>
+                            </div>
+                            {inconsistenciasList.length > 0 && (
+                                <div className="flex gap-2">
+                                    <button onClick={imprimirInconsistencias} className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center shadow-sm">
+                                        <Printer size={16} className="mr-2" /> Imprimir
+                                    </button>
+                                    <button onClick={exportarInconsistenciasParaExcel} className="bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:hover:bg-emerald-800/40 text-emerald-700 dark:text-emerald-400 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center shadow-sm">
+                                        <FileOutput size={16} className="mr-2" /> Exportar
+                                    </button>
+                                </div>
+                            )}
                         </header>
                         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm overflow-hidden transition-colors duration-200">
                             {(() => {
-                                const groups = {};
-                                vendasList.filter(v => {
-                                    const dv = v.dataVenda || v.dataCadastro || '';
-                                    return dv >= '2026-01-01' && dv <= dataDeHojeInterna();
-                                }).forEach(v => {
-                                    const key = v.contrato || v.cliente;
-                                    if (!key || !v.parcela) return;
-                                    const match = v.parcela.toString().match(/\d+/);
-                                    if (match) {
-                                        const num = parseInt(match[0], 10);
-                                        if (!groups[key]) groups[key] = { cliente: v.cliente, contrato: v.contrato, parcelas: [] };
-                                        groups[key].parcelas.push(num);
-                                    }
-                                });
-                                const inconsistencias = [];
-                                Object.keys(groups).forEach(key => {
-                                    const { cliente, contrato, parcelas } = groups[key];
-                                    const uniqueParcelas = [...new Set(parcelas)].sort((a,b) => a-b);
-                                    if (uniqueParcelas.length === 0) return;
-                                    const max = uniqueParcelas[uniqueParcelas.length - 1];
-                                    const missing = [];
-                                    for (let i = 1; i < max; i++) {
-                                        if (!uniqueParcelas.includes(i)) missing.push(i);
-                                    }
-                                    if (missing.length > 0) {
-                                        inconsistencias.push({ cliente, contrato, faltantes: missing });
-                                    }
-                                });
-
-                                if (inconsistencias.length === 0) {
+                                if (inconsistenciasList.length === 0) {
                                     return <div className="p-12 text-center text-slate-500 italic"><CheckCircle size={48} className="mx-auto text-emerald-500 mb-4 opacity-50"/>Tudo certo! Nenhuma inconsistência ou salto de parcela detectado.</div>;
                                 }
 
@@ -1566,6 +1652,15 @@ export default function App() {
                                     <table className="w-full text-left border-collapse text-sm">
                                         <thead>
                                             <tr className="border-b-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750/50">
+                                                <th className="py-3 px-4 w-12 text-center">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer" 
+                                                        checked={selectedInconsistencias.length === inconsistenciasList.length && inconsistenciasList.length > 0} 
+                                                        onChange={handleSelectAllInconsistencias} 
+                                                        title="Selecionar/Desmarcar Todos" 
+                                                    />
+                                                </th>
                                                 <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Cliente</th>
                                                 <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center">Contrato</th>
                                                 <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center text-rose-600 dark:text-rose-400">Parcelas Faltantes</th>
@@ -1573,8 +1668,18 @@ export default function App() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {inconsistencias.map((inc, i) => (
+                                            {inconsistenciasList.map((inc, i) => (
                                                 <tr key={i} className="border-b border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-750/50 transition-colors">
+                                                    <td className="py-3 px-4 text-center">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer" 
+                                                            checked={selectedInconsistencias.includes(inc.id)} 
+                                                            onChange={() => {
+                                                                setSelectedInconsistencias(prev => prev.includes(inc.id) ? prev.filter(id => id !== inc.id) : [...prev, inc.id]);
+                                                            }}
+                                                        />
+                                                    </td>
                                                     <td className="py-3 px-4 font-medium text-slate-900 dark:text-white">{inc.cliente}</td>
                                                     <td className="py-3 px-4 text-center text-slate-600 dark:text-slate-400 font-mono">{inc.contrato || '-'}</td>
                                                     <td className="py-3 px-4 text-center font-bold text-rose-500 dark:text-rose-400">
@@ -1606,7 +1711,7 @@ export default function App() {
                 
                 {/* NOVO DASHBOARD */}
                 {currentView === 'dashboard' && hasAccess('dashboard') && (
-                    <DashboardControle vendasList={vendasList} nomeEmpresa={nomeEmpresa} nomeEmpresaUpper={nomeEmpresaUpper} />
+                    <DashboardControle vendasList={vendasList} defaultEmpresa={defaultEmpresa} />
                 )}
 
                 {/* ECRÃ 12: PAINEL DE CONTROLE (ANTIGO DASHBOARD) */}
@@ -1826,6 +1931,12 @@ export default function App() {
                                             <option value="Todos">Todos</option>
                                             <option value={`${nomeEmpresaUpper} SEGUROS`}>{`${nomeEmpresaUpper} SEGUROS`}</option>
                                             <option value={nomeEmpresaUpper}>{nomeEmpresaUpper}</option>
+                                            {empresasList.filter(e => e.nome.toUpperCase() !== nomeEmpresaUpper).map(e => (
+                                                <React.Fragment key={e.id}>
+                                                    <option value={`${e.nome.toUpperCase()} SEGUROS`}>{`${e.nome.toUpperCase()} SEGUROS`}</option>
+                                                    <option value={e.nome.toUpperCase()}>{e.nome.toUpperCase()}</option>
+                                                </React.Fragment>
+                                            ))}
                                         </select>
                                     </div>
 
@@ -2214,12 +2325,35 @@ export default function App() {
                                     </button>
                                 )}
                             </div>
-                            <div className="flex w-full md:w-auto">
+                            <div className="flex w-full md:w-auto relative">
                                 <div className="relative w-full md:w-64">
-                                    <Search size={16} className="absolute left-3 top-2.5 text-slate-400"/>
-                                    <input type="text" value={filtroNomeCliente} onChange={(e) => setFiltroNomeCliente(e.target.value)} placeholder="Buscar por Nome ou NIF..." className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-200 rounded-l-lg pl-9 pr-4 py-2 text-sm focus:border-emerald-500 outline-none transition-colors duration-200" />
+                                    <Search size={16} className="absolute left-3 top-2.5 text-slate-400 z-10"/>
+                                    <input 
+                                        type="text" 
+                                        value={filtroNomeCliente} 
+                                        onChange={(e) => { setFiltroNomeCliente(e.target.value); setShowMainClienteSuggestions(true); }} 
+                                        onFocus={() => setShowMainClienteSuggestions(true)}
+                                        onBlur={() => setTimeout(() => setShowMainClienteSuggestions(false), 200)}
+                                        placeholder="Buscar por Nome ou NIF..." 
+                                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-200 rounded-lg pl-9 pr-4 py-2 text-sm focus:border-emerald-500 outline-none transition-colors duration-200" 
+                                    />
                                 </div>
-                                <button className="bg-slate-100 dark:bg-slate-700 px-4 py-2 border-y border-r border-slate-300 dark:border-slate-600 rounded-r-lg text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition-colors" onClick={()=>setModalBuscaOpen(true)}>Avançada</button>
+                                {showMainClienteSuggestions && filtroNomeCliente && (
+                                    <ul className="absolute right-0 top-full mt-1 w-full md:w-64 z-50 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg max-h-60 overflow-y-auto shadow-xl">
+                                        {clientes.filter(c => c.nome.toLowerCase().includes(filtroNomeCliente.toLowerCase()) || (c.documento && c.documento.includes(filtroNomeCliente))).map(c => (
+                                            <li key={c.id} className="px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-700 last:border-0" onMouseDown={() => {
+                                                setFiltroNomeCliente(c.nome);
+                                                setShowMainClienteSuggestions(false);
+                                            }}>
+                                                <div className="font-bold">{c.nome}</div>
+                                                {c.documento && <div className="text-xs text-slate-500 dark:text-slate-400">{c.documento}</div>}
+                                            </li>
+                                        ))}
+                                        {clientes.filter(c => c.nome.toLowerCase().includes(filtroNomeCliente.toLowerCase()) || (c.documento && c.documento.includes(filtroNomeCliente))).length === 0 && (
+                                            <li className="px-4 py-3 text-slate-500 dark:text-slate-400 text-sm italic text-center">Nenhum cliente encontrado</li>
+                                        )}
+                                    </ul>
+                                )}
                             </div>
                         </div>
                         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm overflow-x-auto transition-colors duration-200">
@@ -2579,7 +2713,7 @@ export default function App() {
                     <div className="max-w-6xl mx-auto animate-in fade-in duration-500 pb-20">
                         <header className="mb-6 border-b border-slate-200 dark:border-slate-700 pb-4">
                             <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center"><Archive className="mr-3 text-indigo-500"/> Relatórios Salvos</h2>
-                            <p className="text-slate-500 dark:text-slate-400 mt-1">Consulte e audite os relatórios gerados (Com rastreio de usuário).</p>
+                            <p className="text-slate-500 dark:text-slate-400 mt-1">Consulte e audite os relatórios gerados.</p>
                         </header>
                         
                         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm overflow-x-auto transition-colors duration-200">
@@ -2999,7 +3133,7 @@ export default function App() {
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Ano</label><input type="number" value={formData.ano} onChange={(e) => setFormData({...formData, ano: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500" /></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mês</label><select value={formData.mes} onChange={(e) => setFormData({...formData, mes: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{MESES.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Categoria</label><select value={formData.categoria} onChange={(e) => setFormData({...formData, categoria: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label><select disabled value={formData.empresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-500 dark:text-slate-400 outline-none cursor-not-allowed">{empresasList.map(e => <option key={e.nome} value={e.nome}>{e.nome}</option>)}</select></div>
+                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label><select value={formData.empresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{empresasList.map(e => <option key={e.nome} value={e.nome}>{e.nome}</option>)}</select></div>
                                 <div className="space-y-2 md:col-span-1">
                                     <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Cód. Operadora</label>
                                     <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Módulo opcional" value={formData.codOperadora || ''} onChange={e => setFormData({...formData, codOperadora: e.target.value})} />
@@ -3457,7 +3591,11 @@ export default function App() {
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Empresa / Loja</label>
-                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.loja} onChange={e => setVendaForm({...vendaForm, loja: e.target.value})} />
+                                        <input list="lojas-list" type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.loja} onChange={e => setVendaForm({...vendaForm, loja: e.target.value})} />
+                                        <datalist id="lojas-list">
+                                            {empresasList.map(e => <option key={`${e.id}_1`} value={`${e.nome.toUpperCase()} SEGUROS`} />)}
+                                            {empresasList.map(e => <option key={`${e.id}_2`} value={e.nome.toUpperCase()} />)}
+                                        </datalist>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Operadora | Seguradora</label>

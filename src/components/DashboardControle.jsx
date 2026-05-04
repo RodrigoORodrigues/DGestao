@@ -7,7 +7,10 @@ import { CheckCircle } from 'lucide-react';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler, ChartDataLabels);
 
-const DashboardControle = ({ vendasList, nomeEmpresa = 'PROTETTA', nomeEmpresaUpper = 'PROTETTA' }) => {
+const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
+    const nomeEmpresa = defaultEmpresa.nome || 'PROTETTA';
+    const nomeEmpresaUpper = nomeEmpresa.toUpperCase();
+    const logo = defaultEmpresa.logo;
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [selectedEntity, setSelectedEntity] = useState(`TOTAL ${nomeEmpresaUpper}`);
     const [selectedOperatorMonth, setSelectedOperatorMonth] = useState('Todos');
@@ -123,11 +126,24 @@ const DashboardControle = ({ vendasList, nomeEmpresa = 'PROTETTA', nomeEmpresaUp
     return (
         <div ref={reportRef} className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20 w-full">
             <header className="mb-8">
-                <div className="bg-slate-900 rounded-2xl p-6 md:p-8 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+                <div className="bg-[#111827] dark:bg-slate-900 rounded-xl p-4 md:p-6 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden h-32">
                     <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-blue-500 rounded-full opacity-10 blur-2xl"></div>
-                    <div className="text-center md:text-left z-10">
-                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{nomeEmpresa} Analytics</h1>
-                        <p className="text-slate-400 text-sm md:text-base font-light mt-1">Gestão Estratégica e Evolução</p>
+                    
+                    <div className="flex-1 flex items-center h-full z-10 w-full">
+                        {logo ? (
+                            <div className="bg-white rounded p-2 h-20 w-auto flex items-center justify-center border border-slate-200 shrink-0">
+                                <img src={logo} alt={nomeEmpresa} className="h-full object-contain" />
+                            </div>
+                        ) : (
+                            <div className="text-left">
+                                <h2 className="text-2xl font-bold text-slate-100">{nomeEmpresaUpper}</h2>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="text-right z-10 hidden md:block w-full">
+                        <h1 className="text-2xl font-bold tracking-tight text-white">{nomeEmpresa} Analytics</h1>
+                        <p className="text-slate-400 text-sm font-light mt-1">Gestão Estratégica e Evolução de Vitalícios</p>
                     </div>
                 </div>
             </header>
