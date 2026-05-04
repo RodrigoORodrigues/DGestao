@@ -254,7 +254,21 @@ export default function App() {
             if (resCli.data) setClientes(resCli.data);
             if (resVendas.data) setVendasList(resVendas.data);
             if (resSaved.data) setSavedReportsList(resSaved.data);
-            if (resRep.data) setDbReports(resRep.data);
+            if (resRep.data) {
+                const parsedReports = resRep.data.map(r => {
+                    let parceiro = r.parceiro || '';
+                    let codigoOperadora = '';
+                    let codOperadora = '';
+                    const match = parceiro.match(/^\[(.*?)\|(.*?)\] (.*)$/);
+                    if (match) {
+                        codigoOperadora = match[1];
+                        codOperadora = match[2];
+                        parceiro = match[3];
+                    }
+                    return { ...r, parceiro, codigoOperadora, codOperadora, id: r.id, ano: r.ano, mes: r.mes, categoria: r.categoria, empresa: r.empresa, date: r.date, fileName: r.fileName, filePath: r.filePath };
+                });
+                setDbReports(parsedReports);
+            }
 
             try {
                 const { data: pData, error: pErr } = await supabase.from('print_presets').select('*');
@@ -897,11 +911,15 @@ export default function App() {
             for (const file of formData.arquivos) {
                 const finalOperadora = formData.codigoOperadora === 'OUTRA' ? formData.codigoOperadoraOutra : formData.codigoOperadora;
                 const saveOperadora = (finalOperadora || 'Geral').trim();
+                const saveCodOperadora = (formData.codOperadora || '').trim();
                 const safeFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
                 const filePath = `${Date.now()}_${safeFileName}`;
                 const { error: uploadErr } = await supabase.storage.from('arquivos_extratos').upload(filePath, file);
                 if(uploadErr) throw uploadErr;
-                await supabase.from('reports').insert([{ ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, codigoOperadora: saveOperadora, codOperadora: formData.codOperadora, parceiro: formData.parceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath }]);
+                
+                const saveParceiro = `[${saveOperadora}|${saveCodOperadora}] ${formData.parceiro}`;
+                const { error: insertErr } = await supabase.from('reports').insert([{ ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, parceiro: saveParceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath }]);
+                if (insertErr) throw insertErr;
             }
             await loadFromDB(); setSuccessMsg(`${formData.arquivos.length} extratos guardados!`); setFormData(prev => ({ ...prev, parceiro: '', codOperadora: '', codigoOperadora: '', codigoOperadoraOutra: '', arquivos: [] })); setTimeout(() => setSuccessMsg(''), 4000);
         } catch (error) { showAlert("Erro ao enviar ficheiro para a Cloud: " + error.message); } finally { setLoading(false); }
