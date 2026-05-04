@@ -497,31 +497,62 @@ export default function App() {
 
     const inconsistenciasList = useMemo(() => {
         const groups = {};
+        const dataLimite = '2026-01-01';
+
         vendasList.filter(v => {
             const dv = v.dataVenda || v.dataCadastro || '';
-            return dv >= '2026-01-01' && dv <= dataDeHojeInterna();
+            return dv <= dataDeHojeInterna();
         }).forEach(v => {
             const key = v.contrato || v.cliente;
             if (!key || !v.parcela) return;
             const match = v.parcela.toString().match(/\d+/);
             if (match) {
                 const num = parseInt(match[0], 10);
-                if (!groups[key]) groups[key] = { cliente: v.cliente, contrato: v.contrato, parcelas: [] };
-                groups[key].parcelas.push(num);
+                if (!groups[key]) groups[key] = { cliente: v.cliente, contrato: v.contrato, parcelasUnicas: new Set(), parcelasData: {}, inicioVigencia: v.inicioVigencia };
+                groups[key].parcelasUnicas.add(num);
+                const dv = v.dataVenda || v.dataCadastro || '';
+                if (!groups[key].parcelasData[num] || dv < groups[key].parcelasData[num]) {
+                    groups[key].parcelasData[num] = dv;
+                }
+                if (v.inicioVigencia && (!groups[key].inicioVigencia || v.inicioVigencia < groups[key].inicioVigencia)) {
+                    groups[key].inicioVigencia = v.inicioVigencia;
+                }
             }
         });
+
         const inconsistencias = [];
         Object.keys(groups).forEach(key => {
-            const { cliente, contrato, parcelas } = groups[key];
-            const uniqueParcelas = [...new Set(parcelas)].sort((a,b) => a-b);
+            const param = groups[key];
+            const uniqueParcelas = [...param.parcelasUnicas].sort((a,b) => a-b);
             if (uniqueParcelas.length === 0) return;
+            
+            let startParcel = 1;
+            if (param.inicioVigencia && param.inicioVigencia < dataLimite) {
+                const iy = parseInt(param.inicioVigencia.substring(0, 4));
+                const im = parseInt(param.inicioVigencia.substring(5, 7));
+                if (!isNaN(iy) && !isNaN(im)) {
+                    const monthsDiff = (2026 - iy) * 12 + (1 - im);
+                    if (monthsDiff > 0) startParcel = 1 + monthsDiff;
+                }
+            } else if (!param.inicioVigencia) {
+                let maxBefore2026 = 0;
+                Object.keys(param.parcelasData).forEach(p => {
+                    if (param.parcelasData[p] && param.parcelasData[p] < dataLimite) {
+                        const num = parseInt(p, 10);
+                        if (num > maxBefore2026) maxBefore2026 = num;
+                    }
+                });
+                if (maxBefore2026 > 0) startParcel = maxBefore2026 + 1;
+            }
+
             const max = uniqueParcelas[uniqueParcelas.length - 1];
             const missing = [];
-            for (let i = 1; i < max; i++) {
-                if (!uniqueParcelas.includes(i)) missing.push(i);
+            for (let i = startParcel; i < max; i++) {
+                if (!param.parcelasUnicas.has(i)) missing.push(i);
             }
+            
             if (missing.length > 0) {
-                inconsistencias.push({ id: key, cliente, contrato, faltantes: missing });
+                inconsistencias.push({ id: key, cliente: param.cliente, contrato: param.contrato, faltantes: missing });
             }
         });
         return inconsistencias;
