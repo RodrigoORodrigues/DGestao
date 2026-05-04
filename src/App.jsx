@@ -552,7 +552,16 @@ export default function App() {
     const imprimirInconsistencias = () => {
         const toExport = inconsistenciasList.filter(i => selectedInconsistencias.length === 0 || selectedInconsistencias.includes(i.id));
         if (toExport.length === 0) return showAlert('Nenhuma inconsistência para imprimir.');
-        const windowToPrint = window.open('', '_blank');
+        
+        const printIframe = document.createElement('iframe');
+        printIframe.name = "print_iframe_inconsistencias";
+        printIframe.style.position = 'absolute';
+        printIframe.style.top = '-10000px';
+        document.body.appendChild(printIframe);
+
+        const printDoc = printIframe.contentWindow.document;
+        printDoc.open();
+        
         const content = `
             <html>
             <head>
@@ -561,7 +570,7 @@ export default function App() {
                     body { font-family: sans-serif; padding: 20px; }
                     table { width: 100%; border-collapse: collapse; margin-top: 20px; }
                     th, td { border: 1px solid #ddd; padding: 8px; text-align: left; text-transform: uppercase; }
-                    th { background-color: #f2f2f2; }
+                    th { background-color: #f2f2f2; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                 </style>
             </head>
             <body>
@@ -585,12 +594,17 @@ export default function App() {
                         `).join('')}
                     </tbody>
                 </table>
-                <script>window.print(); window.close();</script>
             </body>
             </html>
         `;
-        windowToPrint.document.write(content);
-        windowToPrint.document.close();
+        printDoc.write(content);
+        printDoc.close();
+
+        printIframe.onload = () => {
+            printIframe.contentWindow.focus();
+            printIframe.contentWindow.print();
+            setTimeout(() => document.body.removeChild(printIframe), 1000);
+        };
     };
 
     const displayedVendas = getFilteredVendas();
