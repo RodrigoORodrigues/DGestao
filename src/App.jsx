@@ -212,11 +212,15 @@ export default function App() {
     // Sincronizar Inclusão de Extrato com o Gestor de Extratos
     useEffect(() => {
         if (currentView === 'gestor-add') {
-            const opPath = (formData.codigoOperadora === 'OUTRA' ? formData.codigoOperadoraOutra : formData.codigoOperadora) || 'Geral';
-            if (formData.codOperadora) {
-                setCurrentPath([formData.ano.toString(), formData.mes, formData.categoria, formData.empresa, opPath, formData.codOperadora]);
+            const opPath = (formData.codigoOperadora === 'OUTRA' ? formData.codigoOperadoraOutra : formData.codigoOperadora);
+            if (opPath) {
+                if (formData.codOperadora) {
+                    setCurrentPath([formData.ano.toString(), formData.mes, formData.categoria, formData.empresa, opPath, formData.codOperadora]);
+                } else {
+                    setCurrentPath([formData.ano.toString(), formData.mes, formData.categoria, formData.empresa, opPath]);
+                }
             } else {
-                setCurrentPath([formData.ano.toString(), formData.mes, formData.categoria, formData.empresa, opPath]);
+                setCurrentPath([formData.ano.toString(), formData.mes, formData.categoria, formData.empresa]);
             }
         }
     }, [formData.ano, formData.mes, formData.categoria, formData.empresa, formData.codigoOperadora, formData.codigoOperadoraOutra, formData.codOperadora, currentView]);
@@ -262,13 +266,16 @@ export default function App() {
             if (resRep.data) {
                 const parsedReports = resRep.data.map(r => {
                     let parceiro = r.parceiro || '';
-                    let codigoOperadora = '';
-                    let codOperadora = '';
+                    let codigoOperadora = r.codigoOperadora || '';
+                    let codOperadora = r.codOperadora || '';
                     const match = parceiro.match(/^\[(.*?)\|(.*?)\] (.*)$/);
                     if (match) {
                         codigoOperadora = match[1];
                         codOperadora = match[2];
                         parceiro = match[3];
+                    }
+                    if (codigoOperadora === 'Geral') {
+                        codigoOperadora = 'AMIL';
                     }
                     return { ...r, parceiro, codigoOperadora, codOperadora, id: r.id, ano: r.ano, mes: r.mes, categoria: r.categoria, empresa: r.empresa, date: r.date, fileName: r.fileName, filePath: r.filePath };
                 });
@@ -900,19 +907,38 @@ export default function App() {
         if (currentPath.length === 3) return empresasList.map(e => ({ id: e.nome, name: e.nome, type: 'folder' }));
         if (currentPath.length === 4) {
             const cat = currentPath[2];
-            const baseFolders = cat === 'Operadoras' ? LISTA_OPERADORAS : (cat === 'Seguradoras' ? LISTA_SEGURADORAS : []);
-            const existingOps = dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3])).map(r => (r.codigoOperadora || 'Geral').trim());
-            const allOps = [...new Set(['Geral', ...baseFolders, ...existingOps])].filter(Boolean).sort();
+            const empresa = currentPath[3];
+            let baseFolders = cat === 'Operadoras' ? LISTA_OPERADORAS : (cat === 'Seguradoras' ? LISTA_SEGURADORAS : []);
+            
+            if (empresa.toLowerCase() === 'proper') {
+                if (cat === 'Operadoras') {
+                    baseFolders = baseFolders.filter(f => f.toUpperCase() === 'AMIL' || f.toUpperCase() === 'NOTRE DAME');
+                } else if (cat === 'Seguradoras') {
+                    baseFolders = baseFolders.filter(f => f.toUpperCase() === 'SULAMERICA');
+                }
+            }
+            
+            const existingOps = dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3])).map(r => (r.codigoOperadora || '').trim());
+            let allOps = [...new Set([...baseFolders, ...existingOps])].filter(Boolean).sort();
+            
+            if (empresa.toLowerCase() === 'proper') {
+                if (cat === 'Operadoras') {
+                    allOps = allOps.filter(f => f.toUpperCase() === 'AMIL' || f.toUpperCase() === 'NOTRE DAME');
+                } else if (cat === 'Seguradoras') {
+                    allOps = allOps.filter(f => f.toUpperCase() === 'SULAMERICA');
+                }
+            }
+            
             return allOps.map(op => ({ id: op, name: op, type: 'folder' }));
         }
         if (currentPath.length === 5) {
             const list = [];
-            const reports = dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && (r.codigoOperadora || 'Geral').trim().toLowerCase() === String(currentPath[4]).toLowerCase());
+            const reports = dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && (r.codigoOperadora || '').trim().toLowerCase() === String(currentPath[4]).toLowerCase());
             
             const codOps = [...new Set(reports.map(r => r.codOperadora).filter(c => c && c.trim() !== ''))].sort();
             
             let fixedCodOps = [];
-            if (currentPath[3] === 'Protetta' && currentPath[4].toUpperCase() === 'AMIL') {
+            if (currentPath[4].toUpperCase() === 'AMIL') {
                 fixedCodOps = ['139491', '162191', '224138'];
             }
             const allCodOps = [...new Set([...fixedCodOps, ...codOps])].sort();
@@ -925,18 +951,22 @@ export default function App() {
             return list;
         }
         if (currentPath.length === 6) {
-            return dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && (r.codigoOperadora || 'Geral').trim().toLowerCase() === String(currentPath[4]).toLowerCase() && String(r.codOperadora || '').trim() === String(currentPath[5])).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro }));
+            return dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && (r.codigoOperadora || '').trim().toLowerCase() === String(currentPath[4]).toLowerCase() && String(r.codOperadora || '').trim() === String(currentPath[5])).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro }));
         }
         return [];
     };
 
     const handleSubmitExtrato = async (e) => {
-        e.preventDefault(); if (!formData.parceiro.trim()) return setFormError('ERRO: Parceiro obrigatório.'); if (formData.arquivos.length === 0) return setFormError('ERRO: Anexos obrigatórios.');
+        e.preventDefault(); 
+        if (!formData.codigoOperadora) return setFormError('ERRO: Selecione a Operadora | Seguradora.');
+        if (!formData.parceiro.trim()) return setFormError('ERRO: Parceiro obrigatório.'); 
+        if (formData.arquivos.length === 0) return setFormError('ERRO: Anexos obrigatórios.');
+        
         setLoading(true); setLoadingMsg("Fazendo upload para a nuvem...");
         try {
             for (const file of formData.arquivos) {
                 const finalOperadora = formData.codigoOperadora === 'OUTRA' ? formData.codigoOperadoraOutra : formData.codigoOperadora;
-                const saveOperadora = (finalOperadora || 'Geral').trim();
+                const saveOperadora = (finalOperadora || '').trim();
                 const saveCodOperadora = (formData.codOperadora || '').trim();
                 const safeFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
                 const filePath = `${Date.now()}_${safeFileName}`;
@@ -3251,7 +3281,7 @@ export default function App() {
                                 </div>
                                 <div className="space-y-2 md:col-span-1">
                                     <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Operadora | Seguradora</label>
-                                    <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={formData.codigoOperadora || ''} onChange={e => setFormData({...formData, codigoOperadora: e.target.value})}>
+                                    <select required className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={formData.codigoOperadora || ''} onChange={e => setFormData({...formData, codigoOperadora: e.target.value})}>
                                         <option value="">Selecione uma Operadora | Seguradora</option>
                                         {formData.categoria === 'Operadoras' 
                                             ? LISTA_OPERADORAS.map(op => <option key={op} value={op}>{op}</option>)
