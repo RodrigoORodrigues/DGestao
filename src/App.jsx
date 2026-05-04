@@ -213,9 +213,13 @@ export default function App() {
     useEffect(() => {
         if (currentView === 'gestor-add') {
             const opPath = (formData.codigoOperadora === 'OUTRA' ? formData.codigoOperadoraOutra : formData.codigoOperadora) || 'Geral';
-            setCurrentPath([formData.ano.toString(), formData.mes, formData.categoria, formData.empresa, opPath]);
+            if (formData.codOperadora) {
+                setCurrentPath([formData.ano.toString(), formData.mes, formData.categoria, formData.empresa, opPath, formData.codOperadora]);
+            } else {
+                setCurrentPath([formData.ano.toString(), formData.mes, formData.categoria, formData.empresa, opPath]);
+            }
         }
-    }, [formData.ano, formData.mes, formData.categoria, formData.empresa, formData.codigoOperadora, formData.codigoOperadoraOutra, currentView]);
+    }, [formData.ano, formData.mes, formData.categoria, formData.empresa, formData.codigoOperadora, formData.codigoOperadoraOutra, formData.codOperadora, currentView]);
 
     useEffect(() => {
         if (currentView === 'gestor-browse' && currentPath.length > 0) {
@@ -225,7 +229,8 @@ export default function App() {
                 mes: currentPath[1] || prev.mes,
                 categoria: currentPath[2] || prev.categoria,
                 empresa: currentPath[3] || prev.empresa,
-                codigoOperadora: currentPath[4] || prev.codigoOperadora
+                codigoOperadora: currentPath[4] || prev.codigoOperadora,
+                codOperadora: currentPath[5] || prev.codOperadora
             }));
         }
     }, [currentPath, currentView]);
@@ -900,7 +905,28 @@ export default function App() {
             const allOps = [...new Set(['Geral', ...baseFolders, ...existingOps])].filter(Boolean).sort();
             return allOps.map(op => ({ id: op, name: op, type: 'folder' }));
         }
-        if (currentPath.length === 5) return dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && (r.codigoOperadora || 'Geral').trim().toLowerCase() === String(currentPath[4]).toLowerCase()).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro }));
+        if (currentPath.length === 5) {
+            const list = [];
+            const reports = dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && (r.codigoOperadora || 'Geral').trim().toLowerCase() === String(currentPath[4]).toLowerCase());
+            
+            const codOps = [...new Set(reports.map(r => r.codOperadora).filter(c => c && c.trim() !== ''))].sort();
+            
+            let fixedCodOps = [];
+            if (currentPath[3] === 'Protetta' && currentPath[4].toUpperCase() === 'AMIL') {
+                fixedCodOps = ['139491', '162191', '224138'];
+            }
+            const allCodOps = [...new Set([...fixedCodOps, ...codOps])].sort();
+            
+            allCodOps.forEach(c => list.push({ id: c, name: c, type: 'folder' }));
+            
+            const filesNoCod = reports.filter(r => !r.codOperadora || !allCodOps.includes(r.codOperadora));
+            filesNoCod.forEach(f => list.push({ ...f, type: 'file', name: f.fileName || f.parceiro }));
+            
+            return list;
+        }
+        if (currentPath.length === 6) {
+            return dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && (r.codigoOperadora || 'Geral').trim().toLowerCase() === String(currentPath[4]).toLowerCase() && String(r.codOperadora || '').trim() === String(currentPath[5])).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro }));
+        }
         return [];
     };
 
