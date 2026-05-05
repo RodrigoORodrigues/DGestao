@@ -150,6 +150,15 @@ export default function App() {
     const [modalUserOpen, setModalUserOpen] = useState(false);
     const [userForm, setUserForm] = useState({ id: null, username: '', password: '', role: 'user', permissions: [], empresa: 'Todas' });
 
+    const [modalImportNfPdfOpen, setModalImportNfPdfOpen] = useState(false);
+    const [importNfPdfForm, setImportNfPdfForm] = useState({ nf: '', operadora: '', cliente: '', valor: 0, dataHora: '', chave: '' });
+
+    const [modalEditNfOpen, setModalEditNfOpen] = useState(false);
+    const [editNfForm, setEditNfForm] = useState(null);
+
+    const [modalViewNfOpen, setModalViewNfOpen] = useState(false);
+    const [viewNfData, setViewNfData] = useState(null);
+
     const [vendasList, setVendasList] = useState([]);
     const [showVendasFilter, setShowVendasFilter] = useState(false);
     const [showVendasPeriodMenu, setShowVendasPeriodMenu] = useState(false);
@@ -228,7 +237,7 @@ export default function App() {
         pis: '', cofins: '', inss: '', ir: '', csll: ''
     });
 
-    const [formData, setFormData] = useState({ ano: new Date().getFullYear().toString(), mes: MESES[0], categoria: CATEGORIAS[0], empresa: nomeEmpresa, parceiro: '', codOperadora: '', codigoOperadora: '', codigoOperadoraOutra: '', arquivos: [] });
+    const [formData, setFormData] = useState({ ano: new Date().getFullYear().toString(), mes: MESES[0], categoria: CATEGORIAS[0], empresa: nomeEmpresa, parceiro: '', codOperadora: '', codigoOperadora: '', codigoOperadoraOutra: '', notaFiscal: '', arquivos: [] });
     
     // Sincronizar Inclusão de Extrato com o Gestor de Extratos
     useEffect(() => {
@@ -264,7 +273,19 @@ export default function App() {
     const [successMsg, setSuccessMsg] = useState(''); 
     const fileInputRef = useRef(null);
 
-    const showAlert = (msg) => setAlertDialog({ isOpen: true, message: msg });
+    const showAlert = (msg, type) => {
+        let finalType = type;
+        if (!finalType) {
+            if (/pulos de seq/i.test(msg)) {
+                finalType = 'warning_pulse';
+            } else if (/sucesso|importados!|processado!|guardado|salvo/i.test(msg)) {
+                finalType = 'success';
+            } else {
+                finalType = 'error';
+            }
+        }
+        setAlertDialog({ isOpen: true, message: msg, type: finalType });
+    };
     const showConfirm = (msg, callback) => setConfirmDialog({ isOpen: true, message: msg, onConfirm: callback });
 
     const hasAccess = (module) => {
@@ -905,7 +926,7 @@ export default function App() {
     };
 
     const getItemsAtCurrentPath = () => {
-        if (searchTerm.trim() !== '') { const term = searchTerm.toLowerCase(); return dbReports.filter(r => r.parceiro.toLowerCase().includes(term) || (r.fileName || '').toLowerCase().includes(term) || r.empresa.toLowerCase().includes(term)).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro, pathInfo: `${f.ano} / ${f.mes} / ${f.empresa}` })); }
+        if (searchTerm.trim() !== '') { const term = searchTerm.toLowerCase(); return dbReports.filter(r => r.parceiro.toLowerCase().includes(term) || (r.fileName || '').toLowerCase().includes(term) || r.empresa.toLowerCase().includes(term)).map(f => ({ ...f, type: 'file', name: (f.parceiro && f.parceiro.replace(/^\[.*?\]\s*/, '')) || f.fileName, pathInfo: `${f.ano} / ${f.mes} / ${f.empresa}` })); }
         if (currentPath.length === 0) return [...new Set([String(new Date().getFullYear()), ...dbReports.map(r => String(r.ano))])].sort().map(y => ({ id: y, name: y, type: 'folder' }));
         if (currentPath.length === 1) return MESES.map(m => ({ id: m, name: m, type: 'folder' }));
         if (currentPath.length === 2) return CATEGORIAS.map(c => ({ id: c, name: c, type: 'folder' }));
@@ -951,12 +972,12 @@ export default function App() {
             allCodOps.forEach(c => list.push({ id: c, name: c, type: 'folder' }));
             
             const filesNoCod = reports.filter(r => !r.codOperadora || !allCodOps.includes(r.codOperadora));
-            filesNoCod.forEach(f => list.push({ ...f, type: 'file', name: f.fileName || f.parceiro }));
+            filesNoCod.forEach(f => list.push({ ...f, type: 'file', name: (f.parceiro && f.parceiro.replace(/^\[.*?\]\s*/, '')) || f.fileName }));
             
             return list;
         }
         if (currentPath.length === 6) {
-            return dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && (r.codigoOperadora || '').trim().toLowerCase() === String(currentPath[4]).toLowerCase() && String(r.codOperadora || '').trim() === String(currentPath[5])).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro }));
+            return dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && (r.codigoOperadora || '').trim().toLowerCase() === String(currentPath[4]).toLowerCase() && String(r.codOperadora || '').trim() === String(currentPath[5])).map(f => ({ ...f, type: 'file', name: (f.parceiro && f.parceiro.replace(/^\[.*?\]\s*/, '')) || f.fileName }));
         }
         return [];
     };
@@ -978,11 +999,11 @@ export default function App() {
                 const { error: uploadErr } = await supabase.storage.from('arquivos_extratos').upload(filePath, file);
                 if(uploadErr) throw uploadErr;
                 
-                const saveParceiro = `[${saveOperadora}|${saveCodOperadora}] ${formData.parceiro}`;
+                const saveParceiro = `[${saveOperadora}|${saveCodOperadora}] ${formData.parceiro}${formData.notaFiscal ? ` (NF: ${formData.notaFiscal})` : ''}`;
                 const { error: insertErr } = await supabase.from('reports').insert([{ ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, parceiro: saveParceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath }]);
                 if (insertErr) throw insertErr;
             }
-            await loadFromDB(); setSuccessMsg(`${formData.arquivos.length} extratos guardados!`); setFormData(prev => ({ ...prev, parceiro: '', codOperadora: '', codigoOperadora: '', codigoOperadoraOutra: '', arquivos: [] })); setTimeout(() => setSuccessMsg(''), 4000);
+            await loadFromDB(); setSuccessMsg(`${formData.arquivos.length} extratos guardados!`); setFormData(prev => ({ ...prev, parceiro: '', codOperadora: '', codigoOperadora: '', codigoOperadoraOutra: '', notaFiscal: '', arquivos: [] })); setTimeout(() => setSuccessMsg(''), 4000);
         } catch (error) { showAlert("Erro ao enviar ficheiro para a Cloud: " + error.message); } finally { setLoading(false); }
     };
 
@@ -1546,6 +1567,130 @@ export default function App() {
         XLSX.writeFile(wb, `NotasFiscais_Exportadas_${dataDeHojeInterna()}.xlsx`);
     };
 
+    const importarNotaPdfHistory = async (event) => {
+        const file = event.target.files[0]; if (!file) return;
+        setLoading(true); setLoadingMsg("Extraindo dados do PDF...");
+        try {
+            const data = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({data}).promise;
+            let textoCompleto = "";
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                textoCompleto += textContent.items.map(item => item.str).join(" ") + " ";
+            }
+            
+            let nfExtracted = "";
+            const numNfMatch = textoCompleto.match(/Número da NFS-e\s+(\d+)/i);
+            if (numNfMatch) nfExtracted = numNfMatch[1];
+            
+            let clientExtracted = "";
+            const tomadorSection = textoCompleto.split(/TOMADOR DO SERVIÇO/i)[1];
+            if (tomadorSection) {
+                const match = tomadorSection.match(/Nome\s*\/\s*Nome Empresarial\s+(.*?)\s+(?:E-mail|Endereço|Município|CEP)/i);
+                if (match && match[1]) {
+                    clientExtracted = match[1].trim();
+                } else {
+                    const matchFallback = tomadorSection.match(/Nome\s*\/\s*Nome Empresarial\s+([A-Z0-9.\-& ]{5,100})/i);
+                    if (matchFallback && matchFallback[1]) {
+                        clientExtracted = matchFallback[1].trim();
+                    }
+                }
+            }
+            if (!clientExtracted && textoCompleto.includes("AMIL ASSISTENCIA MEDICA INTERNACIONAL")) {
+                clientExtracted = "AMIL ASSISTENCIA MEDICA INTERNACIONAL S.A.";
+            }
+
+            let valorExtracted = 0;
+            const valMatch = textoCompleto.match(/Valor Líquido da NFS-e\s*R\$?\s*([\d,.]+)/i) || textoCompleto.match(/Valor do Serviço\s*R\$?\s*([\d,.]+)/i);
+            if (valMatch) valorExtracted = parseFloat(valMatch[1].replace(/\./g, "").replace(",", "."));
+            
+            let dateExtracted = dataDeHojeInterna();
+            const dateMatch = textoCompleto.match(/Data e Hora da emissão da NFS-e\s*([\d]{2}\/[\d]{2}\/[\d]{4})/i);
+            if (dateMatch) dateExtracted = dateMatch[1].split('/').reverse().join('-');
+            
+            let chaveExtracted = "";
+            const chaveMatch = textoCompleto.match(/Chave de Acesso da NFS-e\s*(\d+)/i);
+            if (chaveMatch) chaveExtracted = chaveMatch[1];
+
+            const pdfUrl = URL.createObjectURL(file);
+            setImportNfPdfForm({
+                nf: nfExtracted,
+                operadora: '',
+                cliente: clientExtracted.trim(),
+                valor: valorExtracted,
+                dataHora: dateExtracted,
+                chave: chaveExtracted,
+                pdfUrl: pdfUrl
+            });
+            setModalImportNfPdfOpen(true);
+        } catch (err) {
+            showAlert("Erro ao ler o PDF: " + err.message);
+        } finally {
+            setLoading(false);
+            event.target.value = '';
+        }
+    };
+
+    const salvarNotaPdfImportada = (e) => {
+        e.preventDefault();
+        const newNota = {
+            id: Date.now() + Math.random(),
+            cliente: importNfPdfForm.operadora || importNfPdfForm.cliente || 'Consumidor Final',
+            valor: parseFloat(importNfPdfForm.valor) || 0,
+            data: importNfPdfForm.dataHora || dataDeHojeInterna(),
+            status: "EMITIDA",
+            chaveNacional: importNfPdfForm.chave || `IMPORT-PDF-${Date.now()}`,
+            numero: importNfPdfForm.nf || "0",
+            codigoNbs: "",
+            codTributNacional: "",
+            aliquotaIss: 0,
+            issRetido: false,
+            originalPdfUrl: importNfPdfForm.pdfUrl
+        };
+        setNfeHistorico(prev => [newNota, ...prev]);
+        setModalImportNfPdfOpen(false);
+        showAlert("Nota Fiscal PDF importada com sucesso!");
+    };
+
+    const abrirEdicaoNota = (nota) => {
+        setEditNfForm({ ...nota });
+        setModalEditNfOpen(true);
+    };
+
+    const salvarEdicaoNota = (e) => {
+        e.preventDefault();
+        setNfeHistorico(prev => prev.map(n => n.id === editNfForm.id ? editNfForm : n));
+        setModalEditNfOpen(false);
+        showAlert("Nota editada com sucesso!");
+    };
+
+    const visualizarNota = (nota) => {
+        if (nota.originalPdfUrl) {
+            window.open(nota.originalPdfUrl, '_blank');
+        } else {
+            setViewNfData(nota);
+            setModalViewNfOpen(true);
+        }
+    };
+
+    const baixarNota = (nota) => {
+        if (nota.originalPdfUrl) {
+            const a = document.createElement('a');
+            a.href = nota.originalPdfUrl;
+            a.download = `Nota_${nota.numero || nota.chaveNacional || 'Fiscal'}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        } else {
+            setViewNfData(nota);
+            setModalViewNfOpen(true);
+            setTimeout(() => {
+                window.print();
+            }, 500);
+        }
+    };
+
     const importarNotasHistory = async (event) => {
         const file = event.target.files[0]; if (!file) return;
         setLoading(true); setLoadingMsg("Lendo ficheiro de notas...");
@@ -1776,10 +1921,13 @@ export default function App() {
             {/* ALERTS E LOADING */}
             {alertDialog.isOpen && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4 border-l-4 border-rose-500 shadow-rose-500/20">
-                        <h3 className="text-xl font-black mb-3 text-rose-600 dark:text-rose-500 flex items-center"><AlertCircle className="mr-2 text-rose-600"/> ATENÇÃO</h3>
+                    <div className={`bg-white dark:bg-slate-800 p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4 border-l-4 ${alertDialog.type === 'success' ? 'border-emerald-500 shadow-emerald-500/20' : 'border-rose-500 shadow-rose-500/20'} ${alertDialog.type === 'warning_pulse' ? 'animate-pulse shadow-[0_0_15px_rgba(244,63,94,0.6)]' : ''}`}>
+                        <h3 className={`text-xl font-black mb-3 flex items-center ${alertDialog.type === 'success' ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-600 dark:text-rose-500'}`}>
+                            {alertDialog.type === 'success' ? <CheckCircle className="mr-2 text-emerald-600 dark:text-emerald-500"/> : <AlertCircle className="mr-2 text-rose-600 dark:text-rose-500"/> }
+                            {alertDialog.type === 'success' ? 'SUCESSO' : 'ATENÇÃO'}
+                        </h3>
                         <p className="text-sm text-slate-700 dark:text-slate-300 mb-6 whitespace-pre-wrap">{alertDialog.message}</p>
-                        <div className="flex justify-end"><button onClick={() => setAlertDialog({ isOpen: false, message: '' })} className="bg-rose-600 hover:bg-rose-500 text-white px-6 py-2 rounded-lg font-bold transition-colors">OK</button></div>
+                        <div className="flex justify-end"><button onClick={() => setAlertDialog({ isOpen: false, message: '' })} className={`${alertDialog.type === 'success' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-rose-600 hover:bg-rose-500'} text-white px-6 py-2 rounded-lg font-bold transition-colors`}>OK</button></div>
                     </div>
                 </div>
             )}
@@ -2885,6 +3033,223 @@ export default function App() {
                     </div>
                 )}
 
+                {/* Modal Importar NF de PDF */}
+                {modalImportNfPdfOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-lg relative mx-4 transition-colors">
+                            <button onClick={() => setModalImportNfPdfOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+                                <X size={20} />
+                            </button>
+                            <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center mb-6">
+                                <CheckCircle className="mr-3 text-emerald-500" />
+                                NF {importNfPdfForm.nf || "Não identificada"} pré-carregada!
+                            </h3>
+
+                            <form onSubmit={salvarNotaPdfImportada} className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Nº da Nota</label>
+                                        <input type="text" required value={importNfPdfForm.nf} onChange={e=>setImportNfPdfForm({...importNfPdfForm, nf: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Valor do Serviço (R$)</label>
+                                        <input type="number" step="0.01" required value={importNfPdfForm.valor} onChange={e=>setImportNfPdfForm({...importNfPdfForm, valor: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Operadora / Seguradora (Tomador)</label>
+                                    <p className="text-xs text-slate-500 mb-2">Tomador Identificado: {importNfPdfForm.cliente}</p>
+                                    <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={importNfPdfForm.operadora} onChange={e => setImportNfPdfForm({...importNfPdfForm, operadora: e.target.value})}>
+                                        <option value="">Selecione uma Operadora | Seguradora</option>
+                                        <optgroup label="Operadoras">
+                                            <option value="AMIL">AMIL</option>
+                                            <option value="ASSIM">ASSIM</option>
+                                            <option value="HAPVIDA">HAPVIDA</option>
+                                            <option value="KLINI">KLINI</option>
+                                            <option value="LEVE SAUDE">LEVE SAUDE</option>
+                                            <option value="NOTRE DAME">NOTRE DAME</option>
+                                            <option value="PREVENT">PREVENT</option>
+                                            <option value="QUALICORP">QUALICORP</option>
+                                            <option value="SUPERMED">SUPERMED</option>
+                                            <option value="MED SENIOR">MED SENIOR</option>
+                                        </optgroup>
+                                        <optgroup label="Seguradoras">
+                                            <option value="ALLIANZ">ALLIANZ</option>
+                                            <option value="ASSIST CARD">ASSIST CARD</option>
+                                            <option value="AZUL">AZUL</option>
+                                            <option value="BRADESCO">BRADESCO</option>
+                                            <option value="HDI">HDI</option>
+                                            <option value="ICATU">ICATU</option>
+                                            <option value="MONGERAL">MONGERAL</option>
+                                            <option value="SULAMERICA">SULAMERICA</option>
+                                        </optgroup>
+                                        <option value={importNfPdfForm.cliente}>Manter: {importNfPdfForm.cliente}</option>
+                                    </select>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Emissão</label>
+                                        <input type="date" value={importNfPdfForm.dataHora} onChange={e=>setImportNfPdfForm({...importNfPdfForm, dataHora: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Chave</label>
+                                        <input type="text" value={importNfPdfForm.chave} onChange={e=>setImportNfPdfForm({...importNfPdfForm, chave: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end pt-4 mt-6 border-t border-slate-200 dark:border-slate-700 gap-3">
+                                    <button type="button" onClick={() => setModalImportNfPdfOpen(false)} className="px-6 py-2 rounded-lg font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">Cancelar</button>
+                                    <button type="submit" className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-8 rounded-lg shadow-lg flex items-center transition-colors"><CheckCircle size={18} className="mr-2"/> Salvar Nota</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal Editar NF */}
+                {modalEditNfOpen && editNfForm && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-lg relative mx-4 transition-colors">
+                            <button onClick={() => setModalEditNfOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+                                <X size={20} />
+                            </button>
+                            <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center mb-6">
+                                <Edit className="mr-3 text-amber-500" />
+                                Editar Nota Fiscal
+                            </h3>
+
+                            <form onSubmit={salvarEdicaoNota} className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Nº da Nota</label>
+                                        <input type="text" required value={editNfForm.numero || ''} onChange={e=>setEditNfForm({...editNfForm, numero: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Valor Total (R$)</label>
+                                        <input type="number" step="0.01" required value={editNfForm.valor} onChange={e=>setEditNfForm({...editNfForm, valor: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Cliente / Tomador</label>
+                                    <input type="text" required value={editNfForm.cliente || ''} onChange={e=>setEditNfForm({...editNfForm, cliente: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Data Emissão</label>
+                                        <input type="date" value={editNfForm.data ? editNfForm.data.split('T')[0] : ''} onChange={e=>setEditNfForm({...editNfForm, data: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Chave / Protocolo</label>
+                                        <input type="text" value={editNfForm.chaveNacional || editNfForm.protocolo || ''} onChange={e=>setEditNfForm({...editNfForm, chaveNacional: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end pt-4 mt-6 border-t border-slate-200 dark:border-slate-700 gap-3">
+                                    <button type="button" onClick={() => setModalEditNfOpen(false)} className="px-6 py-2 rounded-lg font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">Cancelar</button>
+                                    <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-8 rounded-lg shadow-lg flex items-center transition-colors"><CheckCircle size={18} className="mr-2"/> Atualizar Nota</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal Visualizar DANFSe */}
+                {modalViewNfOpen && viewNfData && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-2 sm:p-4">
+                        <div className="bg-white dark:bg-slate-800 border items-center flex flex-col border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-4 sm:p-6 w-full max-w-4xl relative overflow-y-auto max-h-screen">
+                            <button onClick={() => setModalViewNfOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors no-print z-10">
+                                <X size={24} />
+                            </button>
+                            
+                            <div className="w-full p-4 sm:p-8 bg-white text-black border border-slate-300 print:border-none print:shadow-none shadow-sm rounded">
+                                <div className="flex justify-between items-center border-b-2 border-slate-800 pb-4 mb-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-16 h-16 border-2 border-slate-800 flex items-center justify-center font-bold text-xl text-slate-800 tracking-tighter">NFS-e</div>
+                                        <div>
+                                            <h1 className="text-xl font-bold uppercase">DANFSe v1.0</h1>
+                                            <p className="text-sm font-semibold uppercase">Documento Auxiliar da NFS-e</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <h2 className="text-sm font-bold uppercase">Prefeitura da Cidade do Rio de Janeiro</h2>
+                                        <p className="text-xs uppercase">SMF / Receita Rio</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="mb-4">
+                                    <div className="bg-slate-100 p-2 font-bold text-sm uppercase mb-1 border-t border-b border-slate-300">Chave de Acesso da NFS-e</div>
+                                    <div className="text-sm font-mono tracking-widest px-2">{viewNfData.chaveNacional ?? viewNfData.protocolo}</div>
+                                </div>
+
+                                <div className="flex justify-between border-b border-slate-300 pb-4 mb-4 gap-4">
+                                    <div>
+                                        <div className="text-xs font-bold uppercase text-slate-600">Número da NFS-e</div>
+                                        <div className="font-bold text-lg">{viewNfData.numero || "DPS"}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs font-bold uppercase text-slate-600">Data e Hora da Emissão</div>
+                                        <div className="font-bold">{formatarDataVisivel(viewNfData.data)}</div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-xs font-bold uppercase text-slate-600">Autenticidade</div>
+                                        <div className="text-xs max-w-[150px] leading-tight text-slate-500">A autenticidade desta NFS-e pode ser verificada no portal nacional da NFS-e.</div>
+                                    </div>
+                                </div>
+
+                                <div className="border border-slate-800 mb-4 rounded-sm overflow-hidden">
+                                    <div className="bg-slate-100 font-bold uppercase text-xs p-1 px-2 border-b border-slate-800">Prestador do Serviço</div>
+                                    <div className="p-3 text-sm">
+                                        <p><strong>Nome / Nome Empresarial:</strong> {nomeEmpresaUpper}</p>
+                                        <p><strong>Endereço:</strong> NILO PECANHA, 00050, CENTRO - Rio de Janeiro - RJ (CEP: 20020-906)</p>
+                                        <p><strong>Simples Nacional:</strong> Optante - Microempresa ou Empresa de Pequeno Porte (ME/EPP)</p>
+                                    </div>
+                                </div>
+
+                                <div className="border border-slate-800 mb-4 rounded-sm overflow-hidden">
+                                    <div className="bg-slate-100 font-bold uppercase text-xs p-1 px-2 border-b border-slate-800">Tomador do Serviço</div>
+                                    <div className="p-3 text-sm">
+                                        <p><strong>Nome / Nome Empresarial:</strong> {viewNfData.cliente}</p>
+                                    </div>
+                                </div>
+
+                                <div className="border border-slate-800 mb-4 rounded-sm overflow-hidden">
+                                    <div className="bg-slate-100 font-bold uppercase text-xs p-1 px-2 border-b border-slate-800">Serviço Prestado</div>
+                                    <div className="p-3 text-sm min-h-[100px]">
+                                        <p className="whitespace-pre-wrap uppercase">Agenciamento, corretagem ou intermediação de planos de saúde.</p>
+                                    </div>
+                                </div>
+
+                                <div className="border-t-2 border-slate-800 pt-4 mt-8">
+                                    <div className="flex justify-between items-end">
+                                        <div>
+                                            <div className="text-xs font-bold uppercase text-slate-600">ISS Retido</div>
+                                            <div className="font-bold">{viewNfData.issRetido ? "Sim, pelo Tomador" : "Não"}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs font-bold uppercase text-slate-600">Alíquota Aplicada</div>
+                                            <div className="font-bold">{viewNfData.aliquotaIss ?? 2}%</div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-xs font-bold uppercase text-slate-600">Valor Total da NFS-e</div>
+                                            <div className="font-black text-2xl">R$ {parseFloat(viewNfData.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                            
+                            <div className="mt-6 flex justify-end w-full gap-3 no-print">
+                                <button onClick={() => setModalViewNfOpen(false)} className="px-6 py-2 rounded-lg font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">Fechar</button>
+                                <button onClick={() => window.print()} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-8 rounded-lg shadow-lg flex items-center transition-colors"><Printer size={18} className="mr-2"/> Imprimir DANFSe</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Modal de Buscar Arquivos no Sistema */}
 {modalArquivosOpen && (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -3316,23 +3681,36 @@ export default function App() {
                 ) : (
                     <div className="space-y-3">
                         {nfeHistorico.map((nota) => (
-                            <div key={nota.id} className="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Chave ADN: {nota.chaveNacional ?? nota.protocolo}</span>
-                                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 font-bold uppercase">{nota.status}</span>
-                                        {nota.issRetido && (
-                                            <span className="text-[10px] px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 font-bold uppercase">ISS Retido</span>
-                                        )}
+                            <div key={nota.id} className="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row items-start md:items-center gap-4 group">
+                                <div className="flex-1 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 w-full">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Chave: {nota.chaveNacional ?? nota.protocolo}</span>
+                                            <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 font-bold uppercase">{nota.status}</span>
+                                            {nota.issRetido && (
+                                                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 font-bold uppercase">ISS Retido</span>
+                                            )}
+                                        </div>
+                                        <p className="text-sm font-bold text-slate-900 dark:text-white">{nota.cliente}</p>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">Nota Nº {nota.numero || '—'}</p>
                                     </div>
-                                    <p className="text-sm font-bold text-slate-900 dark:text-white">{nota.cliente}</p>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">NBS: {nota.codigoNbs ?? '—'} · Trib.: {nota.codTributNacional ?? '—'}</p>
+                                    <div className="text-left md:text-right">
+                                        <p className="text-emerald-600 dark:text-emerald-400 font-bold text-lg">
+                                            R$ {parseFloat(nota.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                                        </p>
+                                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{formatarDataVisivel(nota.data)}</p>
+                                    </div>
                                 </div>
-                                <div className="text-left md:text-right">
-                                    <p className="text-emerald-600 dark:text-emerald-400 font-bold text-lg">
-                                        R$ {parseFloat(nota.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                                    </p>
-                                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">ISS {nota.aliquotaIss ?? '—'}% · {formatarDataVisivel(nota.data)}</p>
+                                <div className="flex gap-2 items-center justify-end w-full md:w-auto pt-3 md:pt-0 mt-3 md:mt-0 border-t md:border-t-0 border-slate-200 dark:border-slate-700 shrink-0 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => visualizarNota(nota)} className="p-2 text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-lg transition-colors" title="Visualizar Nota">
+                                        <Eye size={18} />
+                                    </button>
+                                    <button onClick={() => baixarNota(nota)} className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Baixar PDF">
+                                        <Download size={18} />
+                                    </button>
+                                    <button onClick={() => abrirEdicaoNota(nota)} className="p-2 text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/50 rounded-lg transition-colors" title="Editar Informações">
+                                        <Edit size={18} />
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -3356,11 +3734,13 @@ export default function App() {
                     
                     <div className="bg-slate-50 dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
                         <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-2">Importar Notas</h4>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Adicione notas fiscais geradas anteriormente subindo uma planilha Excel.</p>
-                        <label className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg flex items-center transition-colors cursor-pointer w-fit">
-                            <Upload size={18} className="mr-2"/> Selecionar Ficheiro (.xlsx)
-                            <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={importarNotasHistory} />
-                        </label>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Adicione notas fiscais geradas anteriormente subindo um arquivo PDF (DANFSe).</p>
+                        <div className="flex flex-wrap gap-3">
+                            <label className="bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 px-4 rounded-lg flex items-center transition-colors cursor-pointer w-fit">
+                                <Upload size={18} className="mr-2"/> PDF DANFSe (.pdf)
+                                <input type="file" accept=".pdf" className="hidden" onChange={importarNotaPdfHistory} />
+                            </label>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -3408,9 +3788,29 @@ export default function App() {
                                     )}
                                 </div>
                             </div>
-                            <div className="space-y-2 pt-4 border-t border-slate-200 dark:border-slate-700">
-                                <label className="text-sm font-bold text-blue-600 dark:text-blue-400">NOME DO ARQUIVO</label>
-                                <input type="text" value={formData.parceiro} onChange={(e) => setFormData({...formData, parceiro: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-3 text-slate-900 dark:text-white outline-none focus:border-blue-500" placeholder="Ex: Extrato Amil Mensal..." />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+                                <div className="space-y-2 md:col-span-1">
+                                    <label className="text-sm font-bold text-blue-600 dark:text-blue-400">Nota Fiscal Vinculada</label>
+                                    <input 
+                                        type="text" 
+                                        list="historico-notas-list"
+                                        value={formData.notaFiscal || ''} 
+                                        onChange={(e) => setFormData({...formData, notaFiscal: e.target.value})} 
+                                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-3 text-slate-900 dark:text-white outline-none focus:border-blue-500" 
+                                        placeholder="Selecione ou digite a NF..." 
+                                    />
+                                    <datalist id="historico-notas-list">
+                                        {nfeHistorico.map(nf => {
+                                            const displayVal = nf.numero || nf.chaveNacional || nf.protocolo;
+                                            const displayStr = nf.numero ? `NF Nº ${nf.numero}` : `Chave: ${nf.chaveNacional || nf.protocolo}`;
+                                            return <option key={nf.id} value={displayVal}>{displayStr} - {nf.cliente}</option>
+                                        })}
+                                    </datalist>
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
+                                    <label className="text-sm font-bold text-blue-600 dark:text-blue-400">Nome do Arquivo</label>
+                                    <input type="text" value={formData.parceiro} onChange={(e) => setFormData({...formData, parceiro: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-3 text-slate-900 dark:text-white outline-none focus:border-blue-500" placeholder="Ex: Extrato Amil Mensal..." />
+                                </div>
                             </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Ficheiros Anexos</label>
