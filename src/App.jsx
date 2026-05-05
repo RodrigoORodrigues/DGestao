@@ -1478,9 +1478,11 @@ export default function App() {
             try {
                 let savedId = currentReportId;
                 if (currentReportId) {
-                    await supabase.from('savedReports').update(dataToSave).eq('id', currentReportId);
+                    const { error } = await supabase.from('savedReports').update(dataToSave).eq('id', currentReportId);
+                    if (error) throw error;
                 } else { 
-                    const { data } = await supabase.from('savedReports').insert([dataToSave]).select(); 
+                    const { data, error } = await supabase.from('savedReports').insert([dataToSave]).select(); 
+                    if (error) throw error;
                     if(data && data.length > 0) {
                         savedId = data[0].id;
                         setCurrentReportId(savedId); 
@@ -1491,11 +1493,12 @@ export default function App() {
                     const vendasParaSalvar = dadosParaSalvar.map((row, index) => ({
                         dataVenda: new Date().toISOString().split('T')[0],
                         cliente: row.cliente || '',
-                        vidas: row.vidas || '1',
-                        operadora: row.codigoOperadora || 'AMIL',
+                        vidas: row.vidas === '' || row.vidas === undefined ? null : parseInt(row.vidas, 10),
+                        codOperadora: row.codOperadora || '',
+                        codigoOperadora: row.codigoOperadora || 'AMIL',
                         valor: parseFloat(row.valorTotal) || 0,
-                        comissao: parseFloat(row.comissao) || 0,
-                        vendedor: row.vendedor || '',
+                        comissao: row.comissao === '' || row.comissao === undefined ? null : parseFloat(row.comissao),
+                        corretor: row.vendedor || '',
                         parcela: row.parcela || '1',
                         situacao: row.situacao || 'PAGO',
                         empresa: row.empresa || nomeEmpresa,
@@ -1507,12 +1510,14 @@ export default function App() {
                         assessoria: row.assessoria || '',
                         formaPagamento: row.formaPagamento || '',
                         servico: row.servico || 'Plano de Saúde',
-                        desconto: row.desconto || '',
+                        desconto: row.desconto === '' || row.desconto === undefined ? null : parseFloat(row.desconto),
+                        notas: row.notas || '',
                         reportId: savedId,
                         reportRowIndex: index
                     }));
                     if (vendasParaSalvar.length > 0) {
-                        await supabase.from('vendas').insert(vendasParaSalvar);
+                        const { error } = await supabase.from('vendas').insert(vendasParaSalvar);
+                        if (error) throw error;
                     }
                 }
 
