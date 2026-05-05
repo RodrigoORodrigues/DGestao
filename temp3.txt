@@ -1,0 +1,15 @@
+130:    const [userForm, setUserForm] = useState({ id: null, username: '', password: '', role: 'user', permissions: [] });
+822:            const { data: existing } = await supabase.from('users').select('*').eq('username', userForm.username);
+823:            if (existing && existing.length > 0 && existing[0].id !== userForm.id) { setLoading(false); return showAlert("Já existe um usuário registado com este nome."); }
+825:            const dataToSave = { username: userForm.username, password: userForm.password, role: userForm.role, permissions: userForm.role === 'admin' ? SYSTEM_MODULES.map(m=>m.id) : userForm.permissions };
+826:            if (userForm.id) {
+827:                await supabase.from('users').update(dataToSave).eq('id', userForm.id);
+828:                if (currentUser?.id === userForm.id) { 
+3812:                                    {userForm.id ? "Editar Usuário" : "Novo Usuário"}
+3818:                                    <input required type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={userForm.username} onChange={e => setUserForm({...userForm, username: e.target.value})} />
+3822:                                    <input required type="password" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} />
+3826:                                    <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})}>
+3831:                                {userForm.role !== 'admin' && (
+3837:                                                    <input type="checkbox" checked={userForm.permissions.includes(mod.id)} onChange={(e) => {
+3838:                                                        const p = e.target.checked ? [...userForm.permissions, mod.id] : userForm.permissions.filter(x => x !== mod.id);
+3839:                                                        setUserForm({...userForm, permissions: p});

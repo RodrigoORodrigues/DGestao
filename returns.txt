@@ -1,0 +1,88 @@
+42:    if (!list || list.length === 0) return '00001';
+50:    return String(maxNum + 1).padStart(5, '0');
+55:        const saved = localStorage.getItem('protetta_theme'); return saved ? saved === 'dark' : true; 
+60:        return savedLocal ? JSON.parse(savedLocal) : (savedSession ? JSON.parse(savedSession) : null);
+91:                return parsed.map(e => (e.id === 1 && e.nome === 'PROTETTA' && !e.cnpj) ? { ...e, cnpj: '28.291.926/0001-00' } : e);
+93:            return [{ id: 1, nome: 'PROTETTA', cnpj: '28.291.926/0001-00', isDefault: true }];
+94:        } catch { return [{ id: 1, nome: 'PROTETTA', cnpj: '28.291.926/0001-00', isDefault: true }]; }
+250:        if (!currentUser) return false;
+251:        if (currentUser.role === 'admin') return true; 
+252:        return (currentUser.permissions || []).includes(module);
+256:        if(!supabase) return;
+280:                    return { ...r, parceiro, codigoOperadora, codOperadora, id: r.id, ano: r.ano, mes: r.mes, categoria: r.categoria, empresa: r.empresa, date: r.date, fileName: r.fileName, filePath: r.filePath };
+302:            if(!supabase) return;
+338:        return () => {
+372:                return;
+403:        return (
+415:        return (
+525:            if (valA < valB) return vendasSortConfig.direction === 'asc' ? -1 : 1;
+526:            if (valA > valB) return vendasSortConfig.direction === 'asc' ? 1 : -1;
+527:            return 0;
+530:        return todasAsVendas;
+542:        if (vendasSortConfig.key !== key) return null;
+543:        return <ChevronDown size={14} className={`inline ml-1 transition-transform ${vendasSortConfig.direction === 'asc' ? 'rotate-180' : ''}`} />;
+552:            return dv <= dataDeHojeInterna();
+555:            if (!key || !v.parcela) return;
+575:            if (uniqueParcelas.length === 0) return;
+606:        return inconsistencias;
+619:        if (toExport.length === 0) return showAlert('Nenhuma inconsistência para exportar.');
+633:        if (toExport.length === 0) return showAlert('Nenhuma inconsistência para imprimir.');
+718:        if (!situacao) return 'bg-slate-100 text-slate-700';
+719:        if (situacao.includes('FATURADO')) return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400';
+720:        if (situacao.includes('PENDENTE')) return 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400';
+721:        if (situacao.includes('CANCELADO')) return 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400';
+722:        return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+839:                    return;
+871:            if (existing && existing.length > 0 && existing[0].id !== userForm.id) { setLoading(false); return showAlert("Já existe um usuário registado com este nome."); }
+891:        if (u.username === 'admin') return showAlert("Não é possível apagar admin.");
+892:        if (currentUser?.id === u.id) return showAlert("Você não pode apagar a sua própria conta.");
+897:        if (!fileName) return "text-slate-400"; const ext = fileName.split('.').pop().toLowerCase();
+898:        if (['csv', 'xlsx', 'xls'].includes(ext)) return "text-emerald-600 dark:text-emerald-400";
+899:        if (['pdf'].includes(ext)) return "text-rose-600 dark:text-rose-400"; return "text-slate-400";
+903:        if (searchTerm.trim() !== '') { const term = searchTerm.toLowerCase(); return dbReports.filter(r => r.parceiro.toLowerCase().includes(term) || (r.fileName || '').toLowerCase().includes(term) || r.empresa.toLowerCase().includes(term)).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro, pathInfo: `${f.ano} / ${f.mes} / ${f.empresa}` })); }
+904:        if (currentPath.length === 0) return [...new Set([String(new Date().getFullYear()), ...dbReports.map(r => String(r.ano))])].sort().map(y => ({ id: y, name: y, type: 'folder' }));
+905:        if (currentPath.length === 1) return MESES.map(m => ({ id: m, name: m, type: 'folder' }));
+906:        if (currentPath.length === 2) return CATEGORIAS.map(c => ({ id: c, name: c, type: 'folder' }));
+907:        if (currentPath.length === 3) return empresasList.map(e => ({ id: e.nome, name: e.nome, type: 'folder' }));
+932:            return allOps.map(op => ({ id: op, name: op, type: 'folder' }));
+951:            return list;
+954:            return dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && (r.codigoOperadora || '').trim().toLowerCase() === String(currentPath[4]).toLowerCase() && String(r.codOperadora || '').trim() === String(currentPath[5])).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro }));
+956:        return [];
+961:        if (!formData.codigoOperadora) return setFormError('ERRO: Selecione a Operadora | Seguradora.');
+962:        if (!formData.parceiro.trim()) return setFormError('ERRO: Parceiro obrigatório.'); 
+963:        if (formData.arquivos.length === 0) return setFormError('ERRO: Anexos obrigatórios.');
+998:        if (!item) return;
+1024:        return matchNome && matchTipo && matchSituacao;
+1035:        if(!clienteParaApagar) return;
+1054:        if (selectedClientes.length === 0) return showAlert("Selecione pelo menos um cliente para apagar.");
+1105:            return showAlert(`Já existe um cliente registado com o nome "${clienteForm.nome.trim()}". Não é possível guardar clientes com nomes duplicados.`);
+1111:                return showAlert("Atenção: O CPF deve conter 11 dígitos numéricos. (Preencha corretamente ou deixe em branco).");
+1113:                return showAlert("Atenção: O CNPJ deve conter 14 dígitos numéricos. (Preencha corretamente ou deixe em branco).");
+1122:                if (duplicado) { setLoading(false); return showAlert("Já existe outro cliente registado com este nome exato."); }
+1126:                if (duplicado) { setLoading(false); return showAlert("Não é possível salvar. Já existe um cliente com este nome na base."); }
+1140:        const file = event.target.files[0]; if (!file) return;
+1146:                return !isNaN(v) && v > max ? v : max;
+1198:            return !isNaN(num) && num > max ? num : max;
+1203:            return !isNaN(v) && v > max ? v : max;
+1356:        if(count === 0) return showAlert("Nenhuma linha selecionada para apagar.");
+1365:        if (selecionados.length === 0) return showAlert("Selecione pelo menos uma linha para gerar a Nota Fiscal.");
+1409:            return !isNaN(num) && num > max ? num : max;
+1413:            return !isNaN(num) && num > max ? num : max;
+1428:        if(!reportName) return showAlert('Digite um nome para o relatório antes de salvar.');
+1429:        if(pdfData.length === 0) return showAlert('Não há dados para salvar.');
+1432:        if(dadosParaSalvar.length === 0) return showAlert('Não há linhas selecionadas para salvar.');
+1474:                return showAlert("A Data de Competência não pode ser uma data futura.");
+1477:                return showAlert(`A Data de Competência não pode ser anterior ao ano atual (${currentYear}).`);
+1482:            return showAlert("Por favor, preencha todos os campos do endereço do tomador (CEP, Logradouro, Número, Bairro, Cidade, UF).");
+1487:            return showAlert("CEP inválido. O CEP deve conter 8 dígitos.");
+1491:            return showAlert("Por favor, preencha pelo menos o CNPJ e o Valor para emitir a NF.");
+1496:             return showAlert("CPF / CNPJ com tamanho inválido. Preencha corretamente (11 dígitos para CPF ou 14 para CNPJ).");
+1500:            return showAlert("CPF / CNPJ inválido. Por favor verifique os dígitos digitados.");
+1518:        if(nfeHistorico.length === 0) return showAlert("Não há notas para exportar.");
+1536:        const file = event.target.files[0]; if (!file) return;
+1571:        if (!newPresetName.trim()) return showAlert("Digite um nome para a seleção.");
+1597:        if (!idOrName) { setPrintCols(defaultPrintCols); return; }
+1709:    return (
+1789:                                    return <div className="p-12 text-center text-slate-500 italic"><CheckCircle size={48} className="mx-auto text-emerald-500 mb-4 opacity-50"/>Tudo certo! Nenhuma inconsistência ou salto de parcela detectado.</div>;
+1792:                                return (
+3421:                                        if (clientes.length === 0 && savedReportsList.length === 0 && vendasList.length === 0) return showAlert("Não existem dados suficientes para backup.");

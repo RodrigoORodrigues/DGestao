@@ -1,0 +1,32 @@
+85:    const [empresasList, setEmpresasList] = useState(() => {
+87:            const saved = localStorage.getItem('protetta_empresas');
+96:    const defaultEmpresa = empresasList.find(e => e.isDefault) || empresasList[0] || { nome: 'PROTETTA' };
+210:    const [formData, setFormData] = useState({ ano: new Date().getFullYear().toString(), mes: MESES[0], categoria: CATEGORIAS[0], empresa: nomeEmpresa, parceiro: '', codOperadora: '', codigoOperadora: '', codigoOperadoraOutra: '', arquivos: [] });
+218:                    setCurrentPath([formData.ano.toString(), formData.mes, formData.categoria, formData.empresa, opPath, formData.codOperadora]);
+220:                    setCurrentPath([formData.ano.toString(), formData.mes, formData.categoria, formData.empresa, opPath]);
+223:                setCurrentPath([formData.ano.toString(), formData.mes, formData.categoria, formData.empresa]);
+226:    }, [formData.ano, formData.mes, formData.categoria, formData.empresa, formData.codigoOperadora, formData.codigoOperadoraOutra, formData.codOperadora, currentView]);
+235:                empresa: currentPath[3] || prev.empresa,
+280:                    return { ...r, parceiro, codigoOperadora, codOperadora, id: r.id, ano: r.ano, mes: r.mes, categoria: r.categoria, empresa: r.empresa, date: r.date, fileName: r.fileName, filePath: r.filePath };
+855:        if (searchTerm.trim() !== '') { const term = searchTerm.toLowerCase(); return dbReports.filter(r => r.parceiro.toLowerCase().includes(term) || (r.fileName || '').toLowerCase().includes(term) || r.empresa.toLowerCase().includes(term)).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro, pathInfo: `${f.ano} / ${f.mes} / ${f.empresa}` })); }
+859:        if (currentPath.length === 3) return empresasList.map(e => ({ id: e.nome, name: e.nome, type: 'folder' }));
+862:            const empresa = currentPath[3];
+865:            if (empresa.toLowerCase() === 'proper') {
+873:            const existingOps = dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3])).map(r => (r.codigoOperadora || '').trim());
+876:            if (empresa.toLowerCase() === 'proper') {
+888:            const reports = dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && (r.codigoOperadora || '').trim().toLowerCase() === String(currentPath[4]).toLowerCase());
+906:            return dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && (r.codigoOperadora || '').trim().toLowerCase() === String(currentPath[4]).toLowerCase() && String(r.codOperadora || '').trim() === String(currentPath[5])).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro }));
+929:                const { error: insertErr } = await supabase.from('reports').insert([{ ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, parceiro: saveParceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath }]);
+1130:        const empresaContexto = reportDoc?.empresa || nomeEmpresa;
+1131:        const empresaContextoUpper = empresaContexto.toUpperCase();
+1264:                        situacao: `FATURADO ${empresaContextoUpper} NF`, 
+1265:                        loja: empresaContextoUpper, 
+1268:                        vendedor: vendedorDetectado || empresaContexto, 
+1273:                        assessoria: empresaContexto, 
+1760:                {currentView === 'empresas' && hasAccess('empresas') && (
+1762:                        empresasList={empresasList} 
+2077:                                            {empresasList.filter(e => e.nome.toUpperCase() !== nomeEmpresaUpper).map(e => (
+2834:                                        <p className={`text-slate-500 ${extratosModalViewMode === 'cards' ? 'text-xs' : 'text-sm whitespace-nowrap'}`}>{report.ano} / {report.mes} / {report.empresa}</p>
+3279:                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label><select value={formData.empresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{empresasList.map(e => <option key={e.nome} value={e.nome}>{e.nome}</option>)}</select></div>
+3739:                                            {empresasList.map(e => <option key={`${e.id}_1`} value={`${e.nome.toUpperCase()} SEGUROS`} />)}
+3740:                                            {empresasList.map(e => <option key={`${e.id}_2`} value={e.nome.toUpperCase()} />)}

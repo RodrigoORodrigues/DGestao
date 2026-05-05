@@ -1,0 +1,32 @@
+259:                supabase.from('users').select('*'), supabase.from('clientes').select('*'),
+260:                supabase.from('vendas').select('*'), supabase.from('savedReports').select('*'), supabase.from('reports').select('*')
+286:                const { data: pData, error: pErr } = await supabase.from('print_presets').select('*');
+304:                const { data, error } = await supabase.from('users').select('*').limit(1);
+309:                    const insertResponse = await supabase.from('users').insert([{ username: 'admin', password: 'admin', role: 'admin', permissions: SYSTEM_MODULES.map(m => m.id) }]);
+357:            const { data: users, error } = await supabase.from('users').select('*').eq('username', loginData.user);
+736:                    const rep = await supabase.from('savedReports').select('*').eq('id', vendaForm.reportId).single();
+747:                        await supabase.from('savedReports').update({ dados: dadosAtualizados }).eq('id', rep.data.id);
+751:                        const { error } = await supabase.from('vendas').update(dataToSave).eq('id', vendaForm.id);
+755:                        const { error } = await supabase.from('vendas').insert([dataToSave]); 
+803:                const rep = await supabase.from('savedReports').select('*').eq('id', venda.reportId).single();
+806:                    await supabase.from('savedReports').update({ dados: dados }).eq('id', rep.data.id);
+808:            } else { await supabase.from('vendas').delete().eq('id', venda.id); }
+822:            const { data: existing } = await supabase.from('users').select('*').eq('username', userForm.username);
+827:                await supabase.from('users').update(dataToSave).eq('id', userForm.id);
+837:            } else { await supabase.from('users').insert([dataToSave]); }
+845:        showConfirm(`Tem a certeza que deseja apagar o usuário '${u.username}'?`, async () => { await supabase.from('users').delete().eq('id', u.id); await loadFromDB(); });
+929:                const { error: insertErr } = await supabase.from('reports').insert([{ ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, parceiro: saveParceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath }]);
+959:                    await supabase.from('reports').delete().eq('id', item.id);
+998:            await supabase.from('clientes').delete().eq('id', id); 
+1012:                    await supabase.from('clientes').delete().eq('id', id);
+1075:                await supabase.from('clientes').update(clienteParaSalvar).eq('id', clienteEditIndex);
+1080:                await supabase.from('clientes').insert([clienteParaSalvar]);
+1111:            if(novosClientesParaInserir.length > 0){ await supabase.from('clientes').insert(novosClientesParaInserir); await loadFromDB(); showAlert(`${novosClientesParaInserir.length} novos clientes importados!`); } else { showAlert("Nenhum cliente novo encontrado no ficheiro."); }
+1286:            await supabase.from('clientes').insert(clientesParaInserir); 
+1394:            if (currentReportId) await supabase.from('savedReports').update(dataToSave).eq('id', currentReportId);
+1395:            else { const { data } = await supabase.from('savedReports').insert([dataToSave]).select(); if(data) setCurrentReportId(data[0].id); }
+1401:    const apagarRelatorioSalvo = (id) => { showConfirm("ATENÇÃO: Tem certeza absoluta que deseja apagar permanentemente este relatório da nuvem e do cache local? Esta ação é totalmente irreversível e os dados serão perdidos.", async () => { setLoading(true); setLoadingMsg("A apagar..."); await supabase.from('savedReports').delete().eq('id', id); if(currentReportId === id) { setPdfData([]); setCurrentReportId(null); } await loadFromDB(); setLoading(false); }); };
+1527:            const { data, error } = await supabase.from('print_presets').insert([newPreset]).select();
+1558:            if (!isLocal && supabase) await supabase.from('print_presets').delete().eq('id', idOrName);
+3449:                                            await supabase.from('vendas').delete().neq('id', 0);
+3450:                                            await supabase.from('savedReports').delete().neq('id', 0);

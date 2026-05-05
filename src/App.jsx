@@ -82,7 +82,7 @@ export default function App() {
     const [filtrosCli, setFiltrosCli] = useState({ tipo: 'Todos', situacao: 'Todos' });
     
     // Empresas Gestão
-    const [empresasList, setEmpresasList] = useState(() => {
+    const [rawEmpresasList, setRawEmpresasList] = useState(() => {
         try {
             const saved = localStorage.getItem('protetta_empresas');
             const parsed = saved ? JSON.parse(saved) : null;
@@ -93,15 +93,36 @@ export default function App() {
             return [{ id: 1, nome: 'PROTETTA', cnpj: '28.291.926/0001-00', isDefault: true }];
         } catch { return [{ id: 1, nome: 'PROTETTA', cnpj: '28.291.926/0001-00', isDefault: true }]; }
     });
-    const defaultEmpresa = empresasList.find(e => e.isDefault) || empresasList[0] || { nome: 'PROTETTA' };
+
+    const empresasList = useMemo(() => {
+        if (!currentUser?.empresa || currentUser.empresa === 'Todas') return rawEmpresasList;
+        return rawEmpresasList.filter(e => e.nome.toUpperCase() === currentUser.empresa.toUpperCase());
+    }, [rawEmpresasList, currentUser]);
+
+    const setEmpresasList = (newListOrFunc) => {
+        let newList;
+        if (typeof newListOrFunc === 'function') {
+            newList = newListOrFunc(rawEmpresasList);
+        } else {
+            newList = newListOrFunc;
+        }
+        setRawEmpresasList(newList);
+        localStorage.setItem('protetta_empresas', JSON.stringify(newList));
+    };
+
+    const activeEmpresa = (currentUser?.empresa && currentUser?.empresa !== 'Todas') 
+        ? (rawEmpresasList.find(e => e.nome.toUpperCase() === currentUser.empresa.toUpperCase()) || { nome: currentUser.empresa }) 
+        : (rawEmpresasList.find(e => e.isDefault) || rawEmpresasList[0] || { nome: 'PROTETTA' });
+        
+    const defaultEmpresa = activeEmpresa;
     const nomeEmpresa = defaultEmpresa.nome;
     const nomeEmpresaUpper = nomeEmpresa.toUpperCase();
 
-    const [cols, setCols] = useState({ codigo: false, nome: true, tipo: true, documento: true, telefone: true, celular: true, email: true, situacao: true, cadastrado_em: true, acoes: true });
+    const [cols, setCols] = useState({ codigo: false, nome: true, tipo: true, documento: true, operadora: true, servico: true, telefone: true, celular: true, email: true, situacao: true, cadastrado_em: true, acoes: true });
     const [modalClienteOpen, setModalClienteOpen] = useState(false);
     const [modalBuscaOpen, setModalBuscaOpen] = useState(false);
     const [clienteEditIndex, setClienteEditIndex] = useState(-1);
-    const [clienteForm, setClienteForm] = useState({ id: null, nome: '', tipo: 'Pessoa jurídica', documento: '', telefone: '', celular: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '', email: '', situacao: true });
+    const [clienteForm, setClienteForm] = useState({ id: null, nome: '', tipo: 'Pessoa jurídica', documento: '', telefone: '', celular: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '', email: '', situacao: true, operadora: '', servico: 'Plano de Saúde' });
     const [clientSaveSuccess, setClientSaveSuccess] = useState(false);
     const [clientesCurrentPage, setClientesCurrentPage] = useState(1);
     
@@ -127,7 +148,7 @@ export default function App() {
 
     const [usersList, setUsersList] = useState([]);
     const [modalUserOpen, setModalUserOpen] = useState(false);
-    const [userForm, setUserForm] = useState({ id: null, username: '', password: '', role: 'user', permissions: [] });
+    const [userForm, setUserForm] = useState({ id: null, username: '', password: '', role: 'user', permissions: [], empresa: 'Todas' });
 
     const [vendasList, setVendasList] = useState([]);
     const [showVendasFilter, setShowVendasFilter] = useState(false);
@@ -248,6 +269,7 @@ export default function App() {
 
     const hasAccess = (module) => {
         if (!currentUser) return false;
+        if (module === 'empresas' && currentUser.empresa && currentUser.empresa !== 'Todas') return false;
         if (currentUser.role === 'admin') return true; 
         return (currentUser.permissions || []).includes(module);
     };
@@ -259,12 +281,25 @@ export default function App() {
                 supabase.from('users').select('*'), supabase.from('clientes').select('*'),
                 supabase.from('vendas').select('*'), supabase.from('savedReports').select('*'), supabase.from('reports').select('*')
             ]);
-            if (resUsers.data) setUsersList(resUsers.data);
-            if (resCli.data) setClientes(resCli.data);
-            if (resVendas.data) setVendasList(resVendas.data);
-            if (resSaved.data) setSavedReportsList(resSaved.data);
+            const userFilters = (data) => {
+                if (!data) return [];
+                if (!currentUser?.empresa || currentUser.empresa === 'Todas') return data;
+                const userEmp = currentUser.empresa.toUpperCase();
+                return data.filter(item => {
+                    const emp = (item?.empresa || item?.loja || '').toUpperCase();
+                    if (!emp) return true; // keep items with no company for backward compat
+                    if (emp === userEmp || emp.includes(userEmp)) return true;
+                    // For example loja might be "PROTETTA SEGUROS" and userEmp "PROTETTA"
+                    return false;
+                });
+            };
+
+            if (resUsers.data) setUsersList(userFilters(resUsers.data));
+            if (resCli.data) setClientes(userFilters(resCli.data));
+            if (resVendas.data) setVendasList(userFilters(resVendas.data));
+            if (resSaved.data) setSavedReportsList(userFilters(resSaved.data));
             if (resRep.data) {
-                const parsedReports = resRep.data.map(r => {
+                let parsedReports = resRep.data.map(r => {
                     let parceiro = r.parceiro || '';
                     let codigoOperadora = r.codigoOperadora || '';
                     let codOperadora = r.codOperadora || '';
@@ -279,6 +314,9 @@ export default function App() {
                     }
                     return { ...r, parceiro, codigoOperadora, codOperadora, id: r.id, ano: r.ano, mes: r.mes, categoria: r.categoria, empresa: r.empresa, date: r.date, fileName: r.fileName, filePath: r.filePath };
                 });
+                if (currentUser?.empresa && currentUser.empresa !== 'Todas') {
+                    parsedReports = parsedReports.filter(r => r.empresa && r.empresa.toUpperCase() === currentUser.empresa.toUpperCase());
+                }
                 setDbReports(parsedReports);
             }
 
@@ -399,55 +437,7 @@ export default function App() {
         });
     };
 
-    if (!supabase) {
-        return (
-            <div className="flex h-screen w-screen items-center justify-center bg-slate-900 p-6">
-                <div className="bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-lg w-full text-center border border-slate-700">
-                    <Database size={48} className="text-blue-500 mx-auto mb-4" />
-                    <h1 className="text-2xl font-bold text-white mb-2">Conexão Cloud Necessária</h1>
-                    <p className="text-slate-400 mb-6 text-sm">O seu sistema Don Gestão precisa da configuração do Supabase para funcionar.</p>
-                </div>
-            </div>
-        );
-    }
 
-    if (!currentUser) {
-        return (
-            <div className="flex h-screen w-screen items-center justify-center bg-slate-100 dark:bg-slate-900 transition-colors duration-200 p-4">
-                <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-700 transition-colors relative">
-                    <div className="flex flex-col items-center mb-8">
-                        <div className="bg-emerald-600 p-3 rounded-xl font-bold text-white text-3xl leading-none border border-emerald-400/50 mb-4 shadow-lg">D</div>
-                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Don Gestão</h1>
-                    </div>
-                    <form onSubmit={handleLogin} onInvalid={(e) => e.currentTarget.classList.add('show-errors')} className="space-y-5">
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Usuário</label>
-                            <div className="relative">
-                                <User size={18} className="absolute left-3 top-3 text-slate-400" />
-                                <input type="text" required value={loginData.user} onChange={e => setLoginData({...loginData, user: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg pl-10 pr-4 py-2.5 text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Senha</label>
-                            <div className="relative">
-                                <Key size={18} className="absolute left-3 top-3 text-slate-400" />
-                                <input type={showPassword ? "text" : "password"} required value={loginData.password} onChange={e => setLoginData({...loginData, password: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg pl-10 pr-10 py-2.5 text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" />
-                                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"><Eye size={18} /></button>
-                            </div>
-                        </div>
-                        <div className="flex items-center -mt-2 mb-2">
-                            <input type="checkbox" id="rememberMe" checked={loginData.rememberMe} onChange={e => setLoginData({...loginData, rememberMe: e.target.checked})} className="w-4 h-4 text-emerald-600 bg-slate-50 border-slate-300 rounded focus:ring-emerald-500 dark:focus:ring-emerald-600 dark:ring-offset-slate-800 focus:ring-2 dark:bg-slate-900 dark:border-slate-600" />
-                            <label htmlFor="rememberMe" className="ml-2 text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none">Manter sessão iniciada</label>
-                        </div>
-                        {loginError && <p className="text-rose-500 dark:text-rose-400 text-sm font-bold text-center bg-rose-100 dark:bg-rose-500/10 py-2 rounded-lg border border-rose-200 dark:border-rose-500/20">{loginError}</p>}
-                        <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg flex items-center justify-center space-x-2 transition-colors shadow-lg mt-4" disabled={loading}>
-                            {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <><Lock size={18} /><span>Entrar no Sistema</span></>}
-                        </button>
-                    </form>
-                </div>
-            </div>
-        );
-    }
 
     // --- FUNÇÕES DE LÓGICA ---
     const applyDatePreset = (preset) => {
@@ -773,6 +763,16 @@ export default function App() {
                 dataToSave.comissao = dataToSave.comissao === '' || dataToSave.comissao === undefined ? null : parseFloat(dataToSave.comissao);
                 dataToSave.desconto = dataToSave.desconto === '' || dataToSave.desconto === undefined ? null : parseFloat(dataToSave.desconto);
                 
+                if (currentUser.empresa && currentUser.empresa !== 'Todas') {
+                    const empUpper = currentUser.empresa.toUpperCase();
+                    if (!dataToSave.loja || !dataToSave.loja.toUpperCase().includes(empUpper)) {
+                        dataToSave.loja = `${empUpper} SEGUROS`;
+                    }
+                    if (!dataToSave.situacao.toUpperCase().includes(empUpper)) {
+                         dataToSave.situacao = `FATURADO ${empUpper} NF`;
+                    }
+                }
+
                 delete dataToSave.comissaoPorcentagem;
                 delete dataToSave.isFromReport;
                 delete dataToSave.reportId;
@@ -860,7 +860,7 @@ export default function App() {
 
     const abrirModalUsuario = (user = null) => {
         if (user) setUserForm({ ...user });
-        else setUserForm({ id: null, username: '', password: '', role: 'user', permissions: [] });
+        else setUserForm({ id: null, username: '', password: '', role: 'user', permissions: [], empresa: nomeEmpresa });
         setModalUserOpen(true);
     };
 
@@ -870,7 +870,12 @@ export default function App() {
             const { data: existing } = await supabase.from('users').select('*').eq('username', userForm.username);
             if (existing && existing.length > 0 && existing[0].id !== userForm.id) { setLoading(false); return showAlert("Já existe um usuário registado com este nome."); }
             
-            const dataToSave = { username: userForm.username, password: userForm.password, role: userForm.role, permissions: userForm.role === 'admin' ? SYSTEM_MODULES.map(m=>m.id) : userForm.permissions };
+            let finalEmpresa = userForm.empresa || 'Todas';
+            if (currentUser?.empresa && currentUser.empresa !== 'Todas' && finalEmpresa === 'Todas') {
+                finalEmpresa = currentUser.empresa; // Prevents privilege escalation
+            }
+
+            const dataToSave = { username: userForm.username, password: userForm.password, role: userForm.role, permissions: userForm.role === 'admin' ? SYSTEM_MODULES.map(m=>m.id) : userForm.permissions, empresa: finalEmpresa };
             if (userForm.id) {
                 await supabase.from('users').update(dataToSave).eq('id', userForm.id);
                 if (currentUser?.id === userForm.id) { 
@@ -938,7 +943,7 @@ export default function App() {
             const codOps = [...new Set(reports.map(r => r.codOperadora).filter(c => c && c.trim() !== ''))].sort();
             
             let fixedCodOps = [];
-            if (currentPath[4].toUpperCase() === 'AMIL') {
+            if (currentPath[3] === 'Protetta' && currentPath[4].toUpperCase() === 'AMIL') {
                 fixedCodOps = ['139491', '162191', '224138'];
             }
             const allCodOps = [...new Set([...fixedCodOps, ...codOps])].sort();
@@ -1091,7 +1096,7 @@ export default function App() {
     const isAllClientesSelected = currentClientes.length > 0 && currentClientes.every(c => selectedClientes.includes(c.id));
     const abrirModalAddEdit = (cliente = null) => {
         if (cliente) { setClienteForm({...cliente}); setClienteEditIndex(cliente.id); } 
-        else { setClienteForm({ id: null, nome: '', tipo: 'Pessoa jurídica', documento: '', telefone: '', celular: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '', email: '', situacao: true }); setClienteEditIndex(-1); }
+        else { setClienteForm({ id: null, nome: '', tipo: 'Pessoa jurídica', documento: '', telefone: '', celular: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '', email: '', situacao: true, operadora: '', servico: 'Plano de Saúde' }); setClienteEditIndex(-1); }
         setModalClienteOpen(true);
     };
 
@@ -1099,10 +1104,10 @@ export default function App() {
         e.preventDefault(); 
 
         const nomeUpper = clienteForm.nome.trim().toUpperCase();
-        const clienteExistente = clientes.find(c => c.nome.trim().toUpperCase() === nomeUpper && c.id !== clienteForm.id);
+        const clienteExistente = clientes.find(c => c.nome.trim().toUpperCase() === nomeUpper && c.id !== clienteForm.id && (c.operadora || '') === (clienteForm.operadora || '') && (c.servico || '') === (clienteForm.servico || ''));
         
         if (clienteExistente) {
-            return showAlert(`Já existe um cliente registado com o nome "${clienteForm.nome.trim()}". Não é possível guardar clientes com nomes duplicados.`);
+            return showAlert(`Já existe um cliente registado com o nome "${clienteForm.nome.trim()}", operadora "${clienteForm.operadora}" e serviço "${clienteForm.servico}". Não é possível guardar clientes duplicados.`);
         }
 
         const doc = clienteForm.documento ? clienteForm.documento.replace(/[^\d]/g, '') : '';
@@ -1116,14 +1121,15 @@ export default function App() {
 
         setLoading(true); setLoadingMsg("Guardando cliente...");
         try {
-            const clienteParaSalvar = { ...clienteForm }; clienteParaSalvar.nome = clienteParaSalvar.nome.trim();
+            const finalEmpresa = (!currentUser?.empresa || currentUser.empresa === 'Todas') ? (clienteForm.empresa || nomeEmpresa) : nomeEmpresa;
+            const clienteParaSalvar = { ...clienteForm, empresa: finalEmpresa }; clienteParaSalvar.nome = clienteParaSalvar.nome.trim();
             if (clienteEditIndex >= 0) {
-                const duplicado = clientes.find(c => c.id !== clienteEditIndex && c.nome.toLowerCase() === clienteParaSalvar.nome.toLowerCase());
-                if (duplicado) { setLoading(false); return showAlert("Já existe outro cliente registado com este nome exato."); }
+                const duplicado = clientes.find(c => c.id !== clienteEditIndex && c.nome.toLowerCase() === clienteParaSalvar.nome.toLowerCase() && (c.operadora || '') === (clienteParaSalvar.operadora || '') && (c.servico || '') === (clienteParaSalvar.servico || ''));
+                if (duplicado) { setLoading(false); return showAlert("Já existe outro cliente registado com este nome, operadora e serviço exatos."); }
                 await supabase.from('clientes').update(clienteParaSalvar).eq('id', clienteEditIndex);
             } else {
-                const duplicado = clientes.find(c => c.nome.toLowerCase() === clienteParaSalvar.nome.toLowerCase());
-                if (duplicado) { setLoading(false); return showAlert("Não é possível salvar. Já existe um cliente com este nome na base."); }
+                const duplicado = clientes.find(c => c.nome.toLowerCase() === clienteParaSalvar.nome.toLowerCase() && (c.operadora || '') === (clienteParaSalvar.operadora || '') && (c.servico || '') === (clienteParaSalvar.servico || ''));
+                if (duplicado) { setLoading(false); return showAlert("Não é possível salvar. Já existe um cliente com este nome, operadora e serviço na base."); }
                 clienteParaSalvar.codigo = getNextSequenceNumber(clientes, c => c.codigo); delete clienteParaSalvar.id;
                 await supabase.from('clientes').insert([clienteParaSalvar]);
             }
@@ -1147,12 +1153,13 @@ export default function App() {
             }, 0);
             if (ext === 'xlsx' || ext === 'csv') {
                 const data = await file.arrayBuffer(); const workbook = XLSX.read(data); const linhasExcel = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                const impEmpresa = (!currentUser?.empresa || currentUser.empresa === 'Todas') ? nomeEmpresa : (currentUser.empresa || nomeEmpresa);
                 linhasExcel.forEach(linha => {
                     let nome = linha['Nome'] || linha['NOME'] || linha['Cliente'] || "Sem Nome"; nome = nome.trim();
                     if(!clientes.find(c => c.nome.toLowerCase() === nome.toLowerCase()) && !novosClientesParaInserir.find(c => c.nome.toLowerCase() === nome.toLowerCase())) {
                         currentMaxCodigo++;
                         let newCodigo = String(currentMaxCodigo).padStart(5, '0');
-                        novosClientesParaInserir.push({ codigo: newCodigo, nome: nome, tipo: linha['Tipo'] || 'Pessoa jurídica', documento: linha['Documento'] || linha['CNPJ'] || linha['NIF'] || '', telefone: linha['Telefone'] || '', celular: linha['Celular'] || '', email: linha['Email'] || linha['E-mail'] || '', situacao: true });
+                        novosClientesParaInserir.push({ codigo: newCodigo, nome: nome, tipo: linha['Tipo'] || 'Pessoa jurídica', documento: linha['Documento'] || linha['CNPJ'] || linha['NIF'] || '', telefone: linha['Telefone'] || '', celular: linha['Celular'] || '', email: linha['Email'] || linha['E-mail'] || '', situacao: true, empresa: impEmpresa });
                     }
                 });
             }
@@ -1434,7 +1441,8 @@ export default function App() {
         const dataToSave = { 
             nome: reportName, periodo: reportPeriod, dataCriacao: new Date().toISOString(), 
             criadoPor: currentUser?.username || 'Sistema', 
-            dados: dadosParaSalvar 
+            dados: dadosParaSalvar,
+            empresa: nomeEmpresa
         };
         
         setLoading(true); setLoadingMsg("Guardando relatório na cloud...");
@@ -1705,6 +1713,56 @@ export default function App() {
             setTimeout(() => document.body.removeChild(printIframe), 1000);
         }, 500);
     };
+
+    if (!supabase) {
+        return (
+            <div className="flex h-screen w-screen items-center justify-center bg-slate-900 p-6">
+                <div className="bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-lg w-full text-center border border-slate-700">
+                    <Database size={48} className="text-blue-500 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-white mb-2">Conexão Cloud Necessária</h1>
+                    <p className="text-slate-400 mb-6 text-sm">O seu sistema Don Gestão precisa da configuração do Supabase para funcionar.</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!currentUser) {
+        return (
+            <div className="flex h-screen w-screen items-center justify-center bg-slate-100 dark:bg-slate-900 transition-colors duration-200 p-4">
+                <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-700 transition-colors relative">
+                    <div className="flex flex-col items-center mb-8">
+                        <div className="bg-emerald-600 p-3 rounded-xl font-bold text-white text-3xl leading-none border border-emerald-400/50 mb-4 shadow-lg">D</div>
+                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Don Gestão</h1>
+                    </div>
+                    <form onSubmit={handleLogin} onInvalid={(e) => e.currentTarget.classList.add('show-errors')} className="space-y-5">
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Usuário</label>
+                            <div className="relative">
+                                <User size={18} className="absolute left-3 top-3 text-slate-400" />
+                                <input type="text" required value={loginData.user} onChange={e => setLoginData({...loginData, user: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg pl-10 pr-4 py-2.5 text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Senha</label>
+                            <div className="relative">
+                                <Key size={18} className="absolute left-3 top-3 text-slate-400" />
+                                <input type={showPassword ? "text" : "password"} required value={loginData.password} onChange={e => setLoginData({...loginData, password: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg pl-10 pr-10 py-2.5 text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-colors" />
+                                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"><Eye size={18} /></button>
+                            </div>
+                        </div>
+                        <div className="flex items-center -mt-2 mb-2">
+                            <input type="checkbox" id="rememberMe" checked={loginData.rememberMe} onChange={e => setLoginData({...loginData, rememberMe: e.target.checked})} className="w-4 h-4 text-emerald-600 bg-slate-50 border-slate-300 rounded focus:ring-emerald-500 dark:focus:ring-emerald-600 dark:ring-offset-slate-800 focus:ring-2 dark:bg-slate-900 dark:border-slate-600" />
+                            <label htmlFor="rememberMe" className="ml-2 text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none">Manter sessão iniciada</label>
+                        </div>
+                        {loginError && <p className="text-rose-500 dark:text-rose-400 text-sm font-bold text-center bg-rose-100 dark:bg-rose-500/10 py-2 rounded-lg border border-rose-200 dark:border-rose-500/20">{loginError}</p>}
+                        <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg flex items-center justify-center space-x-2 transition-colors shadow-lg mt-4" disabled={loading}>
+                            {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <><Lock size={18} /><span>Entrar no Sistema</span></>}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex h-[100dvh] w-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans overflow-hidden transition-colors duration-200">
@@ -2514,6 +2572,8 @@ export default function App() {
                                         {cols.nome && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Nome</th>}
                                         {cols.tipo && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Tipo</th>}
                                         {cols.documento && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Documento</th>}
+                                        {cols.operadora && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Operadora/Seg.</th>}
+                                        {cols.servico && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Serviço</th>}
                                         {cols.telefone && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Telefone</th>}
                                         {cols.email && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">E-mail</th>}
                                         {cols.situacao && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center">Situação</th>}
@@ -2538,6 +2598,8 @@ export default function App() {
                                                 {cols.nome && <td className="py-3 px-4 font-medium text-slate-900 dark:text-slate-100">{cli.nome}</td>}
                                                 {cols.tipo && <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{cli.tipo}</td>}
                                                 {cols.documento && <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{cli.documento || '-'}</td>}
+                                                {cols.operadora && <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{cli.operadora || '-'}</td>}
+                                                {cols.servico && <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{cli.servico || '-'}</td>}
                                                 {cols.telefone && <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{cli.telefone || '-'}</td>}
                                                 {cols.email && <td className="py-3 px-4 text-sky-600 dark:text-sky-400">{cli.email || '-'}</td>}
                                                 {cols.situacao && <td className="py-3 px-4 text-center">{cli.situacao ? <CheckCircle size={18} className="text-emerald-500 mx-auto"/> : <XCircle size={18} className="text-rose-500 mx-auto"/>}</td>}
@@ -2591,9 +2653,12 @@ export default function App() {
                             <p className="text-slate-500 dark:text-slate-400 mt-1">Geração e edição de relatórios.</p>
                         </header>
                         {successMsg && <div className="mb-4 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 p-3 rounded-lg text-center font-bold">{successMsg}</div>}
-                        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-md mb-6 flex flex-col md:flex-row justify-between items-center gap-4 transition-colors duration-200">
-                            <div><h3 className="font-bold text-lg text-slate-800 dark:text-slate-100">1. Selecionar Extrato</h3><p className="text-sm text-slate-500 dark:text-slate-400">O sistema extrairá automaticamente.</p></div>
-                            <div className="flex flex-wrap gap-3 justify-end">
+                        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-md mb-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 transition-colors duration-200">
+                            <div className="shrink-0 w-full xl:w-auto">
+                                <h3 className="font-bold text-xl text-slate-800 dark:text-slate-100 whitespace-nowrap">Selecionar Extrato</h3>
+                                <p className="text-sm text-slate-500 dark:text-slate-400">O sistema extrairá automaticamente.</p>
+                            </div>
+                            <div className="flex flex-wrap gap-3 justify-start xl:justify-end w-full">
                                 <button onClick={() => setModalArquivosOpen(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 px-6 rounded-lg font-bold flex items-center shadow-lg transition-colors"> <Database size={18} className="mr-2"/> Buscar no Sistema</button>
                                 {pdfData.length > 0 && (
                                     <React.Fragment>
@@ -3274,7 +3339,7 @@ export default function App() {
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Ano</label><input type="number" value={formData.ano} onChange={(e) => setFormData({...formData, ano: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500" /></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mês</label><select value={formData.mes} onChange={(e) => setFormData({...formData, mes: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{MESES.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Categoria</label><select value={formData.categoria} onChange={(e) => setFormData({...formData, categoria: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label><select value={formData.empresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{empresasList.map(e => <option key={e.nome} value={e.nome}>{e.nome}</option>)}</select></div>
+                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label><select value={formData.empresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500"><option value={nomeEmpresa}>{nomeEmpresa}</option></select></div>
                                 <div className="space-y-2 md:col-span-1">
                                     <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Cód. Operadora</label>
                                     <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Módulo opcional" value={formData.codOperadora || ''} onChange={e => setFormData({...formData, codOperadora: e.target.value})} />
@@ -3303,7 +3368,7 @@ export default function App() {
                                 </div>
                             </div>
                             <div className="space-y-2 pt-4 border-t border-slate-200 dark:border-slate-700">
-                                <label className="text-sm font-bold text-blue-600 dark:text-blue-400">NOME DO PARCEIRO / ARQUIVO</label>
+                                <label className="text-sm font-bold text-blue-600 dark:text-blue-400">NOME DO ARQUIVO</label>
                                 <input type="text" value={formData.parceiro} onChange={(e) => setFormData({...formData, parceiro: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-3 text-slate-900 dark:text-white outline-none focus:border-blue-500" placeholder="Ex: Extrato Amil Mensal..." />
                             </div>
                             <div className="space-y-2">
@@ -3551,6 +3616,52 @@ export default function App() {
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">{clienteForm.tipo === 'Pessoa jurídica' ? 'CNPJ' : 'CPF'}</label>
                                         <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.documento} onChange={e => setClienteForm({...clienteForm, documento: e.target.value})} placeholder={clienteForm.tipo === 'Pessoa jurídica' ? '00.000.000/0000-00' : '000.000.000-00'} />
                                     </div>
+                                    {(!currentUser?.empresa || currentUser.empresa === 'Todas') && (
+                                        <div>
+                                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Empresa</label>
+                                            <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.empresa || nomeEmpresa} onChange={e => setClienteForm({...clienteForm, empresa: e.target.value})}>
+                                                {rawEmpresasList.map(emp => (
+                                                    <option key={emp.nome} value={emp.nome}>{emp.nome}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Operadora / Seguradora</label>
+                                        <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.operadora || ''} onChange={e => setClienteForm({...clienteForm, operadora: e.target.value})}>
+                                            <option value="">Selecione uma Operadora | Seguradora</option>
+                                            <optgroup label="Operadoras">
+                                                <option value="AMIL">AMIL</option>
+                                                <option value="ASSIM">ASSIM</option>
+                                                <option value="HAPVIDA">HAPVIDA</option>
+                                                <option value="KLINI">KLINI</option>
+                                                <option value="LEVE SAUDE">LEVE SAUDE</option>
+                                                <option value="NOTRE DAME">NOTRE DAME</option>
+                                                <option value="PREVENT">PREVENT</option>
+                                                <option value="QUALICORP">QUALICORP</option>
+                                                <option value="SUPERMED">SUPERMED</option>
+                                                <option value="MED SENIOR">MED SENIOR</option>
+                                            </optgroup>
+                                            <optgroup label="Seguradoras">
+                                                <option value="ALLIANZ">ALLIANZ</option>
+                                                <option value="ASSIST CARD">ASSIST CARD</option>
+                                                <option value="AZUL">AZUL</option>
+                                                <option value="BRADESCO">BRADESCO</option>
+                                                <option value="HDI">HDI</option>
+                                                <option value="ICATU">ICATU</option>
+                                                <option value="MONGERAL">MONGERAL</option>
+                                            </optgroup>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Serviço</label>
+                                        <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.servico || 'Plano de Saúde'} onChange={e => setClienteForm({...clienteForm, servico: e.target.value})}>
+                                            <option value="Plano de Saúde">Plano de Saúde</option>
+                                            <option value="Plano Dental">Plano Dental</option>
+                                            <option value="Seguro Vida">Seguro Vida</option>
+                                            <option value="Outros">Outros</option>
+                                        </select>
+                                    </div>
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Telefone</label>
                                         <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" 
@@ -3642,7 +3753,7 @@ export default function App() {
                             <div className="mb-4 pb-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
                                 <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center">
                                     <ShoppingCart className="mr-3 text-sky-500" />
-                                    {vendaForm.id || vendaForm.isFromReport ? "Detalhes da Venda" : "Nova Venda / Extrato"}
+                                    {vendaForm.id || vendaForm.isFromReport ? "Detalhes da Venda" : "Nova Venda"}
                                 </h3>
                             </div>
                             <form onSubmit={salvarVenda} onInvalid={(e) => e.currentTarget.classList.add('show-errors')} className="flex flex-col h-full overflow-hidden">
@@ -3689,11 +3800,15 @@ export default function App() {
                                             <ul className="absolute z-10 w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg max-h-48 overflow-y-auto shadow-lg mt-1">
                                                 {clientes.filter(c => c.nome.toLowerCase().includes(vendaForm.cliente.toLowerCase())).map(c => (
                                                     <li key={c.id} className="px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-700 last:border-0" onMouseDown={() => {
-                                                        setVendaForm({...vendaForm, cliente: c.nome});
+                                                        setVendaForm({...vendaForm, cliente: c.nome, servico: c.servico || 'Plano de Saúde'});
                                                         setShowClienteSuggestions(false);
                                                     }}>
                                                         <div className="font-bold">{c.nome}</div>
-                                                        {c.documento && <div className="text-xs text-slate-500 dark:text-slate-400">{c.documento}</div>}
+                                                        <div className="text-xs text-slate-500 flex gap-2">
+                                                            {c.documento && <span>{c.documento}</span>}
+                                                            {c.operadora && <span>• {c.operadora}</span>}
+                                                            {c.servico && <span>• {c.servico}</span>}
+                                                        </div>
                                                     </li>
                                                 ))}
                                                 {clientes.filter(c => c.nome.toLowerCase().includes(vendaForm.cliente.toLowerCase())).length === 0 && (
@@ -3701,6 +3816,15 @@ export default function App() {
                                                 )}
                                             </ul>
                                         )}
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Serviços</label>
+                                        <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.servico || 'Plano de Saúde'} onChange={e => setVendaForm({...vendaForm, servico: e.target.value})}>
+                                            <option value="Plano de Saúde">Plano de Saúde</option>
+                                            <option value="Plano Dental">Plano Dental</option>
+                                            <option value="Seguro Vida">Seguro Vida</option>
+                                            <option value="Outros">Outros</option>
+                                        </select>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Valor Total</label>
@@ -3824,6 +3948,17 @@ export default function App() {
                                     <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})}>
                                         <option value="admin">Administrador</option>
                                         <option value="operador">Colaborador</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Empresa</label>
+                                    <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={userForm.empresa || 'Todas'} onChange={e => setUserForm({...userForm, empresa: e.target.value})}>
+                                        {(!currentUser?.empresa || currentUser.empresa === 'Todas') && (
+                                            <option value="Todas">Todas as Empresas (Acesso Global)</option>
+                                        )}
+                                        {empresasList.map(emp => (
+                                            <option key={emp.nome} value={emp.nome}>{emp.nome}</option>
+                                        ))}
                                     </select>
                                 </div>
                                 {userForm.role !== 'admin' && (

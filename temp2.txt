@@ -1,0 +1,5 @@
+57:    const [currentUser, setCurrentUser] = useState(() => {
+363:                setCurrentUser(sessionUser); 
+381:                setCurrentUser(sessionUser); 
+398:            setCurrentUser(null); localStorage.removeItem('protetta_auth_user'); sessionStorage.removeItem('protetta_auth_user'); setCurrentView('dashboard');
+830:                    setCurrentUser(updatedSession); 
