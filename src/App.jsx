@@ -985,7 +985,8 @@ export default function App() {
     const handleSubmitExtrato = async (e) => {
         e.preventDefault(); 
         if (!formData.codigoOperadora) return setFormError('ERRO: Selecione a Operadora | Seguradora.');
-        if (!formData.parceiro.trim()) return setFormError('ERRO: Parceiro obrigatório.'); 
+        if (!formData.notaFiscal || !formData.notaFiscal.trim()) return setFormError('ERRO: Nota Fiscal obrigatória.');
+        if (!formData.parceiro.trim()) return setFormError('ERRO: Nome do arquivo obrigatório.'); 
         if (formData.arquivos.length === 0) return setFormError('ERRO: Anexos obrigatórios.');
         
         setLoading(true); setLoadingMsg("Fazendo upload para a nuvem...");
@@ -1472,12 +1473,52 @@ export default function App() {
             empresa: nomeEmpresa
         };
         
-        setLoading(true); setLoadingMsg("Guardando relatório na cloud...");
-        try {
-            if (currentReportId) await supabase.from('savedReports').update(dataToSave).eq('id', currentReportId);
-            else { const { data } = await supabase.from('savedReports').insert([dataToSave]).select(); if(data) setCurrentReportId(data[0].id); }
-            await loadFromDB(); setSuccessMsg("Relatório salvo com sucesso!"); setTimeout(() => setSuccessMsg(''), 3000);
-        } catch(e) { showAlert('Erro ao salvar relatório: ' + e.message); } finally { setLoading(false); }
+        showConfirm("Deseja extrair as informações deste extrato e gerar as Vendas para alimentar o Dashboard automaticamente?", async () => {
+            setLoading(true); setLoadingMsg("Guardando relatório na cloud...");
+            try {
+                let savedId = currentReportId;
+                if (currentReportId) {
+                    await supabase.from('savedReports').update(dataToSave).eq('id', currentReportId);
+                } else { 
+                    const { data } = await supabase.from('savedReports').insert([dataToSave]).select(); 
+                    if(data && data.length > 0) {
+                        savedId = data[0].id;
+                        setCurrentReportId(savedId); 
+                    }
+                }
+
+                if (savedId) {
+                    const vendasParaSalvar = dadosParaSalvar.map((row, index) => ({
+                        dataVenda: new Date().toISOString().split('T')[0],
+                        cliente: row.cliente || '',
+                        vidas: row.vidas || '1',
+                        operadora: row.codigoOperadora || 'AMIL',
+                        valor: parseFloat(row.valorTotal) || 0,
+                        comissao: parseFloat(row.comissao) || 0,
+                        vendedor: row.vendedor || '',
+                        parcela: row.parcela || '1',
+                        situacao: row.situacao || 'PAGO',
+                        empresa: row.empresa || nomeEmpresa,
+                        loja: row.loja || '',
+                        numero: row.cod || '',
+                        contrato: row.contrato || '',
+                        inicioVigencia: row.inicioVigencia || '',
+                        vitalicio: row.vitalicio || 'Não',
+                        assessoria: row.assessoria || '',
+                        formaPagamento: row.formaPagamento || '',
+                        servico: row.servico || 'Plano de Saúde',
+                        desconto: row.desconto || '',
+                        reportId: savedId,
+                        reportRowIndex: index
+                    }));
+                    if (vendasParaSalvar.length > 0) {
+                        await supabase.from('vendas').insert(vendasParaSalvar);
+                    }
+                }
+
+                await loadFromDB(); setSuccessMsg("Relatório e Vendas salvos com sucesso!"); setTimeout(() => setSuccessMsg(''), 4000);
+            } catch(e) { showAlert('Erro ao salvar relatório: ' + e.message); } finally { setLoading(false); }
+        });
     };
 
     const carregarRelatorioSalvo = (report) => { setPdfData((report.dados || []).map(r => ({...r, selected: true}))); setReportName(report.nome); setReportPeriod(report.periodo || ''); setCurrentReportId(report.id); setCurrentView('processar'); };
