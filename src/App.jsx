@@ -1400,7 +1400,13 @@ export default function App() {
         setNfeTab('emitir'); 
     };
 
-    const startEditingRow = (idx, linha) => { setEditRowIndex(idx); setEditRowData({...linha}); };
+    const startEditingRow = (idx, linha) => { 
+        setEditRowIndex(idx); 
+        setEditRowData({
+            ...linha,
+            comissaoBase: linha.comissaoBase !== undefined ? linha.comissaoBase : linha.comissao
+        }); 
+    };
     const saveRowEdit = () => {
         const newData = [...pdfData];
         newData[editRowIndex] = { ...editRowData, valorTotal: parseFloat(editRowData.valorTotal) || 0, comissao: parseFloat(editRowData.comissao) || 0 };
@@ -2763,7 +2769,24 @@ export default function App() {
                                                             <option>Plano de Saúde</option><option>Plano Dental</option><option>Seguro</option><option>Bonificação</option>
                                                         </select>
                                                     </td>}
-                                                    {reportTableCols.desconto && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.desconto || ''} onChange={e=>setEditRowData({...editRowData, desconto: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-amber-500 w-12 text-center" placeholder="R$ ou %" /></td>}
+                                                    {reportTableCols.desconto && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
+                                                        <input type="text" value={editRowData.desconto || ''} onChange={e => {
+                                                            let rawDesconto = e.target.value;
+                                                            let baseVal = editRowData.comissaoBase || 0;
+                                                            let descValue = 0;
+                                                            if (rawDesconto.includes('%')) {
+                                                                let pct = parseFloat(rawDesconto.replace('%', '').replace(',', '.'));
+                                                                if (!isNaN(pct)) descValue = baseVal * (pct / 100);
+                                                            } else {
+                                                                descValue = parseFloat(rawDesconto.replace(',', '.')) || 0;
+                                                            }
+                                                            setEditRowData({
+                                                                ...editRowData, 
+                                                                desconto: rawDesconto, 
+                                                                comissao: Number((baseVal - descValue).toFixed(2))
+                                                            });
+                                                        }} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-amber-500 w-12 text-center" placeholder="R$ ou %" />
+                                                    </td>}
                                                     {reportTableCols.corretor && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
                                                         <select value={editRowData.vendedor || nomeEmpresa} onChange={e=>setEditRowData({...editRowData, vendedor: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 min-w-[80px]">
                                                             <option>{nomeEmpresa}</option><option>Proper</option><option>Assessoria</option><option>Corretor Interno</option>
@@ -2787,7 +2810,25 @@ export default function App() {
                                                         </select>
                                                     </td>}
                                                     {reportTableCols.valorTotal && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="number" step="0.01" value={editRowData.valorTotal} onChange={e=>setEditRowData({...editRowData, valorTotal: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500 text-right w-16" /></td>}
-                                                    {reportTableCols.comissao && <td className="py-1 px-1"><input type="number" step="0.01" value={editRowData.comissao} onChange={e=>setEditRowData({...editRowData, comissao: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-sky-500 text-right w-16" /></td>}
+                                                    {reportTableCols.comissao && <td className="py-1 px-1">
+                                                        <input type="number" step="0.01" value={editRowData.comissao} onChange={e => {
+                                                            const rawVal = e.target.value;
+                                                            const numVal = parseFloat(rawVal) || 0;
+                                                            let rawDesconto = String(editRowData.desconto || '');
+                                                            let descValue = 0;
+                                                            let newBase = numVal;
+                                                            if (rawDesconto.includes('%')) {
+                                                                let pct = parseFloat(rawDesconto.replace('%', '').replace(',', '.'));
+                                                                if (!isNaN(pct) && pct !== 100) {
+                                                                    newBase = numVal / (1 - pct/100);
+                                                                }
+                                                            } else {
+                                                                descValue = parseFloat(rawDesconto.replace(',', '.')) || 0;
+                                                                newBase = numVal + descValue;
+                                                            }
+                                                            setEditRowData({...editRowData, comissao: rawVal, comissaoBase: newBase});
+                                                        }} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-sky-500 text-right w-16" />
+                                                    </td>}
                                                     <td className="py-1 px-1 text-center no-print">
                                                         <div className="flex gap-1 justify-center">
                                                             <button onClick={saveRowEdit} className="text-emerald-500 hover:text-emerald-400 p-1" title="Guardar Edição"><CheckCircle size={16}/></button>
