@@ -481,7 +481,7 @@ export default function App() {
     const handleBuscarVendas = () => { setAppliedVendasFilters({ ...vendasFilterForm }); };
     const handleLimparVendas = () => { setVendasFilterForm(defaultVendasFilters); setAppliedVendasFilters(null); setVendasPeriodLabel('Todo o período'); };
 
-    const getFilteredVendas = () => {
+    const getAllVendas = () => {
         let todasAsVendas = [...vendasList];
         savedReportsList.forEach(report => {
             if (report.dados && Array.isArray(report.dados)) {
@@ -498,6 +498,11 @@ export default function App() {
                 });
             }
         });
+        return todasAsVendas;
+    };
+
+    const getFilteredVendas = () => {
+        let todasAsVendas = getAllVendas();
 
         if (appliedVendasFilters) {
             const f = appliedVendasFilters;
@@ -1469,8 +1474,7 @@ export default function App() {
         const dataToSave = { 
             nome: reportName, periodo: reportPeriod, dataCriacao: new Date().toISOString(), 
             criadoPor: currentUser?.username || 'Sistema', 
-            dados: dadosParaSalvar,
-            empresa: nomeEmpresa
+            dados: dadosParaSalvar
         };
         
         showConfirm("Deseja extrair as informações deste extrato e gerar as Vendas para alimentar o Dashboard automaticamente?", async () => {
@@ -1486,38 +1490,6 @@ export default function App() {
                     if(data && data.length > 0) {
                         savedId = data[0].id;
                         setCurrentReportId(savedId); 
-                    }
-                }
-
-                if (savedId) {
-                    const vendasParaSalvar = dadosParaSalvar.map((row, index) => ({
-                        dataVenda: new Date().toISOString().split('T')[0],
-                        cliente: row.cliente || '',
-                        vidas: row.vidas === '' || row.vidas === undefined ? null : parseInt(row.vidas, 10),
-                        codOperadora: row.codOperadora || '',
-                        codigoOperadora: row.codigoOperadora || 'AMIL',
-                        valor: parseFloat(row.valorTotal) || 0,
-                        comissao: row.comissao === '' || row.comissao === undefined ? null : parseFloat(row.comissao),
-                        corretor: row.vendedor || '',
-                        parcela: row.parcela || '1',
-                        situacao: row.situacao || 'PAGO',
-                        empresa: row.empresa || nomeEmpresa,
-                        loja: row.loja || '',
-                        numero: row.cod || '',
-                        contrato: row.contrato || '',
-                        inicioVigencia: row.inicioVigencia || '',
-                        vitalicio: row.vitalicio || 'Não',
-                        assessoria: row.assessoria || '',
-                        formaPagamento: row.formaPagamento || '',
-                        servico: row.servico || 'Plano de Saúde',
-                        desconto: row.desconto === '' || row.desconto === undefined ? null : parseFloat(row.desconto),
-                        notas: row.notas || '',
-                        reportId: savedId,
-                        reportRowIndex: index
-                    }));
-                    if (vendasParaSalvar.length > 0) {
-                        const { error } = await supabase.from('vendas').insert(vendasParaSalvar);
-                        if (error) throw error;
                     }
                 }
 
@@ -2110,7 +2082,7 @@ export default function App() {
                 
                 {/* NOVO DASHBOARD */}
                 {currentView === 'dashboard' && hasAccess('dashboard') && (
-                    <DashboardControle vendasList={vendasList} defaultEmpresa={defaultEmpresa} />
+                    <DashboardControle vendasList={getAllVendas()} defaultEmpresa={defaultEmpresa} />
                 )}
 
                 {/* ECRÃ 12: PAINEL DE CONTROLE (ANTIGO DASHBOARD) */}
@@ -2135,7 +2107,7 @@ export default function App() {
                         </div>
 
                         {/* ULTIMAS VENDAS */}
-                        {hasAccess('vendas') && vendasList.length > 0 && (
+                        {hasAccess('vendas') && getAllVendas().length > 0 && (
                             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg transition-colors duration-200 animate-in fade-in slide-in-from-bottom-4">
                                 <div className="flex justify-between items-center mb-6">
                                     <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center">
@@ -2158,7 +2130,7 @@ export default function App() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {[...vendasList].reverse().slice(0, 5).map((venda, idx) => (
+                                            {getAllVendas().reverse().slice(0, 5).map((venda, idx) => (
                                                 <tr key={idx} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                                                     <td className="py-3 px-4">
                                                         {venda.dataVenda ? new Date(venda.dataVenda + "T12:00:00").toLocaleDateString('pt-BR') : '-'}
@@ -2179,7 +2151,7 @@ export default function App() {
                             </div>
                         )}
                         
-                        {hasAccess('vendas') && vendasList.length === 0 && (
+                        {hasAccess('vendas') && getAllVendas().length === 0 && (
                              <div className="bg-slate-50 dark:bg-slate-800/50 border border-dashed border-slate-300 dark:border-slate-700 p-8 rounded-xl text-center text-slate-500 dark:text-slate-400">
                                  <ShoppingCart size={48} className="mx-auto mb-4 text-slate-400 dark:text-slate-500 opacity-50"/>
                                  <p className="font-medium text-lg mb-1">Nenhuma venda registrada ainda</p>
