@@ -1068,7 +1068,8 @@ export default function App() {
 
             const dataToSave = { username: userForm.username, password: userForm.password, role: userForm.role, permissions: userForm.role === 'admin' ? SYSTEM_MODULES.map(m=>m.id) : userForm.permissions, empresa: finalEmpresa };
             if (userForm.id) {
-                await supabase.from('users').update(dataToSave).eq('id', userForm.id);
+                const { error: updateErr } = await supabase.from('users').update(dataToSave).eq('id', userForm.id);
+                if (updateErr) throw updateErr;
                 if (currentUser?.id === userForm.id) { 
                     const updatedSession = { ...currentUser, ...dataToSave }; 
                     setCurrentUser(updatedSession); 
@@ -1078,15 +1079,32 @@ export default function App() {
                         sessionStorage.setItem('protetta_auth_user', JSON.stringify(updatedSession));
                     }
                 }
-            } else { await supabase.from('users').insert([dataToSave]); }
+            } else { 
+                const { error: insertErr } = await supabase.from('users').insert([dataToSave]); 
+                if (insertErr) throw insertErr;
+            }
             await loadFromDB(); setModalUserOpen(false); showAlert("Usuário guardado com sucesso!");
-        } catch (err) { showAlert("Erro ao guardar: " + err.message); } finally { setLoading(false); }
+        } catch (err) { 
+            let msg = err.message || String(err);
+            if (msg.includes('row-level security') || msg.includes('RLS')) {
+                msg = "O Supabase bloqueou a operação (RLS). Por favor certifique-se que tem as Políticas (Policies) corretas na tabela 'users' para permitir INSERT e UPDATE.";
+            }
+            showAlert("Erro ao guardar: " + msg); 
+        } finally { setLoading(false); }
     };
 
     const apagarUsuario = (u) => {
         if (u.username === 'admin') return showAlert("Não é possível apagar admin.");
         if (currentUser?.id === u.id) return showAlert("Você não pode apagar a sua própria conta.");
-        showConfirm(`Tem a certeza que deseja apagar o usuário '${u.username}'?`, async () => { await supabase.from('users').delete().eq('id', u.id); await loadFromDB(); });
+        showConfirm(`Tem a certeza que deseja apagar o usuário '${u.username}'?`, async () => { 
+            const { error: deleteErr } = await supabase.from('users').delete().eq('id', u.id); 
+            if (deleteErr) {
+                let msg = deleteErr.message || String(deleteErr);
+                if (msg.includes('row-level security') || msg.includes('RLS')) msg = "Bloqueado pelo Supabase (RLS). Adicione política de DELETE na tabela 'users'.";
+                return showAlert("Erro ao apagar: " + msg);
+            }
+            await loadFromDB(); 
+        });
     };
 
     const getFileColorClass = (fileName) => {
