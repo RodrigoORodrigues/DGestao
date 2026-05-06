@@ -2,13 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer utilities {
-  html:not(.dark) .text-slate-400,
-  html:not(.dark) .text-slate-500,
-  html:not(.dark) .text-slate-600,
-  html:not(.dark) .text-slate-700,
-  html:not(.dark) .text-slate-800 {
-    color: #000000 !important;
+@layer base {
+  /* Apply dark theme styles to all table headers across both themes */
+  html:not(.dark) thead,
+  .dark thead {
+    background-color: #0f172a !important;
+  }
+  
+  html:not(.dark) thead tr,
+  .dark thead tr {
+    background-color: #0f172a !important;
+  }
+  
+  html:not(.dark) thead th,
+  .dark thead th {
+    color: #f8fafc !important;
+    border-color: #1e293b !important;
+  }
+  
+  html:not(.dark) thead th:hover,
+  .dark thead th:hover {
+    background-color: #1e293b !important;
   }
 }
 

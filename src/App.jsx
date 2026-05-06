@@ -1066,24 +1066,47 @@ export default function App() {
                 finalEmpresa = currentUser.empresa; // Prevents privilege escalation
             }
 
-            const dataToSave = { username: userForm.username, password: userForm.password, role: userForm.role, permissions: userForm.role === 'admin' ? SYSTEM_MODULES.map(m=>m.id) : userForm.permissions, empresa: finalEmpresa };
+            let dataToSave = { username: userForm.username, password: userForm.password, role: userForm.role, permissions: userForm.role === 'admin' ? SYSTEM_MODULES.map(m=>m.id) : userForm.permissions, empresa: finalEmpresa };
+            let retryWithoutEmpresa = false;
+            
             if (userForm.id) {
-                const { error: updateErr } = await supabase.from('users').update(dataToSave).eq('id', userForm.id);
-                if (updateErr) throw updateErr;
+                let { error: updateErr } = await supabase.from('users').update(dataToSave).eq('id', userForm.id);
+                if (updateErr && (updateErr.message?.includes('empresa') || updateErr.details?.includes('empresa'))) {
+                    retryWithoutEmpresa = true;
+                    const { empresa, ...rest } = dataToSave;
+                    dataToSave = rest;
+                    const { error: retryErr } = await supabase.from('users').update(dataToSave).eq('id', userForm.id);
+                    if (retryErr) throw retryErr;
+                } else if (updateErr) {
+                    throw updateErr;
+                }
                 if (currentUser?.id === userForm.id) { 
                     const updatedSession = { ...currentUser, ...dataToSave }; 
                     setCurrentUser(updatedSession); 
                     if (localStorage.getItem('protetta_auth_user')) {
-                        localStorage.setItem('protetta_auth_user', JSON.stringify(updatedSession)); 
+                        localStorage.setItem('protetta_auth_user', JSON.stringify(updatedSession));
                     } else {
                         sessionStorage.setItem('protetta_auth_user', JSON.stringify(updatedSession));
                     }
                 }
             } else { 
-                const { error: insertErr } = await supabase.from('users').insert([dataToSave]); 
-                if (insertErr) throw insertErr;
+                let { error: insertErr } = await supabase.from('users').insert([dataToSave]); 
+                if (insertErr && (insertErr.message?.includes('empresa') || insertErr.details?.includes('empresa'))) {
+                    retryWithoutEmpresa = true;
+                    const { empresa, ...rest } = dataToSave;
+                    dataToSave = rest;
+                    const { error: retryErr } = await supabase.from('users').insert([dataToSave]);
+                    if (retryErr) throw retryErr;
+                } else if (insertErr) {
+                    throw insertErr;
+                }
             }
-            await loadFromDB(); setModalUserOpen(false); showAlert("Usuário guardado com sucesso!");
+            await loadFromDB(); setModalUserOpen(false); 
+            if (retryWithoutEmpresa) {
+                showAlert("Usuário guardado, mas a coluna 'empresa' não existe no banco de dados. Adicione essa coluna na tabela 'users' para separar usuários por empresa.");
+            } else {
+                showAlert("Usuário guardado com sucesso!");
+            }
         } catch (err) { 
             let msg = err.message || String(err);
             if (msg.includes('row-level security') || msg.includes('RLS')) {
