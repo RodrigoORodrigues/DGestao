@@ -1102,11 +1102,7 @@ export default function App() {
                 }
             }
             await loadFromDB(); setModalUserOpen(false); 
-            if (retryWithoutEmpresa) {
-                showAlert("Usuário guardado, mas a coluna 'empresa' não existe no banco de dados. Adicione essa coluna na tabela 'users' para separar usuários por empresa.");
-            } else {
-                showAlert("Usuário guardado com sucesso!");
-            }
+            showAlert("Usuário guardado com sucesso!");
         } catch (err) { 
             let msg = err.message || String(err);
             if (msg.includes('row-level security') || msg.includes('RLS')) {
