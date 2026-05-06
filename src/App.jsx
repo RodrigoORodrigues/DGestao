@@ -70,6 +70,7 @@ export default function App() {
     const [loadingMsg, setLoadingMsg] = useState('');
 
     const [dbReports, setDbReports] = useState([]);
+    const [selectedExtratos, setSelectedExtratos] = useState([]);
     const [currentPath, setCurrentPath] = useState([]); 
     const [searchTerm, setSearchTerm] = useState('');
     const [fileViewMode, setFileViewMode] = useState('grid');
@@ -137,6 +138,8 @@ export default function App() {
     const [selectedPreset, setSelectedPreset] = useState('');
 
     const [pdfData, setPdfData] = useState([]);
+    const [backupList, setBackupList] = useState([]);
+    const [loadingBackups, setLoadingBackups] = useState(false);
     const tabelaPdfRef = useRef(null);
     const [editRowIndex, setEditRowIndex] = useState(-1);
     const [editRowData, setEditRowData] = useState({});
@@ -269,6 +272,10 @@ export default function App() {
         }
     }, [currentPath, currentView]);
 
+    useEffect(() => {
+        setSelectedExtratos([]);
+    }, [currentPath, currentView, searchTerm]);
+
     const [formError, setFormError] = useState(''); 
     const [successMsg, setSuccessMsg] = useState(''); 
     const fileInputRef = useRef(null);
@@ -295,6 +302,25 @@ export default function App() {
         return (currentUser.permissions || []).includes(module);
     };
 
+    const fetchBackups = async () => {
+        if (!supabase) return;
+        setLoadingBackups(true);
+        try {
+            const { data, error } = await supabase.storage.from('arquivos_extratos').list('backups', {
+                sortBy: { column: 'created_at', order: 'desc' }
+            });
+            if (error) throw error;
+            const empStr = nomeEmpresaUpper.replace(/[^A-Z0-9]/ig, '_');
+            const filtered = (data || []).filter(f => f.name && f.name.includes(empStr) && f.name.endsWith('.zip')).slice(0, 10);
+            setBackupList(filtered);
+        } catch (err) {
+            console.warn("Aviso ao carregar backups (Failed to fetch). Conexão ou CORS bloqueado:", err.message || err);
+            setBackupList([]);
+        } finally {
+            setLoadingBackups(false);
+        }
+    };
+
     const loadFromDB = async () => {
         if(!supabase) return;
         try {
@@ -304,18 +330,26 @@ export default function App() {
             ]);
             const userFilters = (data) => {
                 if (!data) return [];
-                if (!currentUser?.empresa || currentUser.empresa === 'Todas') return data;
-                const userEmp = currentUser.empresa.toUpperCase();
+                const targetEmp = nomeEmpresaUpper;
                 return data.filter(item => {
                     const emp = (item?.empresa || item?.loja || '').toUpperCase();
                     if (!emp) return true; // keep items with no company for backward compat
-                    if (emp === userEmp || emp.includes(userEmp)) return true;
-                    // For example loja might be "PROTETTA SEGUROS" and userEmp "PROTETTA"
+                    if (emp === targetEmp || emp.includes(targetEmp)) return true;
                     return false;
                 });
             };
 
-            if (resUsers.data) setUsersList(userFilters(resUsers.data));
+            if (resUsers.data) {
+                // Users list in configuration should probably still show all users for Admin?
+                // Let's keep users strictly isolated or maybe Admin needs to see all to manage?
+                // Actually the user said "não acessar nada de outra loja". We will isolate users too, except admins.
+                let filteredSubs = resUsers.data.filter(u => {
+                    if (currentUser?.role === 'admin') return true; // admin sees all users in their management view? Or isolate? Let's isolate all.
+                    if (!u.empresa || u.empresa === 'Todas') return true;
+                    return u.empresa.toUpperCase() === nomeEmpresaUpper || u.empresa.toUpperCase().includes(nomeEmpresaUpper);
+                });
+                setUsersList(filteredSubs);
+            }
             if (resCli.data) setClientes(userFilters(resCli.data));
             if (resVendas.data) setVendasList(userFilters(resVendas.data));
             if (resSaved.data) setSavedReportsList(userFilters(resSaved.data));
@@ -335,9 +369,11 @@ export default function App() {
                     }
                     return { ...r, parceiro, codigoOperadora, codOperadora, id: r.id, ano: r.ano, mes: r.mes, categoria: r.categoria, empresa: r.empresa, date: r.date, fileName: r.fileName, filePath: r.filePath };
                 });
-                if (currentUser?.empresa && currentUser.empresa !== 'Todas') {
-                    parsedReports = parsedReports.filter(r => r.empresa && r.empresa.toUpperCase() === currentUser.empresa.toUpperCase());
-                }
+                parsedReports = parsedReports.filter(r => {
+                    const emp = (r.empresa || '').toUpperCase();
+                    if (!emp) return true;
+                    return emp === nomeEmpresaUpper || emp.includes(nomeEmpresaUpper);
+                });
                 setDbReports(parsedReports);
             }
 
@@ -399,8 +435,111 @@ export default function App() {
         };
     }, [showVendasAcoesMenu, showVendasPeriodMenu, showReportColsMenu, showVendasColsMenu]);
 
-    useEffect(() => { if(currentUser) loadFromDB(); }, [currentUser]);
+    useEffect(() => { if(currentUser) loadFromDB(); }, [currentUser, nomeEmpresaUpper]);
     
+    // BACKUP AUTOMÁTICO
+    const backupDataRef = useRef({ clientes, savedReportsList, vendasList, usersList, dbReports });
+    useEffect(() => {
+        backupDataRef.current = { clientes, savedReportsList, vendasList, usersList, dbReports };
+    }, [clientes, savedReportsList, vendasList, usersList, dbReports]);
+
+    useEffect(() => {
+        if (!currentUser) return;
+        const interval = setInterval(async () => {
+            const data = backupDataRef.current;
+            if (data.clientes.length === 0 && data.savedReportsList.length === 0 && data.vendasList.length === 0) return;
+            try {
+                const zip = new JSZip();
+                zip.file("clientes.json", JSON.stringify(data.clientes, null, 2));
+                zip.file("historico_relatorios.json", JSON.stringify(data.savedReportsList, null, 2));
+                zip.file("vendas_servicos.json", JSON.stringify(data.vendasList, null, 2));
+                zip.file("utilizadores.json", JSON.stringify(data.usersList.map(u => ({ username: u.username, role: u.role })), null, 2));
+                zip.file("arquivos_extratos.json", JSON.stringify(data.dbReports, null, 2));
+                
+                const content = await zip.generateAsync({type: "blob"});
+                
+                const now = new Date();
+                const timeStr = `${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}m`;
+                const empStr = nomeEmpresaUpper.replace(/[^A-Z0-9]/ig, '_');
+                const filename = `backups/${empStr}_AutoBackup_${dataDeHojeInterna()}_${timeStr}.zip`;
+                
+                if (supabase) {
+                    const { error: uploadErr } = await supabase.storage.from('arquivos_extratos').upload(filename, content, {
+                        contentType: 'application/zip',
+                        upsert: true
+                    });
+                    if (uploadErr) {
+                        console.error("Auto backup upload falhou", uploadErr);
+                    } else {
+                        console.log("Backup automático guardado na nuvem:", filename);
+                    }
+                }
+            } catch (err) {
+                console.error("Auto backup falhou", err);
+            }
+        }, 15 * 60 * 1000); // 15 minutos
+
+        return () => clearInterval(interval);
+    }, [currentUser, nomeEmpresaUpper, supabase]);
+
+    useEffect(() => {
+        if (currentView === 'settings') {
+            fetchBackups();
+        }
+    }, [currentView, nomeEmpresaUpper, supabase]);
+
+    const handleRestoreBackup = (filename) => {
+        showConfirm(`Tem a certeza que deseja restaurar o backup ${filename}? ISTO SUBSTITUIRÁ TODOS OS DADOS ATUAIS DA LOJA.`, async () => {
+            setLoading(true); setLoadingMsg("A descarregar backup...");
+            try {
+                const { data: fileBlob, error } = await supabase.storage.from('arquivos_extratos').download(`backups/${filename}`);
+                if (error) throw error;
+                
+                setLoadingMsg("A restaurar banco de dados...");
+                const zip = new JSZip();
+                const unzipped = await zip.loadAsync(fileBlob);
+                
+                const clientesFile = unzipped.file("clientes.json");
+                const historicoFile = unzipped.file("historico_relatorios.json");
+                const vendasFile = unzipped.file("vendas_servicos.json");
+                const extratosFile = unzipped.file("arquivos_extratos.json");
+                
+                // Clear existing first
+                await supabase.from('vendas').delete().ilike('loja', `%${nomeEmpresaUpper}%`);
+                await supabase.from('savedReports').delete().eq('empresa', nomeEmpresaUpper);
+                await supabase.from('clientes').delete().eq('empresa', nomeEmpresaUpper);
+                await supabase.from('reports').delete().eq('empresa', nomeEmpresaUpper);
+
+                if (clientesFile) {
+                    const data = JSON.parse(await clientesFile.async("text"));
+                    if (data.length > 0) await supabase.from('clientes').upsert(data);
+                }
+                if (historicoFile) {
+                    const data = JSON.parse(await historicoFile.async("text"));
+                    if (data.length > 0) await supabase.from('savedReports').upsert(data);
+                }
+                if (vendasFile) {
+                    const data = JSON.parse(await vendasFile.async("text"));
+                    if (data.length > 0) await supabase.from('vendas').upsert(data);
+                }
+                if (extratosFile) {
+                    const data = JSON.parse(await extratosFile.async("text"));
+                    // Be careful not to overwrite global reports, so only restore current empresa
+                    const myReports = data.filter(r => (r.empresa || '').toUpperCase() === nomeEmpresaUpper || (r.empresa || '').toUpperCase().includes(nomeEmpresaUpper));
+                    if (myReports.length > 0) await supabase.from('reports').upsert(myReports);
+                }
+                
+                await loadFromDB();
+                showAlert("Backup restaurado com sucesso!");
+            } catch (err) {
+                console.error(err);
+                showAlert("Erro ao restaurar backup: " + err.message);
+            } finally {
+                setLoading(false);
+            }
+        });
+    };
+
     useEffect(() => {
         if (isDarkMode) { document.documentElement.classList.add('dark'); localStorage.setItem('protetta_theme', 'dark'); } 
         else { document.documentElement.classList.remove('dark'); localStorage.setItem('protetta_theme', 'light'); }
@@ -789,14 +928,15 @@ export default function App() {
                 dataToSave.comissao = dataToSave.comissao === '' || dataToSave.comissao === undefined ? null : parseFloat(dataToSave.comissao);
                 dataToSave.desconto = dataToSave.desconto === '' || dataToSave.desconto === undefined ? null : parseFloat(dataToSave.desconto);
                 
-                if (currentUser.empresa && currentUser.empresa !== 'Todas') {
-                    const empUpper = currentUser.empresa.toUpperCase();
-                    if (!dataToSave.loja || !dataToSave.loja.toUpperCase().includes(empUpper)) {
-                        dataToSave.loja = `${empUpper} SEGUROS`;
-                    }
-                    if (!dataToSave.situacao.toUpperCase().includes(empUpper)) {
-                         dataToSave.situacao = `FATURADO ${empUpper} NF`;
-                    }
+                const empUpper = nomeEmpresaUpper;
+                if (!dataToSave.loja || !dataToSave.loja.toUpperCase().includes(empUpper)) {
+                    dataToSave.loja = `${empUpper} SEGUROS`;
+                }
+                if (!dataToSave.assessoria || !dataToSave.assessoria.toUpperCase().includes(empUpper)) {
+                    dataToSave.assessoria = empUpper;
+                }
+                if (!dataToSave.situacao.toUpperCase().includes(empUpper)) {
+                     dataToSave.situacao = `FATURADO ${empUpper} NF`;
                 }
 
                 delete dataToSave.comissaoPorcentagem;
@@ -1011,6 +1151,84 @@ export default function App() {
             }
             await loadFromDB(); setSuccessMsg(`${formData.arquivos.length} extratos guardados!`); setFormData(prev => ({ ...prev, parceiro: '', codOperadora: '', codigoOperadora: '', codigoOperadoraOutra: '', notaFiscal: '', arquivos: [] })); setTimeout(() => setSuccessMsg(''), 4000);
         } catch (error) { showAlert("Erro ao enviar ficheiro para a Cloud: " + error.message); } finally { setLoading(false); }
+    };
+
+    const handleToggleSelectExtrato = (e, fileId) => {
+        e.stopPropagation();
+        setSelectedExtratos(prev => 
+            prev.includes(fileId) ? prev.filter(id => id !== fileId) : [...prev, fileId]
+        );
+    };
+
+    const isAllExtratosSelected = () => {
+        const filesOnly = getItemsAtCurrentPath().filter(item => item.type === 'file');
+        if (filesOnly.length === 0) return false;
+        return filesOnly.every(item => selectedExtratos.includes(item.id));
+    };
+
+    const handleSelectAllExtratos = () => {
+        const filesOnly = getItemsAtCurrentPath().filter(item => item.type === 'file');
+        if (isAllExtratosSelected()) {
+            setSelectedExtratos(prev => prev.filter(id => !filesOnly.find(f => f.id === id)));
+        } else {
+            const allIds = filesOnly.map(f => f.id);
+            const newSelection = [...new Set([...selectedExtratos, ...allIds])];
+            setSelectedExtratos(newSelection);
+        }
+    };
+    
+    const handleExportSelectedExtratos = async () => {
+        if (selectedExtratos.length === 0) return showAlert("Selecione pelo menos um arquivo.");
+        setLoading(true); setLoadingMsg("Gerando arquivo zip...");
+        try {
+            const zip = new JSZip();
+            const repToExport = dbReports.filter(r => selectedExtratos.includes(r.id));
+            if (repToExport.length === 0) throw new Error("Selecionados não encontrados no banco.");
+            
+            for (let rep of repToExport) {
+                const pathTarget = rep.filePath || rep.fileName;
+                if(pathTarget){
+                    const { data: fileBlob, error } = await supabase.storage.from('arquivos_extratos').download(pathTarget);
+                    if (!error && fileBlob) {
+                        zip.file(rep.fileName || pathTarget, fileBlob);
+                    }
+                }
+            }
+            
+            const content = await zip.generateAsync({type: "blob"});
+            const url = URL.createObjectURL(content);
+            const a = document.createElement('a'); a.href = url; a.download = `ExtratosSelecionados_${dataDeHojeInterna()}.zip`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            setSelectedExtratos([]); 
+        } catch (error) {
+            showAlert("Erro ao exportar: " + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDeleteSelectedExtratos = () => {
+        if (selectedExtratos.length === 0) return showAlert("Selecione pelo menos um arquivo.");
+        showConfirm(`Tem a certeza que deseja excluir ${selectedExtratos.length} arquivo(s)?`, async () => {
+            setLoading(true); setLoadingMsg("A excluir...");
+            try {
+                const repToDelete = dbReports.filter(r => selectedExtratos.includes(r.id));
+                for(let rep of repToDelete) {
+                    const pathTarget = rep.filePath || rep.fileName;
+                    if(pathTarget) {
+                        await supabase.storage.from('arquivos_extratos').remove([pathTarget]);
+                    }
+                    await supabase.from('reports').delete().eq('id', rep.id);
+                }
+                setSelectedExtratos([]);
+                await loadFromDB();
+                showAlert("Arquivos excluídos com sucesso!", "success");
+            } catch(error) {
+                showAlert("Erro ao excluir: " + error.message);
+            } finally {
+                setLoading(false);
+            }
+        });
     };
 
     const handleNavigate = async (item) => {
@@ -1268,7 +1486,8 @@ export default function App() {
                         telefone: '', 
                         celular: '', 
                         email: '', 
-                        situacao: true
+                        situacao: true,
+                        empresa: empresaContextoUpper
                     });
                 }
 
@@ -1474,7 +1693,8 @@ export default function App() {
         const dataToSave = { 
             nome: reportName, periodo: reportPeriod, dataCriacao: new Date().toISOString(), 
             criadoPor: currentUser?.username || 'Sistema', 
-            dados: dadosParaSalvar
+            dados: dadosParaSalvar,
+            empresa: nomeEmpresaUpper
         };
         
         showConfirm("Deseja extrair as informações deste extrato e gerar as Vendas para alimentar o Dashboard automaticamente?", async () => {
@@ -3864,6 +4084,27 @@ export default function App() {
                                 </div>
                                 {currentPath.length > 0 && !searchTerm && <button onClick={() => setCurrentPath(currentPath.slice(0, -1))} className="bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-white px-4 rounded-lg transition-colors"><ArrowLeft size={18} /></button>}
                             </div>
+                            {currentPath.length > 0 && getItemsAtCurrentPath().some(item => item.type === 'file') && !searchTerm && (
+                                <div className="flex bg-slate-100 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700 items-center justify-between gap-2 flex-wrap">
+                                    <div className="flex gap-2">
+                                        <button onClick={handleSelectAllExtratos} className="text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 px-3 py-1.5 rounded flex items-center hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shadow-sm">
+                                            <CheckCircle size={14} className="mr-1" />
+                                            {isAllExtratosSelected() ? 'Desmarcar Tudo' : 'Marcar Tudo'}
+                                        </button>
+                                        <button onClick={handleExportSelectedExtratos} disabled={selectedExtratos.length === 0} className={`text-xs px-3 py-1.5 rounded flex items-center transition-colors shadow-sm ${selectedExtratos.length === 0 ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed border border-transparent' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}>
+                                            <Download size={14} className="mr-1" />
+                                            Exportar selecionados ({selectedExtratos.length})
+                                        </button>
+                                        <button onClick={handleDeleteSelectedExtratos} disabled={selectedExtratos.length === 0} className={`text-xs px-3 py-1.5 rounded flex items-center transition-colors shadow-sm ${selectedExtratos.length === 0 ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed border border-transparent' : 'bg-rose-500 hover:bg-rose-600 text-white'}`}>
+                                            <Trash2 size={14} className="mr-1" />
+                                            Excluir selecionados ({selectedExtratos.length})
+                                        </button>
+                                    </div>
+                                    <span className="text-xs text-slate-500 font-medium">
+                                        {selectedExtratos.length} extrato(s) selecionado(s) de {getItemsAtCurrentPath().filter(item => item.type === 'file').length}
+                                    </span>
+                                </div>
+                            )}
                         </header>
                         {!searchTerm && (
                             <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 p-3 rounded-lg mb-6 border border-slate-200 dark:border-slate-700 overflow-x-auto whitespace-nowrap transition-colors">
@@ -3873,8 +4114,18 @@ export default function App() {
                         )}
                         <div className={fileViewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4" : "flex flex-col gap-2"}>
                             {getItemsAtCurrentPath().map((item, idx) => (
-                                <div key={idx} onClick={() => handleNavigate(item)} className={fileViewMode === 'grid' ? `p-4 rounded-xl border cursor-pointer flex flex-col items-center text-center space-y-3 transition-colors ${item.type === 'folder' ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-emerald-500/50 hover:bg-white dark:hover:bg-slate-800'}` : `p-3 rounded-lg border cursor-pointer flex flex-row items-center space-x-4 transition-colors ${item.type === 'folder' ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-emerald-500/50 hover:bg-white dark:hover:bg-slate-800'}`}>
-                                    <div className={`p-2 rounded-full ${item.type === 'folder' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-slate-100 dark:bg-slate-700 ' + getFileColorClass(item.fileName)}`}>
+                                <div key={idx} onClick={() => handleNavigate(item)} className={fileViewMode === 'grid' ? `relative p-4 rounded-xl border cursor-pointer flex flex-col items-center text-center space-y-3 transition-colors ${item.type === 'folder' ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-emerald-500/50 hover:bg-white dark:hover:bg-slate-800'}` : `relative p-3 rounded-lg border cursor-pointer flex flex-row items-center space-x-4 transition-colors ${item.type === 'folder' ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-emerald-500/50 hover:bg-white dark:hover:bg-slate-800'}`}>
+                                    {item.type === 'file' && (
+                                        <div className={`absolute z-10 ${fileViewMode === 'grid' ? 'top-3 left-3' : 'top-1/2 -translate-y-1/2 left-3'}`} onClick={(e) => e.stopPropagation()}>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedExtratos.includes(item.id)}
+                                                onChange={(e) => handleToggleSelectExtrato(e, item.id)}
+                                                className="w-4 h-4 cursor-pointer text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-slate-800 focus:ring-2 dark:bg-slate-700 dark:border-slate-600"
+                                            />
+                                        </div>
+                                    )}
+                                    <div className={`p-2 rounded-full ${fileViewMode !== 'grid' && item.type === 'file' ? 'ml-6' : ''} ${item.type === 'folder' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-slate-100 dark:bg-slate-700 ' + getFileColorClass(item.fileName)}`}>
                                         {item.type === 'folder' ? <Folder size={24} /> : ((item.fileName || '').toLowerCase().endsWith('pdf') ? <FileText size={24} /> : <FileSpreadsheet size={24} />)}
                                     </div>
                                     <div className={fileViewMode === 'grid' ? "w-full" : "flex-1 min-w-0"}>
@@ -3961,6 +4212,46 @@ export default function App() {
                                     }} className="p-4 bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg flex items-center justify-center border border-slate-300 dark:border-slate-600 hover:border-emerald-500 dark:hover:border-emerald-500 transition-colors text-slate-800 dark:text-white"><Download size={20} className="mr-2"/><span className="font-bold">Baixar Arquivo .ZIP Completo</span></button>
                                 </div>
                             </div>
+
+                            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors">
+                                <div className="flex items-center space-x-3 mb-4">
+                                    <div className="bg-blue-100 dark:bg-blue-500/20 p-2 rounded-lg">
+                                        <History className="text-blue-600 dark:text-blue-400" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-slate-900 dark:text-white text-lg">Restaurar Backup (Cloud)</h3>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">Restaure os dados de um dos 10 últimos backups automáticos.</p>
+                                    </div>
+                                    <button onClick={fetchBackups} className="ml-auto p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+                                        <RefreshCw size={18} className={loadingBackups ? "animate-spin" : ""} />
+                                    </button>
+                                </div>
+                                <div className="space-y-3">
+                                    {loadingBackups ? (
+                                        <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center justify-center p-4">
+                                            Carregando lista de backups...
+                                        </div>
+                                    ) : backupList.length === 0 ? (
+                                        <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                                            Nenhum backup encontrado na nuvem para esta loja.
+                                        </div>
+                                    ) : (
+                                        backupList.map((backup) => (
+                                            <div key={backup.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-750 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-blue-400 transition-colors">
+                                                <div>
+                                                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{backup.name.replace('backups/', '')}</p>
+                                                    <p className="text-xs text-slate-500 dark:text-slate-400">Criado em: {new Date(backup.created_at).toLocaleString()}</p>
+                                                </div>
+                                                <button onClick={() => handleRestoreBackup(backup.name.replace('backups/', ''))} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg flex items-center transition-colors shadow-sm">
+                                                    <RefreshCw size={14} className="mr-1.5" />
+                                                    Restaurar
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
                             <div className="bg-rose-50 dark:bg-red-900/10 p-6 rounded-xl border border-rose-200 dark:border-red-900/30 mt-4 transition-colors">
                                 <h3 className="font-bold text-rose-600 dark:text-rose-400 mb-2 flex items-center"><Trash2 size={18} className="mr-2"/> Limpeza Total</h3>
                                 <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Isto irá apagar da nuvem todo o Histórico de Relatórios e as Vendas associadas.</p>
@@ -3968,8 +4259,9 @@ export default function App() {
                                     showConfirm("PERIGO CLOUD: Tem a certeza absoluta que deseja apagar TODOS os relatórios e vendas da Cloud? Esta ação não tem volta.", async () => {
                                         setLoading(true); setLoadingMsg("Apagando base...");
                                         try {
-                                            await supabase.from('vendas').delete().neq('id', 0);
-                                            await supabase.from('savedReports').delete().neq('id', 0);
+                                            // Delete only the current store's data
+                                            await supabase.from('vendas').delete().ilike('loja', `%${nomeEmpresaUpper}%`);
+                                            await supabase.from('savedReports').delete().eq('empresa', nomeEmpresaUpper);
                                             await loadFromDB();
                                             showAlert("Banco de vendas limpo com sucesso na nuvem.");
                                         } catch(err) { showAlert("Erro ao apagar: " + err.message); }
