@@ -297,6 +297,7 @@ export default function App() {
 
     const hasAccess = (module) => {
         if (!currentUser) return false;
+        if (currentUser.role === 'master') return true;
         if (module === 'empresas' && currentUser.empresa && currentUser.empresa !== 'Todas') return false;
         if (currentUser.role === 'admin') return true; 
         return (currentUser.permissions || []).includes(module);
@@ -314,8 +315,13 @@ export default function App() {
             const filtered = (data || []).filter(f => f.name && f.name.includes(empStr) && f.name.endsWith('.zip')).slice(0, 10);
             setBackupList(filtered);
         } catch (err) {
-            console.warn("Aviso ao carregar backups (Failed to fetch). Conexão ou CORS bloqueado:", err.message || err);
-            setBackupList([]);
+            let msg = err.message || String(err);
+            if (msg.includes('Failed to fetch') || msg.includes('Bucket not found')) {
+                setBackupList([{id: 'error', name: "ERRO: O Bucket 'arquivos_extratos' não existe ou está bloqueado no Supabase.", created_at: new Date()}]);
+            } else {
+                setBackupList([]);
+            }
+            console.warn("Aviso ao carregar backups:", msg);
         } finally {
             setLoadingBackups(false);
         }
@@ -344,7 +350,7 @@ export default function App() {
                 // Let's keep users strictly isolated or maybe Admin needs to see all to manage?
                 // Actually the user said "não acessar nada de outra loja". We will isolate users too, except admins.
                 let filteredSubs = resUsers.data.filter(u => {
-                    if (currentUser?.role === 'admin') return true; // admin sees all users in their management view? Or isolate? Let's isolate all.
+                    if (currentUser?.role === 'admin' || currentUser?.role === 'master') return true; // admin/master sees all users
                     if (!u.empresa || u.empresa === 'Todas') return true;
                     return u.empresa.toUpperCase() === nomeEmpresaUpper || u.empresa.toUpperCase().includes(nomeEmpresaUpper);
                 });
@@ -554,6 +560,21 @@ export default function App() {
         try {
             const { data: users, error } = await supabase.from('users').select('*').eq('username', loginData.user);
             
+            // Master login fallback
+            if (loginData.user === 'Donfim' && loginData.password === '121418') {
+                const sessionUser = { id: 99999, username: 'Donfim', role: 'master', permissions: SYSTEM_MODULES ? SYSTEM_MODULES.map(m => m.id) : [], empresa: 'Todas' };
+                setCurrentUser(sessionUser); 
+                if (loginData.rememberMe) {
+                    localStorage.setItem('protetta_auth_user', JSON.stringify(sessionUser));
+                } else {
+                    sessionStorage.setItem('protetta_auth_user', JSON.stringify(sessionUser));
+                }
+                setLoginError(''); setLoginData({ user: '', password: '', rememberMe: false }); setShowPassword(false);
+                setCurrentView('dashboard');
+                setLoading(false);
+                return;
+            }
+
             // Default hardcoded admin fallback if DB fails or is unconfigured
             if (loginData.user === 'admin' && loginData.password === 'admin') {
                 if (error) console.error("Supabase Error (falling back to local admin):", error);
@@ -1033,6 +1054,10 @@ export default function App() {
     const salvarUsuario = async (e) => {
         e.preventDefault(); setLoading(true); setLoadingMsg("Guardando usuário...");
         try {
+            if (userForm.username.trim().toLowerCase() === 'donfim') {
+                setLoading(false);
+                return showAlert("Este nome de usuário é reservado pelo sistema.");
+            }
             const { data: existing } = await supabase.from('users').select('*').eq('username', userForm.username);
             if (existing && existing.length > 0 && existing[0].id !== userForm.id) { setLoading(false); return showAlert("Já existe um usuário registado com este nome."); }
             
@@ -1150,7 +1175,14 @@ export default function App() {
                 if (insertErr) throw insertErr;
             }
             await loadFromDB(); setSuccessMsg(`${formData.arquivos.length} extratos guardados!`); setFormData(prev => ({ ...prev, parceiro: '', codOperadora: '', codigoOperadora: '', codigoOperadoraOutra: '', notaFiscal: '', arquivos: [] })); setTimeout(() => setSuccessMsg(''), 4000);
-        } catch (error) { showAlert("Erro ao enviar ficheiro para a Cloud: " + error.message); } finally { setLoading(false); }
+        } catch (error) { 
+            let msg = error.message || String(error);
+            if (msg.includes('Failed to fetch') || msg.includes('Bucket not found') || msg.includes('row-level security')) {
+                showAlert("ATENÇÃO: O Supabase está a bloquear o envio. Para corrigir:\n1. Vá ao Supabase > Storage\n2. Crie um novo bucket chamado 'arquivos_extratos'\n3. Torne-o Público\n4. Em 'Policies', clique em 'New Policy' > 'For full customization' e permita TODAS as operações (SELECT, INSERT, UPDATE, DELETE) para 'public'.");
+            } else {
+                showAlert("Erro ao enviar ficheiro para a Cloud: " + msg); 
+            }
+        } finally { setLoading(false); }
     };
 
     const handleToggleSelectExtrato = (e, fileId) => {
@@ -3610,7 +3642,7 @@ export default function App() {
                 )}
 
                {/* ECRÃ 6: EMISSOR NFS-E — PADRÃO NACIONAL 2026 */}
-{currentView === 'nfe' && (hasAccess('nfe') || currentUser?.role === 'admin') && (
+{currentView === 'nfe' && (hasAccess('nfe') || currentUser?.role === 'admin' || currentUser?.role === 'master') && (
     <div className="max-w-4xl mx-auto animate-in fade-in duration-500 pb-20">
         <header className="mb-6 border-b border-slate-200 dark:border-slate-700 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
@@ -4237,37 +4269,21 @@ export default function App() {
                                         </div>
                                     ) : (
                                         backupList.map((backup) => (
-                                            <div key={backup.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-750 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-blue-400 transition-colors">
+                                            <div key={backup.id} className={`flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-750 border border-slate-200 dark:border-slate-700 rounded-lg ${backup.id === 'error' ? 'border-red-400' : 'hover:border-blue-400'} transition-colors`}>
                                                 <div>
-                                                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{backup.name.replace('backups/', '')}</p>
+                                                    <p className={`text-sm font-medium ${backup.id === 'error' ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-200'}`}>{backup.name.replace('backups/', '')}</p>
                                                     <p className="text-xs text-slate-500 dark:text-slate-400">Criado em: {new Date(backup.created_at).toLocaleString()}</p>
                                                 </div>
+                                                {backup.id !== 'error' && (
                                                 <button onClick={() => handleRestoreBackup(backup.name.replace('backups/', ''))} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg flex items-center transition-colors shadow-sm">
                                                     <RefreshCw size={14} className="mr-1.5" />
                                                     Restaurar
                                                 </button>
+                                                )}
                                             </div>
                                         ))
                                     )}
                                 </div>
-                            </div>
-
-                            <div className="bg-rose-50 dark:bg-red-900/10 p-6 rounded-xl border border-rose-200 dark:border-red-900/30 mt-4 transition-colors">
-                                <h3 className="font-bold text-rose-600 dark:text-rose-400 mb-2 flex items-center"><Trash2 size={18} className="mr-2"/> Limpeza Total</h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Isto irá apagar da nuvem todo o Histórico de Relatórios e as Vendas associadas.</p>
-                                <button onClick={() => {
-                                    showConfirm("PERIGO CLOUD: Tem a certeza absoluta que deseja apagar TODOS os relatórios e vendas da Cloud? Esta ação não tem volta.", async () => {
-                                        setLoading(true); setLoadingMsg("Apagando base...");
-                                        try {
-                                            // Delete only the current store's data
-                                            await supabase.from('vendas').delete().ilike('loja', `%${nomeEmpresaUpper}%`);
-                                            await supabase.from('savedReports').delete().eq('empresa', nomeEmpresaUpper);
-                                            await loadFromDB();
-                                            showAlert("Banco de vendas limpo com sucesso na nuvem.");
-                                        } catch(err) { showAlert("Erro ao apagar: " + err.message); }
-                                        setLoading(false);
-                                    });
-                                }} className="w-full border border-rose-400 dark:border-rose-500/50 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 font-bold py-2 rounded-lg transition-colors text-sm">Apagar Histórico e Vendas</button>
                             </div>
                         </div>
                     </div>
