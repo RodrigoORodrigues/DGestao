@@ -78,17 +78,18 @@ export default function Sidebar({ currentUser, currentView, setCurrentView, hasA
             style={{ width: collapsed ? '80px' : `${width}px`, transition: isResizing.current ? 'none' : 'width 0.2s ease-in-out' }}
         >
             <div className={`flex flex-col ${collapsed ? 'px-2 py-4 items-center' : 'px-4 py-4'} mb-2 mt-2 relative`}>
-                <div className={`flex items-center space-x-2 w-full ${collapsed ? 'justify-center' : ''}`}>
-                    <div className="h-10 w-10 bg-emerald-600 rounded-lg font-bold text-white flex items-center justify-center text-lg border border-emerald-400/50 shrink-0">
-                        D
-                    </div>
-                    {!collapsed && (
-                        <div className="min-w-0 pr-4">
-                            <h1 className="text-lg font-bold text-slate-900 dark:text-white leading-tight truncate">Don Gestão</h1>
-                            <p className="text-xs text-slate-500 flex items-center mt-0.5 truncate">
-                                <User size={12} className="mr-1 shrink-0"/> <span className="truncate">{currentUser?.username}</span>
-                            </p>
-                        </div>
+                <div className={`flex items-center w-full ${collapsed ? 'justify-center' : ''}`}>
+                    {collapsed ? (
+                         <div className="h-10 w-10 flex items-center justify-center overflow-hidden shrink-0">
+                             <img src="/Logo_DonGestao.png" alt="Don" className="h-8 w-auto object-contain object-left" />
+                         </div>
+                    ) : (
+                         <div className="flex flex-col min-w-0 pl-1">
+                             <img src="/Logo_DonGestao.png" alt="Don Gestão" className="h-12 w-auto object-contain mb-2 origin-left" />
+                             <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center truncate">
+                                 <User size={12} className="mr-1 shrink-0"/> <span className="truncate font-medium">{currentUser?.username}</span>
+                             </p>
+                         </div>
                     )}
                 </div>
 

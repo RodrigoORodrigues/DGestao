@@ -2152,8 +2152,7 @@ export default function App() {
             <div className="flex h-screen w-screen items-center justify-center bg-slate-100 dark:bg-slate-900 transition-colors duration-200 p-4">
                 <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-700 transition-colors relative">
                     <div className="flex flex-col items-center mb-8">
-                        <div className="bg-emerald-600 p-3 rounded-xl font-bold text-white text-3xl leading-none border border-emerald-400/50 mb-4 shadow-lg">D</div>
-                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Don Gestão</h1>
+                        <img src="/Logo_DonGestao.png" alt="Don Gestão" className="h-16 w-auto object-contain mb-4" />
                     </div>
                     <form onSubmit={handleLogin} onInvalid={(e) => e.currentTarget.classList.add('show-errors')} className="space-y-5">
                         <div>
@@ -4116,8 +4115,8 @@ export default function App() {
                                 </div>
                                 {currentPath.length > 0 && !searchTerm && <button onClick={() => setCurrentPath(currentPath.slice(0, -1))} className="bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-white px-4 rounded-lg transition-colors"><ArrowLeft size={18} /></button>}
                             </div>
-                            {currentPath.length > 0 && getItemsAtCurrentPath().some(item => item.type === 'file') && !searchTerm && (
-                                <div className="flex bg-slate-100 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700 items-center justify-between gap-2 flex-wrap">
+                            {getItemsAtCurrentPath().some(item => item.type === 'file') && (
+                                <div className="flex bg-slate-100 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700 items-center justify-between gap-2 flex-wrap mt-4">
                                     <div className="flex gap-2">
                                         <button onClick={handleSelectAllExtratos} className="text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 px-3 py-1.5 rounded flex items-center hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shadow-sm">
                                             <CheckCircle size={14} className="mr-1" />
@@ -4779,7 +4778,7 @@ export default function App() {
                     <p className="font-medium flex items-center gap-2">
                         <span>Desenvolvido por</span> 
                         <a href="https://donfim.com.br" target="_blank" rel="noopener noreferrer" className="flex items-center">
-                            <img src="/logo-donfim.png" alt="Donfim Tech" className="h-6 w-auto object-contain" />
+                            <img src="/Logo_DonGestao.png" alt="Donfim Tech" className="h-6 w-auto object-contain" />
                         </a>
                         <span>copyright © 2026</span>
                     </p>
