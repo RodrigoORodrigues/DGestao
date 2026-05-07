@@ -30,7 +30,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Configuração do Worker do PDF.js - usa a mesma versão da biblioteca
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 const printColLabels = {
-    cod: 'Cód.', contrato: 'Contrato', op: 'Op.', vidas: 'Vidas', 
+    cod: 'Cód.', contrato: 'Contrato', op: 'Op. | Seg.', vidas: 'Vidas', 
     cliente: 'Cliente', data: 'Data', loja: 'Loja', servico: 'Serviço', 
     desconto: 'Desc.', corretor: 'Corretor', parc: 'Parc.', 
     inicioVig: 'Início Vig.', nfe: 'NF-e', vitalicio: 'Vitalício', 
@@ -1603,9 +1603,9 @@ export default function App() {
                     }
 
                     novosRegistos.push({ 
-                        cod: codRegistro, 
+                        cod: reportDoc?.codOperadora || codRegistro, 
                         contrato: contratoDetectado, 
-                        codigoOperadora: 'AMIL', 
+                        codigoOperadora: reportDoc?.codigoOperadora || 'AMIL', 
                         vidas: vidasDetectadas,
                         cliente: nomeCliente, 
                         data: dataDeHojeInterna(), 
@@ -1616,7 +1616,7 @@ export default function App() {
                         vendedor: vendedorDetectado || empresaContexto, 
                         parcela: parcelaDetectada,
                         inicioVigencia: inicioVigenciaDetectada, 
-                        notaFiscal: '', 
+                        notaFiscal: reportDoc?.notaFiscal || '', 
                         vitalicio: 'Não', 
                         assessoria: empresaContexto, 
                         formaPagamento: 'Crédito em conta',
@@ -3158,7 +3158,7 @@ export default function App() {
                                         </th>
                                         {reportTableCols.cod && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-xs text-center">Cód.</th>}
                                         {reportTableCols.contrato && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400">Contrato</th>}
-                                        {reportTableCols.op && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400">Op.</th>}
+                                        {reportTableCols.op && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400">Op. | Seg.</th>}
                                         {reportTableCols.vidas && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-indigo-600 dark:text-indigo-400">Vidas</th>}
                                         {reportTableCols.cliente && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700">Cliente</th>}
                                         {reportTableCols.data && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center">Data</th>}
@@ -3186,7 +3186,7 @@ export default function App() {
                                                     <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700 text-center">
                                                         <input type="checkbox" checked={linha.selected} onChange={() => toggleSelectRow(idx)} className="w-4 h-4 accent-blue-500 rounded cursor-pointer" />
                                                     </td>
-                                                    {reportTableCols.cod && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.cod} onChange={e=>setEditRowData({...editRowData, cod: e.target.value})} className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[10px] text-slate-500 dark:text-slate-400 outline-none cursor-not-allowed w-12 text-center" disabled title="Gerado automaticamente" /></td>}
+                                                    {reportTableCols.cod && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.cod || ''} onChange={e=>setEditRowData({...editRowData, cod: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[10px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 w-16 text-center" placeholder="Cód. Op." /></td>}
                                                     {reportTableCols.contrato && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.contrato} onChange={e=>setEditRowData({...editRowData, contrato: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 w-16" placeholder="Contrato" /></td>}
                                                     {reportTableCols.op && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.codigoOperadora} onChange={e=>setEditRowData({...editRowData, codigoOperadora: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 w-12 text-center" placeholder="AMIL" /></td>}
                                                     {reportTableCols.vidas && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="number" value={editRowData.vidas} onChange={e=>setEditRowData({...editRowData, vidas: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 text-center w-8" placeholder="1" /></td>}
@@ -3274,7 +3274,7 @@ export default function App() {
                                                     <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700 text-center">
                                                         <input type="checkbox" checked={linha.selected} onChange={() => toggleSelectRow(idx)} className="w-4 h-4 accent-blue-500 rounded cursor-pointer" />
                                                     </td>
-                                                    {reportTableCols.cod && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 text-[10px] text-center">{linha.cod}</td>}
+                                                    {reportTableCols.cod && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-[10px] text-center">{linha.cod || '-'}</td>}
                                                     {reportTableCols.contrato && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 font-bold text-indigo-600 dark:text-indigo-400 text-xs">{linha.contrato || '-'}</td>}
                                                     {reportTableCols.op && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 font-medium text-slate-600 dark:text-slate-300 text-center text-xs">{linha.codigoOperadora || 'AMIL'}</td>}
                                                     {reportTableCols.vidas && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-slate-700 dark:text-slate-300 text-xs">{linha.vidas || '-'}</td>}
