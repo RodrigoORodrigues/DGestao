@@ -176,8 +176,8 @@ export default function App() {
         id: null, numero: '', cliente: '', dataVenda: dataDeHojeInterna(), situacao: `FATURADO ${nomeEmpresaUpper} NF`, 
         loja: `${nomeEmpresaUpper} SEGUROS`, valor: 0, contrato: '', codOperadora: '', codigoOperadora: '', vidas: '', 
         parcela: '', inicioVigencia: '', notaFiscal: '', corretor: nomeEmpresa,
-        vitalicio: 'Não', assessoria: nomeEmpresa, formaPagamento: 'Crédito em conta',
-        servico: 'Plano de Saúde', desconto: '', notas: '', comissao: 0, comissaoPorcentagem: ''
+        vitalicio: '', assessoria: nomeEmpresa, formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
+        servico: '', desconto: '', notas: '', comissao: 0, comissaoPorcentagem: ''
     });
 
     const defaultVendasFilters = { loja: 'Todos', codigo: '', dataInicio: '', dataFim: '', situacao: 'Todos', cliente: '', contrato: '', codigoOperadora: '', vidas: '', vitalicio: 'Selecione', parcela: '', inicioVigencia: '', notaFiscal: '', corretor: 'Todos' };
@@ -653,8 +653,8 @@ export default function App() {
                         situacao: dado.situacao, loja: dado.loja, valor: dado.valorTotal, parcela: dado.parcela || '', 
                         corretor: dado.vendedor || '', inicioVigencia: dado.inicioVigencia || '', notaFiscal: dado.notaFiscal || '',
                         contrato: dado.contrato || '', codigoOperadora: dado.codigoOperadora || 'AMIL', vidas: dado.vidas || '', 
-                        vitalicio: dado.vitalicio || 'Não', assessoria: dado.assessoria || nomeEmpresa, formaPagamento: dado.formaPagamento || 'Crédito em conta',
-                        servico: dado.servico || 'Plano de Saúde', desconto: dado.desconto || '' 
+                        vitalicio: dado.vitalicio || '', assessoria: dado.assessoria || nomeEmpresa, formaPagamento: dado.formaPagamento || (nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta'),
+                        servico: dado.servico || '', desconto: dado.desconto || '' 
                     });
                 });
             }
@@ -904,8 +904,8 @@ export default function App() {
         else setVendaForm({ 
             id: null, numero: getNextSequenceNumber(vendasList, v => v.numero), cliente: '', dataVenda: dataDeHojeInterna(), situacao: `FATURADO ${nomeEmpresaUpper} NF`, 
             loja: `${nomeEmpresaUpper} SEGUROS`, valor: 0, contrato: '', codOperadora: '', codigoOperadora: '', vidas: '', parcela: '', inicioVigencia: '', notaFiscal: '', 
-            corretor: nomeEmpresa, vitalicio: 'Não', assessoria: nomeEmpresa, formaPagamento: 'Crédito em conta',
-            servico: 'Plano de Saúde', desconto: '', notas: '' 
+            corretor: nomeEmpresa, vitalicio: '', assessoria: nomeEmpresa, formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
+            servico: '', desconto: '', notas: '' 
         });
         setModalVendaOpen(true);
     };
@@ -1613,14 +1613,14 @@ export default function App() {
                         loja: empresaContextoUpper, 
                         valorTotal, 
                         comissao, 
-                        vendedor: vendedorDetectado || empresaContexto, 
+                        vendedor: vendedorDetectado || nomeEmpresa, 
                         parcela: parcelaDetectada,
                         inicioVigencia: inicioVigenciaDetectada, 
                         notaFiscal: reportDoc?.notaFiscal || '', 
-                        vitalicio: 'Não', 
+                        vitalicio: '', 
                         assessoria: empresaContexto, 
-                        formaPagamento: 'Crédito em conta',
-                        servico: 'Plano de Saúde', 
+                        formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
+                        servico: '', 
                         desconto: '', 
                         selected: true
                     });
@@ -1724,8 +1724,8 @@ export default function App() {
             cod: String(maxCod).padStart(5, '0'), contrato: '', codigoOperadora: 'AMIL', vidas: '1',
             cliente: 'Novo Cliente', data: '', situacao: `FATURADO ${nomeEmpresaUpper} NF`, loja: nomeEmpresaUpper, 
             valorTotal: 0, comissao: 0, vendedor: nomeEmpresa, parcela: '1', inicioVigencia: '', notaFiscal: '',
-            vitalicio: 'Não', assessoria: nomeEmpresa, formaPagamento: 'Crédito em conta',
-            servico: 'Plano de Saúde', desconto: '', selected: true 
+            vitalicio: '', assessoria: nomeEmpresa, formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
+            servico: '', desconto: '', selected: true 
         };
         const newData = [...pdfData, novaLinha]; setPdfData(newData); setEditRowIndex(newData.length - 1); setEditRowData(novaLinha);
     };
@@ -3198,8 +3198,8 @@ export default function App() {
                                                     }} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-blue-500 text-center w-14" /></td>}
                                                     {reportTableCols.loja && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.loja} onChange={e=>setEditRowData({...editRowData, loja: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-blue-500 text-center w-16" /></td>}
                                                     {reportTableCols.servico && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                                        <select value={editRowData.servico || 'Plano de Saúde'} onChange={e=>setEditRowData({...editRowData, servico: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-amber-500 min-w-[100px]">
-                                                            <option>Plano de Saúde</option><option>Plano Dental</option><option>Seguro</option><option>Bonificação</option>
+                                                        <select value={editRowData.servico || ''} onChange={e=>setEditRowData({...editRowData, servico: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-amber-500 min-w-[100px]">
+                                                            <option value=""></option><option>Plano de Saúde</option><option>Plano Dental</option><option>Seguro</option><option>Bonificação</option>
                                                         </select>
                                                     </td>}
                                                     {reportTableCols.desconto && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
@@ -3233,13 +3233,13 @@ export default function App() {
                                                     }} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[10px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 text-center w-24" /></td>}
                                                     {reportTableCols.nfe && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.notaFiscal || ''} onChange={e=>setEditRowData({...editRowData, notaFiscal: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-rose-500 text-center font-bold text-rose-600 dark:text-rose-400 w-16" placeholder="Nº NF"/></td>}
                                                     {reportTableCols.vitalicio && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                                        <select value={editRowData.vitalicio || 'Não'} onChange={e=>setEditRowData({...editRowData, vitalicio: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-indigo-500">
-                                                            <option>Sim</option><option>Não</option>
+                                                        <select value={editRowData.vitalicio || ''} onChange={e=>setEditRowData({...editRowData, vitalicio: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-indigo-500">
+                                                            <option value=""></option><option>Sim</option><option>Não</option>
                                                         </select>
                                                     </td>}
                                                     {reportTableCols.pagamento && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                                        <select value={editRowData.formaPagamento || 'Crédito em conta'} onChange={e=>setEditRowData({...editRowData, formaPagamento: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 min-w-[90px]">
-                                                            <option>Crédito em conta</option><option>Dinheiro à vista</option>
+                                                        <select value={editRowData.formaPagamento || ''} onChange={e=>setEditRowData({...editRowData, formaPagamento: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 min-w-[90px]">
+                                                            <option value=""></option><option>Crédito em conta</option><option>Dinheiro à vista</option>
                                                         </select>
                                                     </td>}
                                                     {reportTableCols.valorTotal && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="number" step="0.01" value={editRowData.valorTotal} onChange={e=>setEditRowData({...editRowData, valorTotal: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500 text-right w-16" /></td>}
@@ -3281,14 +3281,14 @@ export default function App() {
                                                     {reportTableCols.cliente && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs truncate max-w-[150px]" title={linha.cliente}>{linha.cliente}</td>}
                                                     {reportTableCols.data && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center text-slate-500 dark:text-slate-400 text-[11px]">{linha.data}</td>}
                                                     {reportTableCols.loja && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center text-slate-500 dark:text-slate-400 text-xs">{linha.loja}</td>}
-                                                    {reportTableCols.servico && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[11px]">{linha.servico || 'Plano de Saúde'}</td>}
+                                                    {reportTableCols.servico && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[11px]">{linha.servico || '-'}</td>}
                                                     {reportTableCols.desconto && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-rose-500 dark:text-rose-400 text-[11px]">{linha.desconto || '-'}</td>}
-                                                    {reportTableCols.corretor && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-indigo-600 dark:text-indigo-400 text-xs">{linha.vendedor || 'Protetta'}</td>}
+                                                    {reportTableCols.corretor && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-indigo-600 dark:text-indigo-400 text-xs">{linha.vendedor || '-'}</td>}
                                                     {reportTableCols.parc && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-slate-700 dark:text-slate-300 text-xs">{linha.parcela || '-'}</td>}
                                                     {reportTableCols.inicioVig && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[10px]">{linha.inicioVigencia ? formatarDataVisivel(linha.inicioVigencia) : '--/--/----'}</td>}
                                                     {reportTableCols.nfe && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-rose-600 dark:text-rose-400 text-[11px]">{linha.notaFiscal || '-'}</td>}
-                                                    {reportTableCols.vitalicio && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[11px]">{linha.vitalicio || 'Não'}</td>}
-                                                    {reportTableCols.pagamento && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[11px]">{linha.formaPagamento || 'Crédito em conta'}</td>}
+                                                    {reportTableCols.vitalicio && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[11px]">{linha.vitalicio || '-'}</td>}
+                                                    {reportTableCols.pagamento && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[11px]">{linha.formaPagamento || '-'}</td>}
                                                     {reportTableCols.valorTotal && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-right font-medium text-slate-700 dark:text-slate-300 text-xs">{formatarMoeda(linha.valorTotal)}</td>}
                                                     {reportTableCols.comissao && <td className="py-1 px-2 text-right font-bold text-sky-600 dark:text-sky-400 text-xs">{formatarMoeda(linha.comissao)}</td>}
                                                     <td className="py-1 px-1 text-center no-print">
@@ -4600,7 +4600,7 @@ export default function App() {
                                             <ul className="absolute z-10 w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg max-h-48 overflow-y-auto shadow-lg mt-1">
                                                 {clientes.filter(c => c.nome.toLowerCase().includes(vendaForm.cliente.toLowerCase())).map(c => (
                                                     <li key={c.id} className="px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-700 last:border-0" onMouseDown={() => {
-                                                        setVendaForm({...vendaForm, cliente: c.nome, servico: c.servico || 'Plano de Saúde'});
+                                                        setVendaForm({...vendaForm, cliente: c.nome, servico: c.servico || ''});
                                                         setShowClienteSuggestions(false);
                                                     }}>
                                                         <div className="font-bold">{c.nome}</div>
@@ -4619,7 +4619,8 @@ export default function App() {
                                     </div>
                                     <div className="md:col-span-2">
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Serviços</label>
-                                        <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.servico || 'Plano de Saúde'} onChange={e => setVendaForm({...vendaForm, servico: e.target.value})}>
+                                        <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.servico || ''} onChange={e => setVendaForm({...vendaForm, servico: e.target.value})}>
+                                            <option value=""></option>
                                             <option value="Plano de Saúde">Plano de Saúde</option>
                                             <option value="Plano Dental">Plano Dental</option>
                                             <option value="Seguro Vida">Seguro Vida</option>
@@ -4645,7 +4646,8 @@ export default function App() {
 
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Tipo de Pagamento</label>
-                                        <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.formaPagamento} onChange={e => setVendaForm({...vendaForm, formaPagamento: e.target.value})}>
+                                        <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.formaPagamento || ''} onChange={e => setVendaForm({...vendaForm, formaPagamento: e.target.value})}>
+                                            <option value=""></option>
                                             <option value="Crédito em conta">Crédito em conta</option>
                                             <option value="Dinheiro à vista">Dinheiro à vista</option>
                                         </select>
