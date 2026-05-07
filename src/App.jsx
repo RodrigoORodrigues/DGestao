@@ -4048,12 +4048,16 @@ export default function App() {
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label><select value={formData.empresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500"><option value={nomeEmpresa}>{nomeEmpresa}</option></select></div>
                                 <div className="space-y-2 md:col-span-1">
                                     <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Cód. Operadora</label>
-                                    <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={formData.codOperadora || ''} onChange={e => setFormData({...formData, codOperadora: e.target.value})}>
-                                        <option value="">Selecione a Pasta</option>
-                                        <option value="139491">139491</option>
-                                        <option value="162191">162191</option>
-                                        <option value="224138">224138</option>
-                                    </select>
+                                    {formData.codigoOperadora === 'AMIL' ? (
+                                        <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={formData.codOperadora || ''} onChange={e => setFormData({...formData, codOperadora: e.target.value})}>
+                                            <option value="">Selecione a Pasta</option>
+                                            <option value="139491">139491</option>
+                                            <option value="162191">162191</option>
+                                            <option value="224138">224138</option>
+                                        </select>
+                                    ) : (
+                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Módulo opcional" value={formData.codOperadora || ''} onChange={e => setFormData({...formData, codOperadora: e.target.value})} />
+                                    )}
                                 </div>
                                 <div className="space-y-2 md:col-span-1">
                                     <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Operadora | Seguradora</label>
@@ -4573,12 +4577,16 @@ export default function App() {
                                     </div>
                                     <div className="md:col-span-1">
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Cód. Operadora</label>
-                                        <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.codOperadora || ''} onChange={e => setVendaForm({...vendaForm, codOperadora: e.target.value})}>
-                                            <option value="">Módulo opcional</option>
-                                            <option value="139491">139491</option>
-                                            <option value="162191">162191</option>
-                                            <option value="224138">224138</option>
-                                        </select>
+                                        {vendaForm.codigoOperadora === 'AMIL' ? (
+                                            <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.codOperadora || ''} onChange={e => setVendaForm({...vendaForm, codOperadora: e.target.value})}>
+                                                <option value="">Módulo opcional</option>
+                                                <option value="139491">139491</option>
+                                                <option value="162191">162191</option>
+                                                <option value="224138">224138</option>
+                                            </select>
+                                        ) : (
+                                            <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Módulo opcional" value={vendaForm.codOperadora || ''} onChange={e => setVendaForm({...vendaForm, codOperadora: e.target.value})} />
+                                        )}
                                     </div>
                                     <div className="md:col-span-2 relative">
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Cliente / Parceiro</label>
