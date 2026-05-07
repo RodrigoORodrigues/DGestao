@@ -247,7 +247,7 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
                         <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                            <tr><th className="px-6 py-4 uppercase font-semibold">Mês</th><th className="px-6 py-4 uppercase font-semibold">Status</th><th className="px-6 py-4 uppercase font-semibold text-right">Part. Anual</th><th className="px-6 py-4 uppercase font-semibold text-right">Valor</th></tr>
+                            <tr><th className="px-6 py-4 uppercase font-semibold">Mês</th><th className="px-6 py-4 uppercase font-semibold">Status</th><th className="px-6 py-4 uppercase font-semibold text-right">Part. Anual</th><th className="px-6 py-4 uppercase font-semibold text-right text-emerald-600 dark:text-emerald-400">Valor</th></tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-700/50 text-slate-700 dark:text-slate-300">
                             {data.map((val, idx) => (

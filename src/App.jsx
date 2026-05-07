@@ -62,6 +62,7 @@ export default function App() {
     const [loginData, setLoginData] = useState({ user: '', password: '', rememberMe: false });
     const [loginError, setLoginError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [showUserPassword, setShowUserPassword] = useState(false);
 
     const [alertDialog, setAlertDialog] = useState({ isOpen: false, message: '' });
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null });
@@ -1046,8 +1047,13 @@ export default function App() {
     };
 
     const abrirModalUsuario = (user = null) => {
-        if (user) setUserForm({ ...user });
-        else setUserForm({ id: null, username: '', password: '', role: 'user', permissions: [], empresa: nomeEmpresa });
+        if (user) {
+            setUserForm({ 
+                ...user, 
+                permissions: user.role === 'admin' ? SYSTEM_MODULES.map(m => m.id) : (user.permissions || [])
+            });
+        }
+        else setUserForm({ id: null, username: '', password: '', role: 'operador', permissions: [], empresa: nomeEmpresa });
         setModalUserOpen(true);
     };
 
@@ -2413,7 +2419,7 @@ export default function App() {
                                                 <th className="py-3 px-4 rounded-tl-lg">Data</th>
                                                 <th className="py-3 px-4">Cliente</th>
                                                 <th className="py-3 px-4">Operadora</th>
-                                                <th className="py-3 px-4">Valor</th>
+                                                <th className="py-3 px-4 text-emerald-600 dark:text-emerald-400">Valor</th>
                                                 <th className="py-3 px-4 rounded-tr-lg">Situação</th>
                                             </tr>
                                         </thead>
@@ -2873,7 +2879,7 @@ export default function App() {
                                             </th>
                                         )}
                                         {vendasTableCols.valor && (
-                                            <th onClick={() => handleSortVendas('valor')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 w-32 text-right">
+                                            <th onClick={() => handleSortVendas('valor')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-emerald-600 dark:text-emerald-400 border-r border-slate-200 dark:border-slate-700 w-32 text-right">
                                                 Valor {getSortIcon('valor')}
                                             </th>
                                         )}
@@ -2888,12 +2894,12 @@ export default function App() {
                                             </th>
                                         )}
                                         {vendasTableCols.notaFiscal && (
-                                            <th onClick={() => handleSortVendas('notaFiscal')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">
+                                            <th onClick={() => handleSortVendas('notaFiscal')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-purple-600 dark:text-purple-400 border-r border-slate-200 dark:border-slate-700">
                                                 NF {getSortIcon('notaFiscal')}
                                             </th>
                                         )}
                                         {vendasTableCols.vitalicio && (
-                                            <th onClick={() => handleSortVendas('vitalicio')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">
+                                            <th onClick={() => handleSortVendas('vitalicio')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-purple-600 dark:text-purple-400 border-r border-slate-200 dark:border-slate-700">
                                                 Vitalício {getSortIcon('vitalicio')}
                                             </th>
                                         )}
@@ -2908,7 +2914,7 @@ export default function App() {
                                             </th>
                                         )}
                                         {vendasTableCols.desconto && (
-                                            <th onClick={() => handleSortVendas('desconto')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">
+                                            <th onClick={() => handleSortVendas('desconto')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-rose-600 dark:text-rose-400 border-r border-slate-200 dark:border-slate-700">
                                                 Desconto {getSortIcon('desconto')}
                                             </th>
                                         )}
@@ -3185,15 +3191,15 @@ export default function App() {
                                         {reportTableCols.data && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center">Data</th>}
                                         {reportTableCols.loja && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center">Loja</th>}
                                         {reportTableCols.servico && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-amber-600 dark:text-amber-400">Serviço</th>}
-                                        {reportTableCols.desconto && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-amber-600 dark:text-amber-400">Desc.</th>}
+                                        {reportTableCols.desconto && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-rose-600 dark:text-rose-400">Desc.</th>}
                                         {reportTableCols.corretor && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-indigo-600 dark:text-indigo-400">Corretor</th>}
                                         {reportTableCols.parc && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-indigo-600 dark:text-indigo-400">Parc.</th>}
                                         {reportTableCols.inicioVig && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-indigo-600 dark:text-indigo-400">Início Vig.</th>}
-                                        {reportTableCols.nfe && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-rose-600 dark:text-rose-400">NF-e</th>}
-                                        {reportTableCols.vitalicio && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-indigo-600 dark:text-indigo-400">Vitalício</th>}
+                                        {reportTableCols.nfe && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-purple-600 dark:text-purple-400">NF-e</th>}
+                                        {reportTableCols.vitalicio && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-purple-600 dark:text-purple-400">Vitalício</th>}
                                         {reportTableCols.pagamento && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-indigo-600 dark:text-indigo-400">Pagamento</th>}
                                         {reportTableCols.valorTotal && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-right text-emerald-600 dark:text-emerald-400">Valor total</th>}
-                                        {reportTableCols.comissao && <th className="py-2 px-2 font-bold text-right text-sky-600 dark:text-sky-400">Comissão</th>}
+                                        {reportTableCols.comissao && <th className="py-2 px-2 font-bold text-right text-emerald-600 dark:text-emerald-400">Comissão</th>}
                                         <th className="py-2 px-2 font-bold text-center w-28">Ações</th>
                                     </tr>
                                 </thead>
@@ -4744,11 +4750,19 @@ export default function App() {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Senha</label>
-                                    <input required type="password" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} />
+                                    <div className="relative">
+                                        <input required type={showUserPassword ? "text" : "password"} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 pr-10 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} />
+                                        <button type="button" onClick={() => setShowUserPassword(!showUserPassword)} className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                                            {showUserPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                        </button>
+                                    </div>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Função</label>
-                                    <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})}>
+                                    <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={userForm.role} onChange={e => {
+                                        const newRole = e.target.value;
+                                        setUserForm({...userForm, role: newRole, permissions: newRole === 'admin' ? SYSTEM_MODULES.map(m => m.id) : userForm.permissions});
+                                    }}>
                                         <option value="admin">Administrador</option>
                                         <option value="operador">Colaborador</option>
                                     </select>
@@ -4764,22 +4778,20 @@ export default function App() {
                                         ))}
                                     </select>
                                 </div>
-                                {userForm.role !== 'admin' && (
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Permissões de Acesso</label>
-                                        <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                                            {SYSTEM_MODULES.map(mod => (
-                                                <label key={mod.id} className="flex items-center space-x-2">
-                                                    <input type="checkbox" checked={userForm.permissions.includes(mod.id)} onChange={(e) => {
-                                                        const p = e.target.checked ? [...userForm.permissions, mod.id] : userForm.permissions.filter(x => x !== mod.id);
-                                                        setUserForm({...userForm, permissions: p});
-                                                    }} className="rounded text-indigo-600 focus:ring-indigo-500 bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600" />
-                                                    <span className="text-sm text-slate-700 dark:text-slate-300">{mod.label}</span>
-                                                </label>
-                                            ))}
-                                        </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Permissões de Acesso</label>
+                                    <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                                        {SYSTEM_MODULES.map(mod => (
+                                            <label key={mod.id} className="flex items-center space-x-2">
+                                                <input type="checkbox" checked={userForm.permissions.includes(mod.id)} onChange={(e) => {
+                                                    const p = e.target.checked ? [...userForm.permissions, mod.id] : userForm.permissions.filter(x => x !== mod.id);
+                                                    setUserForm({...userForm, permissions: p});
+                                                }} disabled={userForm.role === 'admin'} className="rounded text-indigo-600 focus:ring-indigo-500 bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed" />
+                                                <span className="text-sm text-slate-700 dark:text-slate-300">{mod.label}</span>
+                                            </label>
+                                        ))}
                                     </div>
-                                )}
+                                </div>
                                 <div className="flex justify-end pt-4 mt-6 border-t border-slate-200 dark:border-slate-700 gap-3">
                                     <button type="button" onClick={() => setModalUserOpen(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white rounded-lg font-bold">Cancelar</button>
                                     <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold flex items-center shadow-lg"><Save size={18} className="mr-2"/> Guardar</button>

@@ -3,35 +3,39 @@
 @tailwind utilities;
 
 @layer utilities {
-  html:not(.dark) .text-slate-400,
-  html:not(.dark) .text-slate-500,
-  html:not(.dark) .text-slate-600,
-  html:not(.dark) .text-slate-700,
-  html:not(.dark) .text-slate-800 {
+  :where(html:not(.dark), .dark) thead th:not(.text-emerald-600):not(.text-purple-600):not(.text-rose-600):not(.text-indigo-600):not(.text-amber-600):not(.text-sky-600) {
+    color: #ffffff !important;
+  }
+  
+  :where(html:not(.dark), .dark) thead th .text-slate-400 {
+    color: #cbd5e1 !important;
+  }
+  
+  html:not(.dark) .text-slate-400:not(th),
+  html:not(.dark) .text-slate-500:not(th),
+  html:not(.dark) .text-slate-600:not(th),
+  html:not(.dark) .text-slate-700:not(th),
+  html:not(.dark) .text-slate-800:not(th) {
     color: #000000 !important;
   }
 }
 
 @layer base {
   /* Apply dark theme styles to all table headers across both themes */
-  html:not(.dark) thead,
-  .dark thead {
+  :where(html:not(.dark), .dark) thead {
     background-color: #0f172a !important;
   }
   
-  html:not(.dark) thead tr,
-  .dark thead tr {
+  :where(html:not(.dark), .dark) thead tr {
     background-color: #0f172a !important;
   }
   
-  html:not(.dark) thead th,
-  .dark thead th {
-    color: #f8fafc !important;
+  :where(html:not(.dark), .dark) thead th {
+    color: #f8fafc;
     border-color: #1e293b !important;
   }
   
-  html:not(.dark) thead th:hover,
-  .dark thead th:hover {
+  :where(html:not(.dark), .dark) thead th:hover {
     background-color: #1e293b !important;
   }
 }
