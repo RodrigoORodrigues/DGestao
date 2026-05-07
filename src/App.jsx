@@ -4,6 +4,56 @@ import "react-datepicker/dist/react-datepicker.css";
 import ptBR from 'date-fns/locale/pt-BR';
 registerLocale('pt-BR', ptBR);
 import { supabase } from './config/supabase';
+
+export async function safeSupabaseInsert(table, dataArray) {
+    if(!dataArray || (Array.isArray(dataArray) && dataArray.length === 0)) return { data: null, error: null };
+    try {
+        const { data, error } = await supabase.from(table).insert(dataArray).select();
+        if (error) throw error;
+        return { data, error: null };
+    } catch (e) {
+        if (e && e.message && e.message.includes('Could not find the') && e.message.includes('column of')) {
+            const match = e.message.match(/Could not find the '([^']+)' column/);
+            if (match && match[1]) {
+                const colToDelete = match[1];
+                let newData = Array.isArray(dataArray) ? [...dataArray] : { ...dataArray };
+                if (Array.isArray(newData)) {
+                    newData = newData.map(item => {
+                        const ni = { ...item };
+                        delete ni[colToDelete];
+                        return ni;
+                    });
+                } else {
+                    delete newData[colToDelete];
+                }
+                console.warn(`[SafeInsert] Removed missing col '${colToDelete}' from '${table}'`);
+                return await safeSupabaseInsert(table, newData);
+            }
+        }
+        throw e;
+    }
+}
+
+export async function safeSupabaseUpdate(table, updateObj, eqField, eqValue) {
+    try {
+        const { data, error } = await supabase.from(table).update(updateObj).eq(eqField, eqValue).select();
+        if (error) throw error;
+        return { data, error: null };
+    } catch (e) {
+        if (e && e.message && e.message.includes('Could not find the') && e.message.includes('column of')) {
+            const match = e.message.match(/Could not find the '([^']+)' column/);
+            if (match && match[1]) {
+                const colToDelete = match[1];
+                const newUpdateObj = { ...updateObj };
+                delete newUpdateObj[colToDelete];
+                console.warn(`[SafeUpdate] Removed missing col '${colToDelete}' from '${table}'`);
+                return await safeSupabaseUpdate(table, newUpdateObj, eqField, eqValue);
+            }
+        }
+        throw e;
+    }
+}
+
 import { 
     SYSTEM_MODULES, EMPRESAS_INTERNAS, CATEGORIAS, MESES, LISTA_OPERADORAS, LISTA_SEGURADORAS,
     dataDeHojeInterna, formatarMoeda, formatarDataVisivel, calcularParcelaDaVigencia,
@@ -988,15 +1038,15 @@ export default function App() {
                             vitalicio: dataToSave.vitalicio, assessoria: dataToSave.assessoria, formaPagamento: dataToSave.formaPagamento,
                             servico: dataToSave.servico, desconto: dataToSave.desconto, notas: dataToSave.notas 
                         };
-                        await supabase.from('savedReports').update({ dados: dadosAtualizados }).eq('id', rep.data.id);
+                        await safeSupabaseUpdate('savedReports', { dados: dadosAtualizados }, 'id', rep.data.id);
                     }
                 } else {
                     if (vendaForm.id) {
-                        const { error } = await supabase.from('vendas').update(dataToSave).eq('id', vendaForm.id);
+                        const { error } = await safeSupabaseUpdate('vendas', dataToSave, 'id', vendaForm.id);
                         if (error) throw error;
                     } else { 
                         delete dataToSave.id; 
-                        const { error } = await supabase.from('vendas').insert([dataToSave]); 
+                        const { error } = await safeSupabaseInsert('vendas', [dataToSave]); 
                         if (error) throw error;
                     }
                 }
@@ -1047,7 +1097,7 @@ export default function App() {
                 const rep = await supabase.from('savedReports').select('*').eq('id', venda.reportId).single();
                 if (rep.data) {
                     let dados = rep.data.dados.filter((_, idx) => idx !== venda.reportRowIndex);
-                    await supabase.from('savedReports').update({ dados: dados }).eq('id', rep.data.id);
+                    await safeSupabaseUpdate('savedReports', { dados: dados }, 'id', rep.data.id);
                 }
             } else { await supabase.from('vendas').delete().eq('id', venda.id); }
             await loadFromDB(); setLoading(false);
@@ -1436,12 +1486,12 @@ export default function App() {
             if (clienteEditIndex >= 0) {
                 const duplicado = clientes.find(c => c.id !== clienteEditIndex && c.nome.toLowerCase() === clienteParaSalvar.nome.toLowerCase() && (c.operadora || '') === (clienteParaSalvar.operadora || '') && (c.servico || '') === (clienteParaSalvar.servico || ''));
                 if (duplicado) { setLoading(false); return showAlert("Já existe outro cliente registado com este nome, operadora e serviço exatos."); }
-                await supabase.from('clientes').update(clienteParaSalvar).eq('id', clienteEditIndex);
+                await safeSupabaseUpdate('clientes', clienteParaSalvar, 'id', clienteEditIndex);
             } else {
                 const duplicado = clientes.find(c => c.nome.toLowerCase() === clienteParaSalvar.nome.toLowerCase() && (c.operadora || '') === (clienteParaSalvar.operadora || '') && (c.servico || '') === (clienteParaSalvar.servico || ''));
                 if (duplicado) { setLoading(false); return showAlert("Não é possível salvar. Já existe um cliente com este nome, operadora e serviço na base."); }
                 clienteParaSalvar.codigo = getNextSequenceNumber(clientes, c => c.codigo); delete clienteParaSalvar.id;
-                await supabase.from('clientes').insert([clienteParaSalvar]);
+                await safeSupabaseInsert('clientes', [clienteParaSalvar]);
             }
             await loadFromDB();
             setClientSaveSuccess(true);
@@ -1473,7 +1523,7 @@ export default function App() {
                     }
                 });
             }
-            if(novosClientesParaInserir.length > 0){ await supabase.from('clientes').insert(novosClientesParaInserir); await loadFromDB(); showAlert(`${novosClientesParaInserir.length} novos clientes importados!`); } else { showAlert("Nenhum cliente novo encontrado no ficheiro."); }
+            if(novosClientesParaInserir.length > 0){ await safeSupabaseInsert('clientes', novosClientesParaInserir); await loadFromDB(); showAlert(`${novosClientesParaInserir.length} novos clientes importados!`); } else { showAlert("Nenhum cliente novo encontrado no ficheiro."); }
         } catch (err) { showAlert("Erro ao importar: " + err.message); } finally { setLoading(false); event.target.value = ''; }
     };
 
@@ -1648,7 +1698,7 @@ export default function App() {
         }
         
         if(clientesParaInserir.length > 0) { 
-            await supabase.from('clientes').insert(clientesParaInserir); 
+            await safeSupabaseInsert('clientes', clientesParaInserir); 
             await loadFromDB(); 
         }
         setPdfData(novosRegistos); 
@@ -1766,10 +1816,10 @@ export default function App() {
             try {
                 let savedId = currentReportId;
                 if (currentReportId) {
-                    const { error } = await supabase.from('savedReports').update(dataToSave).eq('id', currentReportId);
+                    const { error } = await safeSupabaseUpdate('savedReports', dataToSave, 'id', currentReportId);
                     if (error) throw error;
                 } else { 
-                    const { data, error } = await supabase.from('savedReports').insert([dataToSave]).select(); 
+                    const { data, error } = await safeSupabaseInsert('savedReports', [dataToSave]); 
                     if (error) throw error;
                     if(data && data.length > 0) {
                         savedId = data[0].id;
@@ -1782,13 +1832,21 @@ export default function App() {
                 const clientesArrayTemp = [...clientes];
                 const clientesParaInserir = [];
                 const vendasParaInserir = [];
+                
+                let currentMaxCodigo = clientesArrayTemp.reduce((max, c) => {
+                    let v = parseInt(c.codigo, 10);
+                    return !isNaN(v) && v > max ? v : max;
+                }, 0);
 
                 for (let i = 0; i < dadosParaSalvar.length; i++) {
                     const r = dadosParaSalvar[i];
                     
                     const hasCliente = clientesArrayTemp.some(c => c.nome.toLowerCase() === r.cliente.toLowerCase());
                     if(!hasCliente && !clientesParaInserir.some(c => c.nome.toLowerCase() === r.cliente.toLowerCase())) {
+                        currentMaxCodigo++;
+                        let newCodigo = String(currentMaxCodigo).padStart(5, '0');
                         const newClient = {
+                            codigo: newCodigo,
                             nome: r.cliente,
                             tipo: 'Pessoa física',
                             documento: '', telefone: '', celular: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '', email: '', situacao: true, operadora: r.codigoOperadora, servico: r.servico || 'Plano de Saúde'
@@ -1804,7 +1862,7 @@ export default function App() {
                         vendasParaInserir.push({
                             loja: r.loja || '', codigo: r.cod || '', data: r.data || '', 
                             mes: new Date().toISOString().substring(0, 7), situacao: r.situacao || '', 
-                            cliente: r.cliente || '', valorTotal: r.valorTotal || 0, 
+                            cliente: r.cliente || '', valor: r.valorTotal || 0, 
                             comissao: r.comissao || 0, vendedor: r.vendedor || '', 
                             contrato: r.contrato || '', 
                             codigoOperadora: r.codigoOperadora || '', 
@@ -1819,14 +1877,17 @@ export default function App() {
                 }
 
                 if(clientesParaInserir.length > 0) {
-                    await supabase.from('clientes').insert(clientesParaInserir);
+                    await safeSupabaseInsert('clientes', clientesParaInserir);
                 }
                 if(vendasParaInserir.length > 0) {
-                    await supabase.from('vendas').insert(vendasParaInserir);
+                    await safeSupabaseInsert('vendas', vendasParaInserir);
                 }
 
                 await loadFromDB(); setSuccessMsg("Relatório e Vendas salvos com sucesso!"); setTimeout(() => setSuccessMsg(''), 4000);
-            } catch(e) { showAlert('Erro ao salvar relatório: ' + e.message); } finally { setLoading(false); }
+            } catch(e) { 
+                console.error("ERRO NO SALVAMENTO DO RELATORIO:", e);
+                showAlert('Erro ao salvar relatório: ' + (e.message || JSON.stringify(e))); 
+            } finally { setLoading(false); }
         });
     };
 
