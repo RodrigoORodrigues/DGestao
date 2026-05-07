@@ -7,16 +7,28 @@ import { supabase } from './config/supabase';
 
 export async function safeSupabaseInsert(table, dataArray) {
     if(!dataArray || (Array.isArray(dataArray) && dataArray.length === 0)) return { data: null, error: null };
+    
+    const sanitize = (obj) => {
+        if(obj === null || typeof obj !== 'object') return obj;
+        if(Array.isArray(obj)) return obj.map(sanitize);
+        const newObj = {};
+        for(let key in obj) {
+            newObj[key] = obj[key] === '' ? null : sanitize(obj[key]);
+        }
+        return newObj;
+    };
+    const sanitizedData = sanitize(dataArray);
+
     try {
-        const { data, error } = await supabase.from(table).insert(dataArray).select();
+        const { data, error } = await supabase.from(table).insert(sanitizedData).select();
         if (error) { error.table = table; throw error; }
         return { data, error: null };
     } catch (e) {
-        if (e && e.message && e.message.includes('Could not find the') && e.message.includes('column of')) {
-            const match = e.message.match(/Could not find the '([^']+)' column/);
+        if (e && e.message && (e.message.includes('Could not find the') || e.message.includes('of relation')) && e.message.includes('column')) {
+            const match = e.message.match(/Could not find the '([^']+)' column/) || e.message.match(/column "([^"]+)" of relation/);
             if (match && match[1]) {
                 const colToDelete = match[1];
-                let newData = Array.isArray(dataArray) ? [...dataArray] : { ...dataArray };
+                let newData = Array.isArray(sanitizedData) ? [...sanitizedData] : { ...sanitizedData };
                 if (Array.isArray(newData)) {
                     newData = newData.map(item => {
                         const ni = { ...item };
@@ -36,16 +48,27 @@ export async function safeSupabaseInsert(table, dataArray) {
 }
 
 export async function safeSupabaseUpdate(table, updateObj, eqField, eqValue) {
+    const sanitize = (obj) => {
+        if(obj === null || typeof obj !== 'object') return obj;
+        if(Array.isArray(obj)) return obj.map(sanitize);
+        const newObj = {};
+        for(let key in obj) {
+            newObj[key] = obj[key] === '' ? null : sanitize(obj[key]);
+        }
+        return newObj;
+    };
+    const sanitizedData = sanitize(updateObj);
+
     try {
-        const { data, error } = await supabase.from(table).update(updateObj).eq(eqField, eqValue).select();
+        const { data, error } = await supabase.from(table).update(sanitizedData).eq(eqField, eqValue).select();
         if (error) { error.table = table; throw error; }
         return { data, error: null };
     } catch (e) {
-        if (e && e.message && e.message.includes('Could not find the') && e.message.includes('column of')) {
-            const match = e.message.match(/Could not find the '([^']+)' column/);
+        if (e && e.message && (e.message.includes('Could not find the') || e.message.includes('of relation')) && e.message.includes('column')) {
+            const match = e.message.match(/Could not find the '([^']+)' column/) || e.message.match(/column "([^"]+)" of relation/);
             if (match && match[1]) {
                 const colToDelete = match[1];
-                const newUpdateObj = { ...updateObj };
+                const newUpdateObj = { ...sanitizedData };
                 delete newUpdateObj[colToDelete];
                 console.warn(`[SafeUpdate] Removed missing col '${colToDelete}' from '${table}'`);
                 return await safeSupabaseUpdate(table, newUpdateObj, eqField, eqValue);
@@ -3049,7 +3072,7 @@ export default function App() {
                                     ) : (
                                         displayedVendas.map((venda) => (
                                             <tr key={venda.id} onClick={() => abrirModalVenda(venda)} className="border-b border-slate-200 dark:border-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-750 transition-colors cursor-pointer">
-                                                {vendasTableCols.numero && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.numero || '-'}</td>}
+                                                {vendasTableCols.numero && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.numero ? String(venda.numero).padStart(5, '0') : '-'}</td>}
                                                 {vendasTableCols.contrato && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.contrato || '-'}</td>}
                                                 {vendasTableCols.codOperadora && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.codOperadora || '-'}</td>}
                                                 {vendasTableCols.codigoOperadora && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.codigoOperadora || 'AMIL'}</td>}
