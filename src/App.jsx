@@ -1777,6 +1777,54 @@ export default function App() {
                     }
                 }
 
+                // Generates Clients & Sales
+                setLoadingMsg("A gerar vendas e atualizar dashboard...");
+                const clientesArrayTemp = [...clientes];
+                const clientesParaInserir = [];
+                const vendasParaInserir = [];
+
+                for (let i = 0; i < dadosParaSalvar.length; i++) {
+                    const r = dadosParaSalvar[i];
+                    
+                    const hasCliente = clientesArrayTemp.some(c => c.nome.toLowerCase() === r.cliente.toLowerCase());
+                    if(!hasCliente && !clientesParaInserir.some(c => c.nome.toLowerCase() === r.cliente.toLowerCase())) {
+                        const newClient = {
+                            nome: r.cliente,
+                            tipo: 'Pessoa física',
+                            documento: '', telefone: '', celular: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '', email: '', situacao: true, operadora: r.codigoOperadora, servico: r.servico || 'Plano de Saúde'
+                        };
+                        clientesParaInserir.push(newClient);
+                        clientesArrayTemp.push(newClient);
+                    }
+
+                    const isDupli = vendasList.some(v => v.reportId === savedId && v.reportRowIndex === i) 
+                                 || (r.cod && vendasList.some(v => v.codigo === r.cod));
+
+                    if(!isDupli) {
+                        vendasParaInserir.push({
+                            loja: r.loja || '', codigo: r.cod || '', data: r.data || '', 
+                            mes: new Date().toISOString().substring(0, 7), situacao: r.situacao || '', 
+                            cliente: r.cliente || '', valorTotal: r.valorTotal || 0, 
+                            comissao: r.comissao || 0, vendedor: r.vendedor || '', 
+                            contrato: r.contrato || '', 
+                            codigoOperadora: r.codigoOperadora || '', 
+                            vidas: r.vidas || '', 
+                            vitalicio: r.vitalicio || '', assessoria: r.assessoria || '', 
+                            formaPagamento: r.formaPagamento || '',
+                            servico: r.servico || '', desconto: r.desconto || '', notas: r.notas || '',
+                            corretor: r.vendedor || '', parcela: r.parcela || '1', inicioVigencia: r.inicioVigencia || '', notaFiscal: r.notaFiscal || '',
+                            reportId: savedId, reportRowIndex: i
+                        });
+                    }
+                }
+
+                if(clientesParaInserir.length > 0) {
+                    await supabase.from('clientes').insert(clientesParaInserir);
+                }
+                if(vendasParaInserir.length > 0) {
+                    await supabase.from('vendas').insert(vendasParaInserir);
+                }
+
                 await loadFromDB(); setSuccessMsg("Relatório e Vendas salvos com sucesso!"); setTimeout(() => setSuccessMsg(''), 4000);
             } catch(e) { showAlert('Erro ao salvar relatório: ' + e.message); } finally { setLoading(false); }
         });
