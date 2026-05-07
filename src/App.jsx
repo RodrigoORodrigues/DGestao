@@ -1041,6 +1041,7 @@ export default function App() {
                 dataToSave.desconto = dataToSave.desconto === '' || dataToSave.desconto === undefined ? null : parseFloat(dataToSave.desconto);
                 
                 const empUpper = nomeEmpresaUpper;
+                dataToSave.empresa = nomeEmpresa;
                 if (!dataToSave.loja || !dataToSave.loja.toUpperCase().includes(empUpper)) {
                     dataToSave.loja = `${empUpper} SEGUROS`;
                 }
@@ -1546,7 +1547,7 @@ export default function App() {
                     if(!clientes.find(c => c.nome.toLowerCase() === nome.toLowerCase()) && !novosClientesParaInserir.find(c => c.nome.toLowerCase() === nome.toLowerCase())) {
                         currentMaxCodigo++;
                         let newCodigo = String(currentMaxCodigo).padStart(5, '0');
-                        novosClientesParaInserir.push({ codigo: newCodigo, nome: nome, tipo: linha['Tipo'] || 'Pessoa jurídica', documento: linha['Documento'] || linha['CNPJ'] || linha['NIF'] || null, telefone: linha['Telefone'] || null, celular: linha['Celular'] || null, email: linha['Email'] || linha['E-mail'] || null, situacao: true });
+                        novosClientesParaInserir.push({ codigo: newCodigo, nome: nome, tipo: linha['Tipo'] || 'Pessoa jurídica', documento: linha['Documento'] || linha['CNPJ'] || linha['NIF'] || null, telefone: linha['Telefone'] || null, celular: linha['Celular'] || null, email: linha['Email'] || linha['E-mail'] || null, situacao: true, empresa: impEmpresa });
                     }
                 });
             }
@@ -1664,7 +1665,7 @@ export default function App() {
                         inicioVigenciaDetectada = `${partes[2]}-${partes[1]}-${partes[0]}`; 
                     }
 
-                    let vendedorDetectado = "Protetta"; 
+                    let vendedorDetectado = nomeEmpresa; 
                     let parcelaDetectada = "1";
                     let numeroEsperado = null;
                     const historicoVendasCliente = vendasList.filter(v => 
@@ -1835,7 +1836,8 @@ export default function App() {
         const dataToSave = { 
             nome: reportName || null, periodo: reportPeriod || null, dataCriacao: new Date().toISOString(), 
             criadoPor: currentUser?.username || 'Sistema', 
-            dados: dadosParaSalvar
+            dados: dadosParaSalvar,
+            empresa: nomeEmpresa
         };
         
         showConfirm("Deseja extrair as informações deste extrato e gerar as Vendas para alimentar o Dashboard automaticamente?", async () => {
@@ -1881,7 +1883,8 @@ export default function App() {
                             codigo: newCodigo,
                             nome: r.cliente || null,
                             tipo: 'Pessoa física',
-                            documento: null, telefone: null, celular: null, cep: null, logradouro: null, numero: null, bairro: null, cidade: null, uf: null, email: null, situacao: true, operadora: r.codigoOperadora || null, servico: r.servico || 'Plano de Saúde'
+                            documento: null, telefone: null, celular: null, cep: null, logradouro: null, numero: null, bairro: null, cidade: null, uf: null, email: null, situacao: true, operadora: r.codigoOperadora || null, servico: r.servico || 'Plano de Saúde',
+                            empresa: nomeEmpresa
                         };
                         clientesParaInserir.push(newClient);
                         clientesArrayTemp.push(newClient);
@@ -1907,7 +1910,8 @@ export default function App() {
                             notas: r.notas || null, corretor: r.vendedor || null, 
                             parcela: r.parcela || '1', inicioVigencia: r.inicioVigencia || null, 
                             notaFiscal: r.notaFiscal || null,
-                            reportId: savedId, reportRowIndex: i
+                            reportId: savedId, reportRowIndex: i,
+                            empresa: nomeEmpresa
                         });
                     }
                 }
@@ -2893,8 +2897,7 @@ export default function App() {
                                             className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500"
                                         >
                                             <option value="Todos">Todos</option>
-                                            <option value="Protetta">Protetta</option>
-                                            <option value="Proper">Proper</option>
+                                            {empresasList.map(e => <option key={e.nome} value={e.nome}>{e.nome}</option>)}
                                             <option value="Assessoria">Assessoria</option>
                                             <option value="Corretor Interno">Corretor Interno</option>
                                         </select>
