@@ -371,10 +371,16 @@ export default function App() {
                         codOperadora = match[2];
                         parceiro = match[3];
                     }
+                    let notaFiscal = '';
+                    const nfMatch = parceiro.match(/ \(NF: (.*?)\)$/);
+                    if (nfMatch) {
+                        notaFiscal = nfMatch[1];
+                        parceiro = parceiro.replace(nfMatch[0], '');
+                    }
                     if (codigoOperadora === 'Geral') {
                         codigoOperadora = 'AMIL';
                     }
-                    return { ...r, parceiro, codigoOperadora, codOperadora, id: r.id, ano: r.ano, mes: r.mes, categoria: r.categoria, empresa: r.empresa, date: r.date, fileName: r.fileName, filePath: r.filePath };
+                    return { ...r, parceiro, codigoOperadora, codOperadora, id: r.id, ano: r.ano, mes: r.mes, categoria: r.categoria, empresa: r.empresa, date: r.date, fileName: r.fileName, filePath: r.filePath, notaFiscal };
                 });
                 parsedReports = parsedReports.filter(r => {
                     let emp = (r.empresa || '').toUpperCase();
@@ -1613,7 +1619,7 @@ export default function App() {
                         loja: empresaContextoUpper, 
                         valorTotal, 
                         comissao, 
-                        vendedor: vendedorDetectado || nomeEmpresa, 
+                        vendedor: nomeEmpresa, 
                         parcela: parcelaDetectada,
                         inicioVigencia: inicioVigenciaDetectada, 
                         notaFiscal: reportDoc?.notaFiscal || '', 
