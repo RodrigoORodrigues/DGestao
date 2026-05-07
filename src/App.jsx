@@ -519,16 +519,18 @@ export default function App() {
                 
                 // Clear existing first
                 await supabase.from('vendas').delete().ilike('loja', `%${nomeEmpresaUpper}%`);
-                await supabase.from('savedReports').delete().eq('empresa', nomeEmpresaUpper);
-                await supabase.from('clientes').delete().eq('empresa', nomeEmpresaUpper);
-                await supabase.from('reports').delete().eq('empresa', nomeEmpresaUpper);
+                await supabase.from('savedReports').delete().neq('id', 0);
+                await supabase.from('clientes').delete().neq('id', 0);
+                await supabase.from('reports').delete().neq('id', 0);
 
                 if (clientesFile) {
-                    const data = JSON.parse(await clientesFile.async("text"));
+                    const parsedData = JSON.parse(await clientesFile.async("text"));
+                    const data = parsedData.map(c => { const { empresa, ...rest } = c; return rest; });
                     if (data.length > 0) await supabase.from('clientes').upsert(data);
                 }
                 if (historicoFile) {
-                    const data = JSON.parse(await historicoFile.async("text"));
+                    const parsedData = JSON.parse(await historicoFile.async("text"));
+                    const data = parsedData.map(r => { const { empresa, ...rest } = r; return rest; });
                     if (data.length > 0) await supabase.from('savedReports').upsert(data);
                 }
                 if (vendasFile) {
@@ -536,9 +538,10 @@ export default function App() {
                     if (data.length > 0) await supabase.from('vendas').upsert(data);
                 }
                 if (extratosFile) {
-                    const data = JSON.parse(await extratosFile.async("text"));
+                    const parsedData = JSON.parse(await extratosFile.async("text"));
                     // Be careful not to overwrite global reports, so only restore current empresa
-                    const myReports = data.filter(r => (r.empresa || '').toUpperCase() === nomeEmpresaUpper || (r.empresa || '').toUpperCase().includes(nomeEmpresaUpper));
+                    const myReports = parsedData.filter(r => (r.empresa || '').toUpperCase() === nomeEmpresaUpper || (r.empresa || '').toUpperCase().includes(nomeEmpresaUpper))
+                        .map(r => { const { empresa, ...rest } = r; return rest; });
                     if (myReports.length > 0) await supabase.from('reports').upsert(myReports);
                 }
                 
@@ -1192,8 +1195,16 @@ export default function App() {
                 if(uploadErr) throw uploadErr;
                 
                 const saveParceiro = `[${saveOperadora}|${saveCodOperadora}] ${formData.parceiro}${formData.notaFiscal ? ` (NF: ${formData.notaFiscal})` : ''}`;
-                const { error: insertErr } = await supabase.from('reports').insert([{ ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, parceiro: saveParceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath }]);
-                if (insertErr) throw insertErr;
+                let reportDataToSave = { ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, parceiro: saveParceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath };
+                const { error: insertErr } = await supabase.from('reports').insert([reportDataToSave]);
+                if (insertErr && (insertErr.message?.includes('empresa') || insertErr.details?.includes('empresa'))) {
+                    const { empresa, ...rest } = reportDataToSave;
+                    reportDataToSave = rest;
+                    const { error: retryErr } = await supabase.from('reports').insert([reportDataToSave]);
+                    if (retryErr) throw retryErr;
+                } else if (insertErr) {
+                    throw insertErr;
+                }
             }
             await loadFromDB(); setSuccessMsg(`${formData.arquivos.length} extratos guardados!`); setFormData(prev => ({ ...prev, parceiro: '', codOperadora: '', codigoOperadora: '', codigoOperadoraOutra: '', notaFiscal: '', arquivos: [] })); setTimeout(() => setSuccessMsg(''), 4000);
         } catch (error) { 
@@ -1420,7 +1431,8 @@ export default function App() {
         setLoading(true); setLoadingMsg("Guardando cliente...");
         try {
             const finalEmpresa = (!currentUser?.empresa || currentUser.empresa === 'Todas') ? (clienteForm.empresa || nomeEmpresa) : nomeEmpresa;
-            const clienteParaSalvar = { ...clienteForm, empresa: finalEmpresa }; clienteParaSalvar.nome = clienteParaSalvar.nome.trim();
+            const clienteParaSalvar = { ...clienteForm }; clienteParaSalvar.nome = clienteParaSalvar.nome.trim();
+            delete clienteParaSalvar.empresa;
             if (clienteEditIndex >= 0) {
                 const duplicado = clientes.find(c => c.id !== clienteEditIndex && c.nome.toLowerCase() === clienteParaSalvar.nome.toLowerCase() && (c.operadora || '') === (clienteParaSalvar.operadora || '') && (c.servico || '') === (clienteParaSalvar.servico || ''));
                 if (duplicado) { setLoading(false); return showAlert("Já existe outro cliente registado com este nome, operadora e serviço exatos."); }
@@ -1457,7 +1469,7 @@ export default function App() {
                     if(!clientes.find(c => c.nome.toLowerCase() === nome.toLowerCase()) && !novosClientesParaInserir.find(c => c.nome.toLowerCase() === nome.toLowerCase())) {
                         currentMaxCodigo++;
                         let newCodigo = String(currentMaxCodigo).padStart(5, '0');
-                        novosClientesParaInserir.push({ codigo: newCodigo, nome: nome, tipo: linha['Tipo'] || 'Pessoa jurídica', documento: linha['Documento'] || linha['CNPJ'] || linha['NIF'] || '', telefone: linha['Telefone'] || '', celular: linha['Celular'] || '', email: linha['Email'] || linha['E-mail'] || '', situacao: true, empresa: impEmpresa });
+                        novosClientesParaInserir.push({ codigo: newCodigo, nome: nome, tipo: linha['Tipo'] || 'Pessoa jurídica', documento: linha['Documento'] || linha['CNPJ'] || linha['NIF'] || '', telefone: linha['Telefone'] || '', celular: linha['Celular'] || '', email: linha['Email'] || linha['E-mail'] || '', situacao: true });
                     }
                 });
             }
@@ -1539,8 +1551,7 @@ export default function App() {
                         telefone: '', 
                         celular: '', 
                         email: '', 
-                        situacao: true,
-                        empresa: empresaContextoUpper
+                        situacao: true
                     });
                 }
 
@@ -1622,7 +1633,7 @@ export default function App() {
                         vendedor: nomeEmpresa, 
                         parcela: parcelaDetectada,
                         inicioVigencia: inicioVigenciaDetectada, 
-                        notaFiscal: reportDoc?.notaFiscal || '', 
+                        notaFiscal: reportDoc?.notaFiscal || (reportDoc?.parceiro?.match(/\(NF:\s*([^)]+)\)/)?.[1] || ''), 
                         vitalicio: 'Sim', 
                         assessoria: empresaContexto, 
                         formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
@@ -1726,10 +1737,11 @@ export default function App() {
         }, 0);
         let maxCod = Math.max(currentMaxVendaCodigo, currentPdfMax) + 1;
 
+        const defaultNotaFiscal = pdfData.length > 0 ? (pdfData[0].notaFiscal || '') : '';
         const novaLinha = { 
             cod: String(maxCod).padStart(5, '0'), contrato: '', codigoOperadora: 'AMIL', vidas: '1',
             cliente: 'Novo Cliente', data: '', situacao: `FATURADO ${nomeEmpresaUpper} NF`, loja: nomeEmpresaUpper, 
-            valorTotal: 0, comissao: 0, vendedor: nomeEmpresa, parcela: '1', inicioVigencia: '', notaFiscal: '',
+            valorTotal: 0, comissao: 0, vendedor: nomeEmpresa, parcela: '1', inicioVigencia: '', notaFiscal: defaultNotaFiscal,
             vitalicio: 'Sim', assessoria: nomeEmpresa, formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
             servico: '', desconto: '', selected: true 
         };
