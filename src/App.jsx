@@ -1860,18 +1860,18 @@ export default function App() {
 
                     if(!isDupli) {
                         vendasParaInserir.push({
-                            loja: r.loja || '', codigo: r.cod || '', data: r.data || '', 
-                            mes: new Date().toISOString().substring(0, 7), situacao: r.situacao || '', 
-                            cliente: r.cliente || '', valor: r.valorTotal || 0, 
-                            comissao: r.comissao || 0, vendedor: r.vendedor || '', 
-                            contrato: r.contrato || '', 
-                            codigoOperadora: r.codigoOperadora || '', 
-                            vidas: r.vidas || '', 
-                            vitalicio: r.vitalicio || '', assessoria: r.assessoria || '', 
-                            formaPagamento: r.formaPagamento || '',
-                            servico: r.servico || '', desconto: r.desconto || '', notas: r.notas || '',
-                            corretor: r.vendedor || '', parcela: r.parcela || '1', inicioVigencia: r.inicioVigencia || '', notaFiscal: r.notaFiscal || '',
-                            reportId: savedId, reportRowIndex: i
+                            loja: r.loja || null, codigo: r.cod || null, dataVenda: r.data || null, 
+                            situacao: r.situacao || null, cliente: r.cliente || null, 
+                            valor: r.valorTotal === '' || r.valorTotal === undefined || r.valorTotal === null ? 0 : parseFloat(r.valorTotal) || 0, 
+                            comissao: r.comissao === '' || r.comissao === undefined || r.comissao === null ? null : parseFloat(r.comissao),
+                            contrato: r.contrato || null, codigoOperadora: r.codigoOperadora || null, 
+                            vidas: r.vidas === '' || r.vidas === undefined || r.vidas === null ? null : parseInt(r.vidas, 10), 
+                            vitalicio: r.vitalicio || null, assessoria: r.assessoria || null, 
+                            formaPagamento: r.formaPagamento || null, servico: r.servico || null, 
+                            desconto: r.desconto === '' || r.desconto === undefined || r.desconto === null ? null : parseFloat(r.desconto), 
+                            notas: r.notas || null, corretor: r.vendedor || null, 
+                            parcela: r.parcela || '1', inicioVigencia: r.inicioVigencia || null, 
+                            notaFiscal: r.notaFiscal || null
                         });
                     }
                 }
