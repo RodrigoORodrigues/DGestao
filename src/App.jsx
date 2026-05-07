@@ -339,8 +339,8 @@ export default function App() {
                 if (!data) return [];
                 const targetEmp = nomeEmpresaUpper;
                 return data.filter(item => {
-                    const emp = (item?.empresa || item?.loja || '').toUpperCase();
-                    if (!emp) return true; // keep items with no company for backward compat
+                    let emp = (item?.empresa || item?.loja || '').toUpperCase();
+                    if (!emp) emp = 'PROTETTA'; // keep items with no company for backward compat, assigning them to default
                     if (emp === targetEmp || emp.includes(targetEmp)) return true;
                     return false;
                 });
@@ -377,8 +377,8 @@ export default function App() {
                     return { ...r, parceiro, codigoOperadora, codOperadora, id: r.id, ano: r.ano, mes: r.mes, categoria: r.categoria, empresa: r.empresa, date: r.date, fileName: r.fileName, filePath: r.filePath };
                 });
                 parsedReports = parsedReports.filter(r => {
-                    const emp = (r.empresa || '').toUpperCase();
-                    if (!emp) return true;
+                    let emp = (r.empresa || '').toUpperCase();
+                    if (!emp) emp = 'PROTETTA';
                     return emp === nomeEmpresaUpper || emp.includes(nomeEmpresaUpper);
                 });
                 setDbReports(parsedReports);
@@ -1142,7 +1142,7 @@ export default function App() {
         if (currentPath.length === 0) return [...new Set([String(new Date().getFullYear()), ...dbReports.map(r => String(r.ano))])].sort().map(y => ({ id: y, name: y, type: 'folder' }));
         if (currentPath.length === 1) return MESES.map(m => ({ id: m, name: m, type: 'folder' }));
         if (currentPath.length === 2) return CATEGORIAS.map(c => ({ id: c, name: c, type: 'folder' }));
-        if (currentPath.length === 3) return empresasList.map(e => ({ id: e.nome, name: e.nome, type: 'folder' }));
+        if (currentPath.length === 3) return empresasList.filter(e => e.nome.toUpperCase() === nomeEmpresaUpper).map(e => ({ id: e.nome, name: e.nome, type: 'folder' }));
         if (currentPath.length === 4) {
             const cat = currentPath[2];
             const empresa = currentPath[3];
