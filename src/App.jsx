@@ -176,7 +176,7 @@ export default function App() {
         id: null, numero: '', cliente: '', dataVenda: dataDeHojeInterna(), situacao: `FATURADO ${nomeEmpresaUpper} NF`, 
         loja: `${nomeEmpresaUpper} SEGUROS`, valor: 0, contrato: '', codOperadora: '', codigoOperadora: '', vidas: '', 
         parcela: '', inicioVigencia: '', notaFiscal: '', corretor: nomeEmpresa,
-        vitalicio: '', assessoria: nomeEmpresa, formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
+        vitalicio: 'Sim', assessoria: nomeEmpresa, formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
         servico: '', desconto: '', notas: '', comissao: 0, comissaoPorcentagem: ''
     });
 
@@ -910,7 +910,7 @@ export default function App() {
         else setVendaForm({ 
             id: null, numero: getNextSequenceNumber(vendasList, v => v.numero), cliente: '', dataVenda: dataDeHojeInterna(), situacao: `FATURADO ${nomeEmpresaUpper} NF`, 
             loja: `${nomeEmpresaUpper} SEGUROS`, valor: 0, contrato: '', codOperadora: '', codigoOperadora: '', vidas: '', parcela: '', inicioVigencia: '', notaFiscal: '', 
-            corretor: nomeEmpresa, vitalicio: '', assessoria: nomeEmpresa, formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
+            corretor: nomeEmpresa, vitalicio: 'Sim', assessoria: nomeEmpresa, formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
             servico: '', desconto: '', notas: '' 
         });
         setModalVendaOpen(true);
@@ -1623,7 +1623,7 @@ export default function App() {
                         parcela: parcelaDetectada,
                         inicioVigencia: inicioVigenciaDetectada, 
                         notaFiscal: reportDoc?.notaFiscal || '', 
-                        vitalicio: '', 
+                        vitalicio: 'Sim', 
                         assessoria: empresaContexto, 
                         formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
                         servico: '', 
@@ -1730,7 +1730,7 @@ export default function App() {
             cod: String(maxCod).padStart(5, '0'), contrato: '', codigoOperadora: 'AMIL', vidas: '1',
             cliente: 'Novo Cliente', data: '', situacao: `FATURADO ${nomeEmpresaUpper} NF`, loja: nomeEmpresaUpper, 
             valorTotal: 0, comissao: 0, vendedor: nomeEmpresa, parcela: '1', inicioVigencia: '', notaFiscal: '',
-            vitalicio: '', assessoria: nomeEmpresa, formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
+            vitalicio: 'Sim', assessoria: nomeEmpresa, formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
             servico: '', desconto: '', selected: true 
         };
         const newData = [...pdfData, novaLinha]; setPdfData(newData); setEditRowIndex(newData.length - 1); setEditRowData(novaLinha);
