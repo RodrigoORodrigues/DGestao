@@ -1746,8 +1746,7 @@ export default function App() {
         const dataToSave = { 
             nome: reportName, periodo: reportPeriod, dataCriacao: new Date().toISOString(), 
             criadoPor: currentUser?.username || 'Sistema', 
-            dados: dadosParaSalvar,
-            empresa: nomeEmpresaUpper
+            dados: dadosParaSalvar
         };
         
         showConfirm("Deseja extrair as informações deste extrato e gerar as Vendas para alimentar o Dashboard automaticamente?", async () => {
