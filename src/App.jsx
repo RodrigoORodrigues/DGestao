@@ -28,6 +28,9 @@ export async function safeSupabaseInsert(table, dataArray) {
             const match = e.message.match(/Could not find the '([^']+)' column/) || e.message.match(/column "([^"]+)" of relation/);
             if (match && match[1]) {
                 const colToDelete = match[1];
+                if (colToDelete === 'empresa') {
+                    throw new Error("A coluna 'empresa' está faltando no Supabase nesta tabela. Crie a coluna 'empresa' (tipo text) para garantir o isolamento das empresas (PROTETTA / PROPER).");
+                }
                 let newData = Array.isArray(sanitizedData) ? [...sanitizedData] : { ...sanitizedData };
                 if (Array.isArray(newData)) {
                     newData = newData.map(item => {
@@ -68,6 +71,9 @@ export async function safeSupabaseUpdate(table, updateObj, eqField, eqValue) {
             const match = e.message.match(/Could not find the '([^']+)' column/) || e.message.match(/column "([^"]+)" of relation/);
             if (match && match[1]) {
                 const colToDelete = match[1];
+                if (colToDelete === 'empresa') {
+                    throw new Error("A coluna 'empresa' está faltando no Supabase nesta tabela. Crie a coluna 'empresa' (tipo text) para garantir o isolamento das empresas (PROTETTA / PROPER).");
+                }
                 const newUpdateObj = { ...sanitizedData };
                 delete newUpdateObj[colToDelete];
                 console.warn(`[SafeUpdate] Removed missing col '${colToDelete}' from '${table}'`);
@@ -600,12 +606,12 @@ export default function App() {
 
                 if (clientesFile) {
                     const parsedData = JSON.parse(await clientesFile.async("text"));
-                    const data = parsedData.map(c => { const { empresa, ...rest } = c; return rest; });
+                    const data = parsedData.map(c => { return c; });
                     if (data.length > 0) await supabase.from('clientes').upsert(data);
                 }
                 if (historicoFile) {
                     const parsedData = JSON.parse(await historicoFile.async("text"));
-                    const data = parsedData.map(r => { const { empresa, ...rest } = r; return rest; });
+                    const data = parsedData.map(r => { return r; });
                     if (data.length > 0) await supabase.from('savedReports').upsert(data);
                 }
                 if (vendasFile) {
@@ -616,7 +622,7 @@ export default function App() {
                     const parsedData = JSON.parse(await extratosFile.async("text"));
                     // Be careful not to overwrite global reports, so only restore current empresa
                     const myReports = parsedData.filter(r => (r.empresa || '').toUpperCase() === nomeEmpresaUpper || (r.empresa || '').toUpperCase().includes(nomeEmpresaUpper))
-                        .map(r => { const { empresa, ...rest } = r; return rest; });
+                        .map(r => { return r; });
                     if (myReports.length > 0) await supabase.from('reports').upsert(myReports);
                 }
                 
@@ -1165,11 +1171,7 @@ export default function App() {
             if (userForm.id) {
                 let { error: updateErr } = await supabase.from('users').update(dataToSave).eq('id', userForm.id);
                 if (updateErr && (updateErr.message?.includes('empresa') || updateErr.details?.includes('empresa'))) {
-                    retryWithoutEmpresa = true;
-                    const { empresa, ...rest } = dataToSave;
-                    dataToSave = rest;
-                    const { error: retryErr } = await supabase.from('users').update(dataToSave).eq('id', userForm.id);
-                    if (retryErr) throw retryErr;
+                    throw new Error("A coluna 'empresa' está faltando na tabela 'users'. Crie a coluna 'empresa' (tipo text) no Supabase para garantir o isolamento.");
                 } else if (updateErr) {
                     throw updateErr;
                 }
@@ -1185,11 +1187,7 @@ export default function App() {
             } else { 
                 let { error: insertErr } = await supabase.from('users').insert([dataToSave]); 
                 if (insertErr && (insertErr.message?.includes('empresa') || insertErr.details?.includes('empresa'))) {
-                    retryWithoutEmpresa = true;
-                    const { empresa, ...rest } = dataToSave;
-                    dataToSave = rest;
-                    const { error: retryErr } = await supabase.from('users').insert([dataToSave]);
-                    if (retryErr) throw retryErr;
+                    throw new Error("A coluna 'empresa' está faltando na tabela 'users'. Crie a coluna 'empresa' (tipo text) no Supabase para garantir o isolamento.");
                 } else if (insertErr) {
                     throw insertErr;
                 }
@@ -1277,10 +1275,7 @@ export default function App() {
                 let reportDataToSave = { ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, parceiro: saveParceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath };
                 const { error: insertErr } = await supabase.from('reports').insert([reportDataToSave]);
                 if (insertErr && (insertErr.message?.includes('empresa') || insertErr.details?.includes('empresa'))) {
-                    const { empresa, ...rest } = reportDataToSave;
-                    reportDataToSave = rest;
-                    const { error: retryErr } = await supabase.from('reports').insert([reportDataToSave]);
-                    if (retryErr) throw retryErr;
+                    throw new Error("A coluna 'empresa' está faltando na tabela 'reports'. Crie a coluna 'empresa' (tipo text) no Supabase para garantir o isolamento.");
                 } else if (insertErr) {
                     throw insertErr;
                 }
@@ -1514,7 +1509,7 @@ export default function App() {
             Object.keys(clienteParaSalvar).forEach(k => {
                 if(clienteParaSalvar[k] === '') clienteParaSalvar[k] = null;
             });
-            delete clienteParaSalvar.empresa;
+            clienteParaSalvar.empresa = finalEmpresa;
             if (clienteEditIndex >= 0) {
                 const duplicado = clientes.find(c => c.id !== clienteEditIndex && c.nome.toLowerCase() === clienteParaSalvar.nome.toLowerCase() && (c.operadora || '') === (clienteParaSalvar.operadora || '') && (c.servico || '') === (clienteParaSalvar.servico || ''));
                 if (duplicado) { setLoading(false); return showAlert("Já existe outro cliente registado com este nome, operadora e serviço exatos."); }
