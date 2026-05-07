@@ -9,7 +9,7 @@ export async function safeSupabaseInsert(table, dataArray) {
     if(!dataArray || (Array.isArray(dataArray) && dataArray.length === 0)) return { data: null, error: null };
     try {
         const { data, error } = await supabase.from(table).insert(dataArray).select();
-        if (error) throw error;
+        if (error) { error.table = table; throw error; }
         return { data, error: null };
     } catch (e) {
         if (e && e.message && e.message.includes('Could not find the') && e.message.includes('column of')) {
@@ -30,6 +30,7 @@ export async function safeSupabaseInsert(table, dataArray) {
                 return await safeSupabaseInsert(table, newData);
             }
         }
+        e.table = table;
         throw e;
     }
 }
@@ -37,7 +38,7 @@ export async function safeSupabaseInsert(table, dataArray) {
 export async function safeSupabaseUpdate(table, updateObj, eqField, eqValue) {
     try {
         const { data, error } = await supabase.from(table).update(updateObj).eq(eqField, eqValue).select();
-        if (error) throw error;
+        if (error) { error.table = table; throw error; }
         return { data, error: null };
     } catch (e) {
         if (e && e.message && e.message.includes('Could not find the') && e.message.includes('column of')) {
@@ -50,6 +51,7 @@ export async function safeSupabaseUpdate(table, updateObj, eqField, eqValue) {
                 return await safeSupabaseUpdate(table, newUpdateObj, eqField, eqValue);
             }
         }
+        e.table = table;
         throw e;
     }
 }
@@ -1025,6 +1027,10 @@ export default function App() {
                 delete dataToSave.reportId;
                 delete dataToSave.reportRowIndex;
                 delete dataToSave.created_at;
+
+                Object.keys(dataToSave).forEach(k => {
+                    if (dataToSave[k] === '') dataToSave[k] = null;
+                });
                 
                 if (vendaForm.isFromReport) {
                     const rep = await supabase.from('savedReports').select('*').eq('id', vendaForm.reportId).single();
@@ -1482,6 +1488,9 @@ export default function App() {
         try {
             const finalEmpresa = (!currentUser?.empresa || currentUser.empresa === 'Todas') ? (clienteForm.empresa || nomeEmpresa) : nomeEmpresa;
             const clienteParaSalvar = { ...clienteForm }; clienteParaSalvar.nome = clienteParaSalvar.nome.trim();
+            Object.keys(clienteParaSalvar).forEach(k => {
+                if(clienteParaSalvar[k] === '') clienteParaSalvar[k] = null;
+            });
             delete clienteParaSalvar.empresa;
             if (clienteEditIndex >= 0) {
                 const duplicado = clientes.find(c => c.id !== clienteEditIndex && c.nome.toLowerCase() === clienteParaSalvar.nome.toLowerCase() && (c.operadora || '') === (clienteParaSalvar.operadora || '') && (c.servico || '') === (clienteParaSalvar.servico || ''));
@@ -1519,7 +1528,7 @@ export default function App() {
                     if(!clientes.find(c => c.nome.toLowerCase() === nome.toLowerCase()) && !novosClientesParaInserir.find(c => c.nome.toLowerCase() === nome.toLowerCase())) {
                         currentMaxCodigo++;
                         let newCodigo = String(currentMaxCodigo).padStart(5, '0');
-                        novosClientesParaInserir.push({ codigo: newCodigo, nome: nome, tipo: linha['Tipo'] || 'Pessoa jurídica', documento: linha['Documento'] || linha['CNPJ'] || linha['NIF'] || '', telefone: linha['Telefone'] || '', celular: linha['Celular'] || '', email: linha['Email'] || linha['E-mail'] || '', situacao: true });
+                        novosClientesParaInserir.push({ codigo: newCodigo, nome: nome, tipo: linha['Tipo'] || 'Pessoa jurídica', documento: linha['Documento'] || linha['CNPJ'] || linha['NIF'] || null, telefone: linha['Telefone'] || null, celular: linha['Celular'] || null, email: linha['Email'] || linha['E-mail'] || null, situacao: true });
                     }
                 });
             }
@@ -1806,7 +1815,7 @@ export default function App() {
         if(dadosParaSalvar.length === 0) return showAlert('Não há linhas selecionadas para salvar.');
 
         const dataToSave = { 
-            nome: reportName, periodo: reportPeriod, dataCriacao: new Date().toISOString(), 
+            nome: reportName || null, periodo: reportPeriod || null, dataCriacao: new Date().toISOString(), 
             criadoPor: currentUser?.username || 'Sistema', 
             dados: dadosParaSalvar
         };
@@ -1838,6 +1847,11 @@ export default function App() {
                     return !isNaN(v) && v > max ? v : max;
                 }, 0);
 
+                let currentMaxNumeroVendas = vendasList.reduce((max, v) => {
+                    let num = parseInt(v.numero, 10);
+                    return !isNaN(num) && num > max ? num : max;
+                }, 0);
+
                 for (let i = 0; i < dadosParaSalvar.length; i++) {
                     const r = dadosParaSalvar[i];
                     
@@ -1847,9 +1861,9 @@ export default function App() {
                         let newCodigo = String(currentMaxCodigo).padStart(5, '0');
                         const newClient = {
                             codigo: newCodigo,
-                            nome: r.cliente,
+                            nome: r.cliente || null,
                             tipo: 'Pessoa física',
-                            documento: '', telefone: '', celular: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '', email: '', situacao: true, operadora: r.codigoOperadora, servico: r.servico || 'Plano de Saúde'
+                            documento: null, telefone: null, celular: null, cep: null, logradouro: null, numero: null, bairro: null, cidade: null, uf: null, email: null, situacao: true, operadora: r.codigoOperadora || null, servico: r.servico || 'Plano de Saúde'
                         };
                         clientesParaInserir.push(newClient);
                         clientesArrayTemp.push(newClient);
@@ -1859,7 +1873,10 @@ export default function App() {
                                  || (r.cod && vendasList.some(v => v.codigo === r.cod));
 
                     if(!isDupli) {
+                        currentMaxNumeroVendas++;
+                        let newNumeroVenda = String(currentMaxNumeroVendas).padStart(5, '0');
                         vendasParaInserir.push({
+                            numero: newNumeroVenda,
                             loja: r.loja || null, codigo: r.cod || null, dataVenda: r.data || null, 
                             situacao: r.situacao || null, cliente: r.cliente || null, 
                             valor: r.valorTotal === '' || r.valorTotal === undefined || r.valorTotal === null ? 0 : parseFloat(r.valorTotal) || 0, 
@@ -1871,7 +1888,8 @@ export default function App() {
                             desconto: r.desconto === '' || r.desconto === undefined || r.desconto === null ? null : parseFloat(r.desconto), 
                             notas: r.notas || null, corretor: r.vendedor || null, 
                             parcela: r.parcela || '1', inicioVigencia: r.inicioVigencia || null, 
-                            notaFiscal: r.notaFiscal || null
+                            notaFiscal: r.notaFiscal || null,
+                            reportId: savedId, reportRowIndex: i
                         });
                     }
                 }
@@ -1885,8 +1903,8 @@ export default function App() {
 
                 await loadFromDB(); setSuccessMsg("Relatório e Vendas salvos com sucesso!"); setTimeout(() => setSuccessMsg(''), 4000);
             } catch(e) { 
-                console.error("ERRO NO SALVAMENTO DO RELATORIO:", e);
-                showAlert('Erro ao salvar relatório: ' + (e.message || JSON.stringify(e))); 
+                console.error("ERRO NO SALVAMENTO DO RELATORIO:", e, "Tabela:", e.table);
+                showAlert(`Erro ao salvar (Tabela: ${e.table || '?'}) relatório: ` + (e.message || JSON.stringify(e))); 
             } finally { setLoading(false); }
         });
     };
