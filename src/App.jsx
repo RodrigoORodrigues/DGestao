@@ -2218,8 +2218,9 @@ export default function App() {
                             <label htmlFor="rememberMe" className="ml-2 text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none">Manter sessão iniciada</label>
                         </div>
                         {loginError && <p className="text-rose-500 dark:text-rose-400 text-sm font-bold text-center bg-rose-100 dark:bg-rose-500/10 py-2 rounded-lg border border-rose-200 dark:border-rose-500/20">{loginError}</p>}
-                        <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg flex items-center justify-center space-x-2 transition-colors shadow-lg mt-4" disabled={loading}>
-                            {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <><Lock size={18} /><span>Entrar no Sistema</span></>}
+                        <button type="submit" className="w-full bg-gradient-to-r from-slate-300 via-slate-100 to-slate-300 hover:from-slate-200 hover:via-white hover:to-slate-200 text-slate-800 border border-slate-400 font-bold py-3 rounded-lg flex items-center justify-center space-x-2 transition-all shadow-[0_0_15px_rgba(203,213,225,0.6)] mt-4 relative overflow-hidden group" disabled={loading}>
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/80 to-transparent -translate-x-[150%] skew-x-[-30deg] group-hover:animate-[shine_1.5s_ease-out_infinite]"></div>
+                            {loading ? <div className="w-5 h-5 border-2 border-slate-800 border-t-transparent rounded-full animate-spin relative z-10"></div> : <><Lock size={18} className="relative z-10" /><span className="relative z-10">Entrar no Sistema</span></>}
                         </button>
                     </form>
                 </div>
