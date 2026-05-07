@@ -1144,29 +1144,8 @@ export default function App() {
         if (currentPath.length === 2) return CATEGORIAS.map(c => ({ id: c, name: c, type: 'folder' }));
         if (currentPath.length === 3) return empresasList.filter(e => e.nome.toUpperCase() === nomeEmpresaUpper).map(e => ({ id: e.nome, name: e.nome, type: 'folder' }));
         if (currentPath.length === 4) {
-            const cat = currentPath[2];
-            const empresa = currentPath[3];
-            let baseFolders = cat === 'Operadoras' ? LISTA_OPERADORAS : (cat === 'Seguradoras' ? LISTA_SEGURADORAS : []);
-            
-            if (empresa.toLowerCase() === 'proper') {
-                if (cat === 'Operadoras') {
-                    baseFolders = baseFolders.filter(f => f.toUpperCase() === 'AMIL' || f.toUpperCase() === 'NOTRE DAME');
-                } else if (cat === 'Seguradoras') {
-                    baseFolders = baseFolders.filter(f => f.toUpperCase() === 'SULAMERICA');
-                }
-            }
-            
             const existingOps = dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3])).map(r => (r.codigoOperadora || '').trim());
-            let allOps = [...new Set([...baseFolders, ...existingOps])].filter(Boolean).sort();
-            
-            if (empresa.toLowerCase() === 'proper') {
-                if (cat === 'Operadoras') {
-                    allOps = allOps.filter(f => f.toUpperCase() === 'AMIL' || f.toUpperCase() === 'NOTRE DAME');
-                } else if (cat === 'Seguradoras') {
-                    allOps = allOps.filter(f => f.toUpperCase() === 'SULAMERICA');
-                }
-            }
-            
+            let allOps = [...new Set(existingOps)].filter(Boolean).sort();
             return allOps.map(op => ({ id: op, name: op, type: 'folder' }));
         }
         if (currentPath.length === 5) {
@@ -1175,15 +1154,9 @@ export default function App() {
             
             const codOps = [...new Set(reports.map(r => r.codOperadora).filter(c => c && c.trim() !== ''))].sort();
             
-            let fixedCodOps = [];
-            if (currentPath[3] === 'Protetta' && currentPath[4].toUpperCase() === 'AMIL') {
-                fixedCodOps = ['139491', '162191', '224138'];
-            }
-            const allCodOps = [...new Set([...fixedCodOps, ...codOps])].sort();
+            codOps.forEach(c => list.push({ id: c, name: c, type: 'folder' }));
             
-            allCodOps.forEach(c => list.push({ id: c, name: c, type: 'folder' }));
-            
-            const filesNoCod = reports.filter(r => !r.codOperadora || !allCodOps.includes(r.codOperadora));
+            const filesNoCod = reports.filter(r => !r.codOperadora || r.codOperadora.trim() === '');
             filesNoCod.forEach(f => list.push({ ...f, type: 'file', name: (f.parceiro && f.parceiro.replace(/^\[.*?\]\s*/, '')) || f.fileName }));
             
             return list;
