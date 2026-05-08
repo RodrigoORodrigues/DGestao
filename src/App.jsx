@@ -230,6 +230,7 @@ export default function App() {
     const [savedReportsList, setSavedReportsList] = useState([]);
     const [currentReportId, setCurrentReportId] = useState(null);
     const [currentReportEmpresa, setCurrentReportEmpresa] = useState('');
+    const [currentReportOperadora, setCurrentReportOperadora] = useState('');
     const [reportName, setReportName] = useState('');
     const [reportPeriod, setReportPeriod] = useState('');
 
@@ -1647,6 +1648,7 @@ export default function App() {
 
         setCurrentReportId(null); 
         setCurrentReportEmpresa(empresaContexto);
+        setCurrentReportOperadora(extratoOperadora);
         setReportName(`Relatório Automático - ${new Date().toLocaleDateString('pt-PT')}`); 
         setReportPeriod('');
 
@@ -1909,7 +1911,7 @@ export default function App() {
 
         const defaultNotaFiscal = pdfData.length > 0 ? (pdfData[0].notaFiscal || '') : '';
         const novaLinha = { 
-            cod: String(maxCod).padStart(5, '0'), contrato: '', codigoOperadora: 'AMIL', vidas: '1',
+            cod: String(maxCod).padStart(5, '0'), contrato: '', codigoOperadora: currentReportOperadora || 'AMIL', vidas: '1',
             cliente: 'Novo Cliente', data: '', situacao: `FATURADO ${nomeEmpresaUpper} NF`, loja: nomeEmpresaUpper, 
             valorTotal: 0, comissao: 0, vendedor: nomeEmpresa, parcela: '1', inicioVigencia: '', notaFiscal: defaultNotaFiscal,
             vitalicio: 'Sim', assessoria: nomeEmpresa, formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
@@ -2034,7 +2036,15 @@ export default function App() {
         });
     };
 
-    const carregarRelatorioSalvo = (report) => { setPdfData((report.dados || []).map(r => ({...r, selected: true}))); setReportName(report.nome); setReportPeriod(report.periodo || ''); setCurrentReportId(report.id); setCurrentView('processar'); };
+    const carregarRelatorioSalvo = (report) => { 
+        setPdfData((report.dados || []).map(r => ({...r, selected: true}))); 
+        setReportName(report.nome); 
+        setReportPeriod(report.periodo || ''); 
+        setCurrentReportId(report.id); 
+        setCurrentReportEmpresa(report.empresa || nomeEmpresa);
+        setCurrentReportOperadora(report.dados && report.dados.length > 0 ? report.dados[0].codigoOperadora || 'AMIL' : 'AMIL');
+        setCurrentView('processar'); 
+    };
     const apagarRelatorioSalvo = (id) => { showConfirm("ATENÇÃO: Tem certeza absoluta que deseja apagar permanentemente este relatório da nuvem e do cache local? Esta ação é totalmente irreversível e os dados serão perdidos.", async () => { setLoading(true); setLoadingMsg("A apagar..."); await supabase.from('savedReports').delete().eq('id', id); if(currentReportId === id) { setPdfData([]); setCurrentReportId(null); } await loadFromDB(); setLoading(false); }); };
 
     const buscarCep = async (cep) => {
@@ -2954,7 +2964,7 @@ export default function App() {
 
                                     {/* Código Operadora */}
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Operadora / Seguradora</label>
+                                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Op. | Seg.</label>
                                         <select
                                             value={vendasFilterForm.codigoOperadora} 
                                             onChange={e => setVendasFilterForm({...vendasFilterForm, codigoOperadora: e.target.value})} 
@@ -3480,7 +3490,7 @@ export default function App() {
                                                     </td>
                                                     {reportTableCols.cod && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.cod || ''} onChange={e=>setEditRowData({...editRowData, cod: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[10px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 w-16 text-center" placeholder="Cód. Op." /></td>}
                                                     {reportTableCols.contrato && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.contrato} onChange={e=>setEditRowData({...editRowData, contrato: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 w-16" placeholder="Contrato" /></td>}
-                                                    {reportTableCols.op && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.codigoOperadora} onChange={e=>setEditRowData({...editRowData, codigoOperadora: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 w-12 text-center" placeholder="AMIL" /></td>}
+                                                    {reportTableCols.op && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.codigoOperadora} onChange={e=>setEditRowData({...editRowData, codigoOperadora: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 w-12 text-center" placeholder={currentReportOperadora || 'AMIL'} /></td>}
                                                     {reportTableCols.vidas && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="number" value={editRowData.vidas} onChange={e=>setEditRowData({...editRowData, vidas: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 text-center w-8" placeholder="1" /></td>}
                                                     {reportTableCols.cliente && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.cliente} onChange={e=>setEditRowData({...editRowData, cliente: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-blue-500 min-w-[120px]" /></td>}
                                                     {reportTableCols.data && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="text" value={editRowData.data} onChange={e=>{
@@ -3568,7 +3578,7 @@ export default function App() {
                                                     </td>
                                                     {reportTableCols.cod && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-[10px] text-center">{linha.cod || '-'}</td>}
                                                     {reportTableCols.contrato && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 font-bold text-indigo-600 dark:text-indigo-400 text-xs">{linha.contrato || '-'}</td>}
-                                                    {reportTableCols.op && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 font-medium text-slate-600 dark:text-slate-300 text-center text-xs">{linha.codigoOperadora || 'AMIL'}</td>}
+                                                    {reportTableCols.op && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 font-medium text-slate-600 dark:text-slate-300 text-center text-xs">{linha.codigoOperadora || currentReportOperadora || 'AMIL'}</td>}
                                                     {reportTableCols.vidas && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-slate-700 dark:text-slate-300 text-xs">{linha.vidas || '-'}</td>}
                                                     {reportTableCols.cliente && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs truncate max-w-[150px]" title={linha.cliente}>{linha.cliente}</td>}
                                                     {reportTableCols.data && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center text-slate-500 dark:text-slate-400 text-[11px]">{linha.data}</td>}
@@ -3635,10 +3645,10 @@ export default function App() {
                                 </div>
                                 
                                 <div>
-                                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Operadora / Seguradora (Tomador)</label>
+                                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Op. | Seg. (Tomador)</label>
                                     <p className="text-xs text-slate-500 mb-2">Tomador Identificado: {importNfPdfForm.cliente}</p>
                                     <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={importNfPdfForm.operadora} onChange={e => setImportNfPdfForm({...importNfPdfForm, operadora: e.target.value})}>
-                                        <option value="">Selecione uma Operadora | Seguradora</option>
+                                        <option value="">Selecione uma Op. | Seg.</option>
                                         <optgroup label="Operadoras">
                                             <option value="AMIL">AMIL</option>
                                             <option value="ASSIM">ASSIM</option>
@@ -4718,9 +4728,9 @@ export default function App() {
                                         </div>
                                     )}
                                     <div>
-                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Operadora / Seguradora</label>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Op. | Seg.</label>
                                         <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.operadora || ''} onChange={e => setClienteForm({...clienteForm, operadora: e.target.value})}>
-                                            <option value="">Selecione uma Operadora | Seguradora</option>
+                                            <option value="">Selecione uma Op. | Seg.</option>
                                             <optgroup label="Operadoras">
                                                 <option value="AMIL">AMIL</option>
                                                 <option value="ASSIM">ASSIM</option>
@@ -4965,9 +4975,9 @@ export default function App() {
                                         </datalist>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Operadora | Seguradora</label>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Op. | Seg.</label>
                                         <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.codigoOperadora || ''} onChange={e => setVendaForm({...vendaForm, codigoOperadora: e.target.value})}>
-                                            <option value="">Selecione uma Operadora | Seguradora</option>
+                                            <option value="">Selecione uma Op. | Seg.</option>
                                             <optgroup label="Operadoras">
                                                 {LISTA_OPERADORAS.map(op => <option key={op} value={op}>{op}</option>)}
                                             </optgroup>
