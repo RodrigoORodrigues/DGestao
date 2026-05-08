@@ -19,35 +19,9 @@ export async function safeSupabaseInsert(table, dataArray) {
     };
     const sanitizedData = sanitize(dataArray);
 
-    try {
-        const { data, error } = await supabase.from(table).insert(sanitizedData).select();
-        if (error) { error.table = table; throw error; }
-        return { data, error: null };
-    } catch (e) {
-        if (e && e.message && (e.message.includes('Could not find the') || e.message.includes('of relation')) && e.message.includes('column')) {
-            const match = e.message.match(/Could not find the '([^']+)' column/) || e.message.match(/column "([^"]+)" of relation/);
-            if (match && match[1]) {
-                const colToDelete = match[1];
-                if (colToDelete === 'empresa') {
-                    throw new Error("A coluna 'empresa' está faltando no Supabase nesta tabela. Crie a coluna 'empresa' (tipo text) para garantir o isolamento das empresas (PROTETTA / PROPER).");
-                }
-                let newData = Array.isArray(sanitizedData) ? [...sanitizedData] : { ...sanitizedData };
-                if (Array.isArray(newData)) {
-                    newData = newData.map(item => {
-                        const ni = { ...item };
-                        delete ni[colToDelete];
-                        return ni;
-                    });
-                } else {
-                    delete newData[colToDelete];
-                }
-                console.warn(`[SafeInsert] Removed missing col '${colToDelete}' from '${table}'`);
-                return await safeSupabaseInsert(table, newData);
-            }
-        }
-        e.table = table;
-        throw e;
-    }
+    const { data, error } = await supabase.from(table).insert(sanitizedData).select();
+    if (error) { error.table = table; throw error; }
+    return { data, error: null };
 }
 
 export async function safeSupabaseUpdate(table, updateObj, eqField, eqValue) {
@@ -62,27 +36,9 @@ export async function safeSupabaseUpdate(table, updateObj, eqField, eqValue) {
     };
     const sanitizedData = sanitize(updateObj);
 
-    try {
-        const { data, error } = await supabase.from(table).update(sanitizedData).eq(eqField, eqValue).select();
-        if (error) { error.table = table; throw error; }
-        return { data, error: null };
-    } catch (e) {
-        if (e && e.message && (e.message.includes('Could not find the') || e.message.includes('of relation')) && e.message.includes('column')) {
-            const match = e.message.match(/Could not find the '([^']+)' column/) || e.message.match(/column "([^"]+)" of relation/);
-            if (match && match[1]) {
-                const colToDelete = match[1];
-                if (colToDelete === 'empresa') {
-                    throw new Error("A coluna 'empresa' está faltando no Supabase nesta tabela. Crie a coluna 'empresa' (tipo text) para garantir o isolamento das empresas (PROTETTA / PROPER).");
-                }
-                const newUpdateObj = { ...sanitizedData };
-                delete newUpdateObj[colToDelete];
-                console.warn(`[SafeUpdate] Removed missing col '${colToDelete}' from '${table}'`);
-                return await safeSupabaseUpdate(table, newUpdateObj, eqField, eqValue);
-            }
-        }
-        e.table = table;
-        throw e;
-    }
+    const { data, error } = await supabase.from(table).update(sanitizedData).eq(eqField, eqValue).select();
+    if (error) { error.table = table; throw error; }
+    return { data, error: null };
 }
 
 import { 
