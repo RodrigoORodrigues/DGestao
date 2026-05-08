@@ -1621,8 +1621,23 @@ export default function App() {
         setReportPeriod('');
 
         let textoNormalizado = texto.replace(/\s+/g, ' ').trim(); 
-        let textoSemFalsoContrato = textoNormalizado.replace(/Total\s+contrato\s*:/gi, 'Total_Apurado:');
         
+        const novosRegistos = []; 
+        const clientesParaInserir = []; 
+        const clientesParaAtualizar = new Map();
+        const nomesClientesExistem = new Set(clientes.map(c => c.nome.toLowerCase()));
+        let alertasSequencia = [];
+        
+        let currentMaxVendaCodigo = vendasList.reduce((max, v) => {
+            let num = parseInt(v.numero, 10);
+            return !isNaN(num) && num > max ? num : max;
+        }, 0);
+
+        let currentMaxCodigo = clientes.reduce((max, c) => {
+            let v = parseInt(c.codigo, 10);
+            return !isNaN(v) && v > max ? v : max;
+        }, 0);
+
         const parseBlocosExtrato = (blocosContrato) => {
             for (let bloco of blocosContrato) {
                 try {
