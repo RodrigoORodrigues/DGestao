@@ -1634,8 +1634,15 @@ export default function App() {
         const empresaContexto = reportDoc?.empresa || nomeEmpresa;
         const empresaContextoUpper = empresaContexto.toUpperCase();
 
-        let extratoOperadora = reportDoc?.codigoOperadora || 'AMIL';
-        let extratoCodOperadora = reportDoc?.codOperadora || '';
+        let extratoOperadora = 'AMIL';
+        let extratoCodOperadora = '';
+        if (reportDoc?.parceiro) {
+            const matchOp = reportDoc.parceiro.match(/^\[([^|]+)\|([^\]]*)\]/);
+            if (matchOp) {
+                extratoOperadora = matchOp[1].trim();
+                extratoCodOperadora = matchOp[2].trim();
+            }
+        }
 
         setCurrentReportId(null); 
         setReportName(`Relatório Automático - ${new Date().toLocaleDateString('pt-PT')}`); 
@@ -1649,6 +1656,7 @@ export default function App() {
         
         const novosRegistos = []; 
         const clientesParaInserir = []; 
+        const clientesParaAtualizar = new Map();
         const nomesClientesExistem = new Set(clientes.map(c => c.nome.toLowerCase()));
         let alertasSequencia = [];
         
@@ -1697,6 +1705,13 @@ export default function App() {
                         operadora: extratoOperadora,
                         empresa: empresaContexto
                     });
+                } else {
+                    let existingCli = clientes.find(c => c.nome.toLowerCase() === nomeCliente.toLowerCase());
+                    if (existingCli && (!existingCli.operadora || existingCli.operadora.trim() === '' || existingCli.operadora === '-')) {
+                        if (!clientesParaAtualizar.has(existingCli.id)) {
+                            clientesParaAtualizar.set(existingCli.id, { operadora: extratoOperadora });
+                        }
+                    }
                 }
 
                 let valorTotal = 0, comissao = 0; 
@@ -1793,6 +1808,15 @@ export default function App() {
         
         if(clientesParaInserir.length > 0) { 
             await safeSupabaseInsert('clientes', clientesParaInserir); 
+        }
+
+        if(clientesParaAtualizar.size > 0) {
+            for (let [id, changes] of clientesParaAtualizar.entries()) {
+                await safeSupabaseUpdate('clientes', changes, 'id', id);
+            }
+        }
+        
+        if(clientesParaInserir.length > 0 || clientesParaAtualizar.size > 0) { 
             await loadFromDB(); 
         }
         setPdfData(novosRegistos); 
