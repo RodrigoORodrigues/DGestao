@@ -1318,7 +1318,7 @@ export default function App() {
 
     const handleSubmitExtrato = async (e) => {
         e.preventDefault(); 
-        if (!formData.codigoOperadora) return setFormError('ERRO: Selecione a Operadora | Seguradora.');
+        if (!formData.codigoOperadora) return setFormError('ERRO: Selecione a Op. | Seg.');
         if (!formData.notaFiscal || !formData.notaFiscal.trim()) return setFormError('ERRO: Nota Fiscal obrigatória.');
         if (!formData.parceiro.trim()) return setFormError('ERRO: Nome do arquivo obrigatório.'); 
         if (formData.arquivos.length === 0) return setFormError('ERRO: Anexos obrigatórios.');
@@ -3303,7 +3303,7 @@ export default function App() {
                                         {cols.nome && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Nome</th>}
                                         {cols.tipo && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Tipo</th>}
                                         {cols.documento && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Documento</th>}
-                                        {cols.operadora && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Operadora/Seg.</th>}
+                                        {cols.operadora && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Op. | Seg.</th>}
                                         {cols.servico && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Serviço</th>}
                                         {cols.telefone && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Telefone</th>}
                                         {cols.email && <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">E-mail</th>}
@@ -4358,9 +4358,9 @@ export default function App() {
                                     )}
                                 </div>
                                 <div className="space-y-2 md:col-span-1">
-                                    <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Operadora | Seguradora</label>
+                                    <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Op. | Seg.</label>
                                     <select required className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={formData.codigoOperadora || ''} onChange={e => setFormData({...formData, codigoOperadora: e.target.value})}>
-                                        <option value="">Selecione uma Operadora | Seguradora</option>
+                                        <option value="">Selecione uma Op. | Seg.</option>
                                         <optgroup label="Operadoras">
                                             {LISTA_OPERADORAS.map(op => <option key={op} value={op}>{op}</option>)}
                                         </optgroup>
@@ -4373,7 +4373,7 @@ export default function App() {
                                         <div className="mt-2">
                                             <input 
                                                 type="text" 
-                                                placeholder="Digite o nome da Operadora / Seguradora" 
+                                                placeholder="Digite o nome da Op. | Seg." 
                                                 className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" 
                                                 value={formData.codigoOperadoraOutra || ''} 
                                                 onChange={e => setFormData({...formData, codigoOperadoraOutra: e.target.value})} 
