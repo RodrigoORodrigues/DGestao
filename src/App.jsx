@@ -1934,11 +1934,10 @@ export default function App() {
                 }
 
                 // Generates Clients & Sales
-                setLoadingMsg("A gerar vendas e atualizar dashboard...");
+                setLoadingMsg("A atualizar clientes e recarregar dashboard...");
                 const clientesArrayTemp = [...clientes];
                 const clientesParaInserir = [];
                 const clientesParaAtualizar = new Map();
-                const vendasParaInserir = [];
                 
                 let currentMaxCodigo = clientesArrayTemp.reduce((max, c) => {
                     let v = parseInt(c.codigo, 10);
@@ -1990,32 +1989,6 @@ export default function App() {
                             clientesParaAtualizar.set(existingCli.id, changes);
                         }
                     }
-
-                    const isDupli = vendasList.some(v => v.reportId === savedId && v.reportRowIndex === i) 
-                                 || (r.cod && vendasList.some(v => v.numero === r.cod));
-
-                    if(!isDupli) {
-                        currentMaxNumeroVendas++;
-                        let newNumeroVenda = String(currentMaxNumeroVendas).padStart(5, '0');
-                        vendasParaInserir.push({
-                            numero: newNumeroVenda,
-                            loja: r.loja || null, dataVenda: r.data || null, 
-                            situacao: r.situacao || null, cliente: r.cliente || null, 
-                            valor: r.valorTotal === '' || r.valorTotal === undefined || r.valorTotal === null ? 0 : parseFloat(r.valorTotal) || 0, 
-                            comissao: r.comissao === '' || r.comissao === undefined || r.comissao === null ? null : parseFloat(r.comissao),
-                            contrato: r.contrato || null,
-                            codOperadora: r.codOperadora || null,
-                            codigoOperadora: r.codigoOperadora || currentReportOperadora || null, 
-                            vidas: r.vidas === '' || r.vidas === undefined || r.vidas === null ? null : parseInt(r.vidas, 10), 
-                            vitalicio: r.vitalicio || null, assessoria: r.assessoria || null, 
-                            formaPagamento: r.formaPagamento || null, servico: r.servico || null, 
-                            desconto: r.desconto === '' || r.desconto === undefined || r.desconto === null ? null : parseFloat(r.desconto), 
-                            notas: r.notas || null, corretor: r.vendedor || null, 
-                            parcela: r.parcela || '1', inicioVigencia: r.inicioVigencia || null, 
-                            notaFiscal: r.notaFiscal || null,
-                            empresa: targetEmpresa
-                        });
-                    }
                 }
 
                 if(clientesParaInserir.length > 0) {
@@ -2025,9 +1998,6 @@ export default function App() {
                     for (let [id, changes] of clientesParaAtualizar.entries()) {
                         await safeSupabaseUpdate('clientes', changes, 'id', id);
                     }
-                }
-                if(vendasParaInserir.length > 0) {
-                    await safeSupabaseInsert('vendas', vendasParaInserir);
                 }
 
                 await loadFromDB(); setSuccessMsg("Relatório e Vendas salvos com sucesso!"); setTimeout(() => setSuccessMsg(''), 4000);
