@@ -1336,8 +1336,20 @@ export default function App() {
                 if(uploadErr) throw uploadErr;
                 
                 const saveParceiro = `[${saveOperadora}|${saveCodOperadora}] ${formData.parceiro}${formData.notaFiscal ? ` (NF: ${formData.notaFiscal})` : ''}`;
-                let reportDataToSave = { ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, parceiro: saveParceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath };
-                const { error: insertErr } = await supabase.from('reports').insert([reportDataToSave]);
+                let reportDataToSave = {
+                    ano: formData.ano,
+                    mes: formData.mes,
+                    categoria: formData.categoria,
+                    empresa: formData.empresa,
+                    parceiro: saveParceiro,
+                    codigoOperadora: saveOperadora || null,
+                    codOperadora: saveCodOperadora || null,
+                    notaFiscal: formData.notaFiscal || null,
+                    date: new Date().toISOString(),
+                    fileName: file.name,
+                    filePath: filePath
+                };
+                const { error: insertErr } = await safeSupabaseInsert('reports', [reportDataToSave]);
                 if (insertErr && (insertErr.message?.includes('empresa') || insertErr.details?.includes('empresa'))) {
                     throw new Error("A coluna 'empresa' está faltando na tabela 'reports'. Crie a coluna 'empresa' (tipo text) no Supabase para garantir o isolamento.");
                 } else if (insertErr) {
@@ -1785,6 +1797,7 @@ export default function App() {
                     novosRegistos.push({ 
                         cod: extratoCodOperadora || codRegistro, 
                         contrato: contratoDetectado, 
+                        codOperadora: extratoCodOperadora || null,
                         codigoOperadora: extratoOperadora, 
                         vidas: vidasDetectadas,
                         cliente: nomeCliente, 
@@ -1979,15 +1992,33 @@ export default function App() {
                             codigo: newCodigo,
                             nome: r.cliente || null,
                             tipo: 'Pessoa física',
-                            documento: null, telefone: null, celular: null, cep: null, logradouro: null, numero: null, bairro: null, cidade: null, uf: null, email: null, situacao: true, operadora: r.codigoOperadora || currentReportOperadora || null, servico: r.servico || 'Plano de Saúde',
+                            documento: null, telefone: null, celular: null, cep: null, logradouro: null, numero: null, bairro: null, cidade: null, uf: null, email: null, situacao: true,
+                            // Op. | Seg. na Gestão de Clientes
+                            operadora: r.codigoOperadora || currentReportOperadora || null,
+                            codigoOperadora: r.codigoOperadora || currentReportOperadora || null,
+                            codOperadora: r.codOperadora || null,
+                            servico: r.servico || 'Plano de Saúde',
                             empresa: targetEmpresa
                         };
                         clientesParaInserir.push(newClient);
                         clientesArrayTemp.push(newClient);
-                    } else if (existingCli && (!existingCli.operadora || existingCli.operadora.trim() === '' || existingCli.operadora === '-')) {
-                        const opToSet = r.codigoOperadora || currentReportOperadora;
-                        if (!clientesParaAtualizar.has(existingCli.id) && opToSet) {
-                            clientesParaAtualizar.set(existingCli.id, { operadora: opToSet });
+                    } else if (existingCli) {
+                        const opToSet = r.codigoOperadora || currentReportOperadora || null;
+                        const codOpToSet = r.codOperadora || null;
+                        const changes = {};
+
+                        if (opToSet && (!existingCli.operadora || existingCli.operadora.trim() === '' || existingCli.operadora === '-')) {
+                            changes.operadora = opToSet;
+                        }
+                        if (opToSet && (!existingCli.codigoOperadora || String(existingCli.codigoOperadora).trim() === '' || existingCli.codigoOperadora === '-')) {
+                            changes.codigoOperadora = opToSet;
+                        }
+                        if (codOpToSet && (!existingCli.codOperadora || String(existingCli.codOperadora).trim() === '' || existingCli.codOperadora === '-')) {
+                            changes.codOperadora = codOpToSet;
+                        }
+
+                        if (Object.keys(changes).length > 0 && existingCli.id && !clientesParaAtualizar.has(existingCli.id)) {
+                            clientesParaAtualizar.set(existingCli.id, changes);
                         }
                     }
 
@@ -2003,7 +2034,9 @@ export default function App() {
                             situacao: r.situacao || null, cliente: r.cliente || null, 
                             valor: r.valorTotal === '' || r.valorTotal === undefined || r.valorTotal === null ? 0 : parseFloat(r.valorTotal) || 0, 
                             comissao: r.comissao === '' || r.comissao === undefined || r.comissao === null ? null : parseFloat(r.comissao),
-                            contrato: r.contrato || null, codigoOperadora: r.codigoOperadora || currentReportOperadora || null, 
+                            contrato: r.contrato || null,
+                            codOperadora: r.codOperadora || null,
+                            codigoOperadora: r.codigoOperadora || currentReportOperadora || null, 
                             vidas: r.vidas === '' || r.vidas === undefined || r.vidas === null ? null : parseInt(r.vidas, 10), 
                             vitalicio: r.vitalicio || null, assessoria: r.assessoria || null, 
                             formaPagamento: r.formaPagamento || null, servico: r.servico || null, 
