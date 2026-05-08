@@ -1766,14 +1766,14 @@ export default function App() {
             const blocosContrato = textoSemFalsoContrato.split(/Contrato\s*:/i); 
             if (blocosContrato.length > 0) blocosContrato.shift();
             
-            processarBlocosExtrato(blocosContrato);
+            parseBlocosExtrato(blocosContrato);
         } else {
             // Lógica Padrão / AMIL
             let textoSemFalsoContrato = textoNormalizado.replace(/Total\s+contrato\s*:/gi, 'Total_Apurado:');
             const blocosContrato = textoSemFalsoContrato.split(/Contrato\s*:/i); 
             if (blocosContrato.length > 0) blocosContrato.shift();
             
-            processarBlocosExtrato(blocosContrato);
+            parseBlocosExtrato(blocosContrato);
         }
         
         if(clientesParaInserir.length > 0) { 
