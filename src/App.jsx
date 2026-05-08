@@ -1604,13 +1604,14 @@ export default function App() {
         const empresaContexto = reportDoc?.empresa || nomeEmpresa;
         const empresaContextoUpper = empresaContexto.toUpperCase();
 
-        let extratoOperadora = 'AMIL';
-        let extratoCodOperadora = '';
+        let extratoOperadora = reportDoc?.codigoOperadora || 'AMIL';
+        let extratoCodOperadora = reportDoc?.codOperadora || '';
+        
         if (reportDoc?.parceiro) {
             const matchOp = reportDoc.parceiro.match(/^\[([^|]+)\|([^\]]*)\]/);
             if (matchOp) {
-                extratoOperadora = matchOp[1].trim();
-                extratoCodOperadora = matchOp[2].trim();
+                if (!reportDoc?.codigoOperadora) extratoOperadora = matchOp[1].trim();
+                if (!reportDoc?.codOperadora) extratoCodOperadora = matchOp[2].trim();
             }
         }
 
