@@ -160,6 +160,7 @@ export default function App() {
 
     const [clientes, setClientes] = useState([]);
     const [selectedClientes, setSelectedClientes] = useState([]);
+    const [selectedVendas, setSelectedVendas] = useState([]);
     const [filtroNomeCliente, setFiltroNomeCliente] = useState('');
     const [showMainClienteSuggestions, setShowMainClienteSuggestions] = useState(false);
     const [filtrosCli, setFiltrosCli] = useState({ tipo: 'Todos', situacao: 'Todos' });
@@ -1126,6 +1127,66 @@ export default function App() {
         executarSalvamento();
     };
 
+    const handleApagarVendasSelecionadas = () => {
+        if (selectedVendas.length === 0) return showAlert("Selecione pelo menos uma venda para apagar.");
+        showConfirm(`Tem a certeza que deseja apagar os ${selectedVendas.length} registos selecionados?`, async () => {
+            setLoading(true); setLoadingMsg("Apagando...");
+            const selectedSet = new Set(selectedVendas);
+            const vendasToDelete = displayedVendas.filter(v => selectedSet.has(v.id));
+            
+            const vendasDiretas = vendasToDelete.filter(v => !v.isFromReport);
+            const vendasReports = vendasToDelete.filter(v => v.isFromReport);
+            
+            if (vendasDiretas.length > 0) {
+                const chunks = [];
+                for(let i = 0; i < vendasDiretas.length; i += 50) chunks.push(vendasDiretas.slice(i, i+50));
+                for(const chunk of chunks) {
+                    await supabase.from('vendas').delete().in('id', chunk.map(v => v.id));
+                }
+            }
+            if (vendasReports.length > 0) {
+                const reportsGrouped = vendasReports.reduce((acc, v) => {
+                    if(!acc[v.reportId]) acc[v.reportId] = [];
+                    acc[v.reportId].push(v.reportRowIndex);
+                    return acc;
+                }, {});
+                for (const reportId of Object.keys(reportsGrouped)) {
+                    const rep = await supabase.from('savedReports').select('*').eq('id', reportId).single();
+                    if (rep.data && rep.data.dados) {
+                        const indicesToRemove = new Set(reportsGrouped[reportId]);
+                        const novosDados = rep.data.dados.filter((_, idx) => !indicesToRemove.has(idx));
+                        await safeSupabaseUpdate('savedReports', { dados: novosDados }, 'id', reportId);
+                    }
+                }
+            }
+            
+            setSelectedVendas([]);
+            await loadFromDB(); 
+            setLoading(false);
+        });
+    };
+
+    const toggleVendaSelection = (id) => {
+        if (selectedVendas.includes(id)) {
+            setSelectedVendas(selectedVendas.filter(vId => vId !== id));
+        } else {
+            setSelectedVendas([...selectedVendas, id]);
+        }
+    };
+
+    const toggleAllVendas = () => {
+        const idsPagina = displayedVendas.map(v => v.id);
+        const allSelected = idsPagina.every(id => selectedVendas.includes(id));
+        if (allSelected) {
+            setSelectedVendas(selectedVendas.filter(id => !idsPagina.includes(id)));
+        } else {
+            const onlyNewIds = idsPagina.filter(id => !selectedVendas.includes(id));
+            setSelectedVendas([...selectedVendas, ...onlyNewIds]);
+        }
+    };
+
+    const isAllVendasSelected = displayedVendas.length > 0 && displayedVendas.every(v => selectedVendas.includes(v.id));
+
     const apagarVenda = (venda) => {
         showConfirm(`Tem a certeza absoluta de que deseja apagar esta venda? Esta ação é irreversível e não poderá recuperar os dados.`, async () => {
             setLoading(true); setLoadingMsg("Apagando...");
@@ -1573,6 +1634,16 @@ export default function App() {
         const empresaContexto = reportDoc?.empresa || nomeEmpresa;
         const empresaContextoUpper = empresaContexto.toUpperCase();
 
+        let extratoOperadora = 'AMIL';
+        let extratoCodOperadora = '';
+        if (reportDoc?.parceiro) {
+            const matchOp = reportDoc.parceiro.match(/^\[([^|]+)\|([^\]]*)\]/);
+            if (matchOp) {
+                extratoOperadora = matchOp[1].trim();
+                extratoCodOperadora = matchOp[2].trim();
+            }
+        }
+
         setCurrentReportId(null); 
         setReportName(`Relatório Automático - ${new Date().toLocaleDateString('pt-PT')}`); 
         setReportPeriod('');
@@ -1629,7 +1700,9 @@ export default function App() {
                         telefone: '', 
                         celular: '', 
                         email: '', 
-                        situacao: true
+                        situacao: true,
+                        operadora: extratoOperadora,
+                        empresa: empresaContexto
                     });
                 }
 
@@ -1698,9 +1771,9 @@ export default function App() {
                     }
 
                     novosRegistos.push({ 
-                        cod: reportDoc?.codOperadora || codRegistro, 
+                        cod: extratoCodOperadora || reportDoc?.codOperadora || codRegistro, 
                         contrato: contratoDetectado, 
-                        codigoOperadora: reportDoc?.codigoOperadora || 'AMIL', 
+                        codigoOperadora: extratoOperadora || reportDoc?.codigoOperadora || 'AMIL', 
                         vidas: vidasDetectadas,
                         cliente: nomeCliente, 
                         data: dataDeHojeInterna(), 
@@ -2653,7 +2726,12 @@ export default function App() {
                         <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 mb-4 flex flex-col md:flex-row justify-between items-center gap-4 shadow-sm transition-colors duration-200">
                             <div className="flex gap-2 w-full md:w-auto relative">
                                 <button onClick={() => abrirModalVenda()} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold flex items-center shadow-md transition-colors"><Plus size={16} className="mr-2"/> Adicionar</button>
-                                <div className="relative vendas-acoes-menu">
+                                {selectedVendas.length > 0 && (
+                                    <button onClick={handleApagarVendasSelecionadas} className="bg-rose-500 hover:bg-rose-400 text-white px-4 py-2 rounded text-sm font-bold flex items-center shadow transition-colors ml-2">
+                                        <Trash2 size={16} className="mr-2"/> Eliminar ({selectedVendas.length})
+                                    </button>
+                                )}
+                                <div className="relative vendas-acoes-menu ml-2">
                                     <button onClick={() => setShowVendasAcoesMenu(!showVendasAcoesMenu)} className="bg-slate-900 dark:bg-black hover:bg-slate-800 text-white px-4 py-2 rounded text-sm font-bold flex items-center transition-colors border border-slate-700 shadow-md">
                                         <Settings size={16} className="mr-2"/> Mais ações <ChevronDown size={16} className="ml-2"/>
                                     </button>
@@ -2961,6 +3039,16 @@ export default function App() {
                             <table className="w-full text-left border-collapse text-sm whitespace-nowrap min-w-max">
                                 <thead>
                                     <tr className="border-b-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750/50 transition-colors duration-200">
+                                        <th className="py-3 px-4 w-10 text-center border-r border-slate-200 dark:border-slate-700">
+                                            <input 
+                                                type="checkbox" 
+                                                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 dark:bg-slate-700 dark:border-slate-600 dark:checked:bg-emerald-600 cursor-pointer"
+                                                checked={isAllVendasSelected}
+                                                onChange={toggleAllVendas}
+                                                disabled={displayedVendas.length === 0}
+                                                title="Selecionar Todos na Página"
+                                            />
+                                        </th>
                                         {vendasTableCols.numero && (
                                             <th onClick={() => handleSortVendas('numero')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 w-24">
                                                 Registo {getSortIcon('numero')}
@@ -3066,25 +3154,34 @@ export default function App() {
                                 </thead>
                                 <tbody>
                                     {displayedVendas.length === 0 ? (
-                                        <tr><td colSpan={Object.values(vendasTableCols).filter(Boolean).length + 1} className="py-8 text-center text-slate-500 italic">Nenhum registo de venda encontrado.</td></tr>
+                                        <tr><td colSpan={Object.values(vendasTableCols).filter(Boolean).length + 2} className="py-8 text-center text-slate-500 italic">Nenhum registo de venda encontrado.</td></tr>
                                     ) : (
                                         displayedVendas.map((venda) => (
-                                            <tr key={venda.id} onClick={() => abrirModalVenda(venda)} className="border-b border-slate-200 dark:border-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-750 transition-colors cursor-pointer">
-                                                {vendasTableCols.numero && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.numero ? String(venda.numero).padStart(5, '0') : '-'}</td>}
-                                                {vendasTableCols.contrato && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.contrato || '-'}</td>}
-                                                {vendasTableCols.codOperadora && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.codOperadora || '-'}</td>}
-                                                {vendasTableCols.codigoOperadora && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.codigoOperadora || 'AMIL'}</td>}
-                                                {vendasTableCols.vidas && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.vidas || '-'}</td>}
-                                                {vendasTableCols.cliente && <td className="py-4 px-4 border-r border-slate-200 dark:border-slate-700"><div className="font-bold text-slate-900 dark:text-slate-100">{venda.cliente}</div></td>}
-                                                {vendasTableCols.dataVenda && <td className="py-4 px-4 text-slate-600 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">{formatarDataVisivel(venda.dataVenda)}</td>}
-                                                {vendasTableCols.loja && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.loja || '-'}</td>}
-                                                {vendasTableCols.servico && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.servico || '-'}</td>}
-                                                {vendasTableCols.corretor && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.corretor || '-'}</td>}
-                                                {vendasTableCols.situacao && <td className="py-4 px-4 text-center border-r border-slate-200 dark:border-slate-700"><span className={`${getSituacaoColor(venda.situacao)} px-3 py-1 rounded text-xs font-bold uppercase`}>{venda.situacao}</span></td>}
-                                                {vendasTableCols.valor && <td className="py-4 px-4 text-slate-800 dark:text-slate-200 font-medium text-right border-r border-slate-200 dark:border-slate-700">{formatarMoeda(venda.valor)}</td>}
-                                                {vendasTableCols.parcela && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.parcela || '-'}</td>}
-                                                {vendasTableCols.inicioVigencia && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{formatarDataVisivel(venda.inicioVigencia)}</td>}
-                                                {vendasTableCols.notaFiscal && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.notaFiscal || '-'}</td>}
+                                            <tr key={venda.id} className="border-b border-slate-200 dark:border-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-750 transition-colors cursor-default">
+                                                <td className="py-3 px-4 text-center border-r border-slate-200 dark:border-slate-700" onClick={(e) => { e.stopPropagation(); toggleVendaSelection(venda.id); }}>
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 dark:bg-slate-700 dark:border-slate-600 dark:checked:bg-emerald-600 cursor-pointer"
+                                                        checked={selectedVendas.includes(venda.id)}
+                                                        onChange={(e) => { e.stopPropagation(); toggleVendaSelection(venda.id); }}
+                                                    />
+                                                </td>
+                                                {vendasTableCols.numero && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.numero ? String(venda.numero).padStart(5, '0') : '-'}</td>}
+                                                {vendasTableCols.contrato && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.contrato || '-'}</td>}
+                                                {vendasTableCols.codOperadora && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.codOperadora || '-'}</td>}
+                                                {vendasTableCols.codigoOperadora && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.codigoOperadora || 'AMIL'}</td>}
+                                                {vendasTableCols.vidas && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.vidas || '-'}</td>}
+                                                {vendasTableCols.cliente && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 border-r border-slate-200 dark:border-slate-700"><div className="font-bold text-slate-900 dark:text-slate-100">{venda.cliente}</div></td>}
+                                                {vendasTableCols.dataVenda && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">{formatarDataVisivel(venda.dataVenda)}</td>}
+                                                {vendasTableCols.loja && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.loja || '-'}</td>}
+                                                {vendasTableCols.servico && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.servico || '-'}</td>}
+                                                {vendasTableCols.corretor && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.corretor || '-'}</td>}
+                                                {vendasTableCols.situacao && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-center border-r border-slate-200 dark:border-slate-700"><span className={`${getSituacaoColor(venda.situacao)} px-3 py-1 rounded text-xs font-bold uppercase`}>{venda.situacao}</span></td>}
+                                                {vendasTableCols.valor && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-800 dark:text-slate-200 font-medium text-right border-r border-slate-200 dark:border-slate-700">{formatarMoeda(venda.valor)}</td>}
+                                                {vendasTableCols.parcela && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.parcela || '-'}</td>}
+                                                {vendasTableCols.inicioVigencia && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{formatarDataVisivel(venda.inicioVigencia)}</td>}
+                                                {vendasTableCols.notaFiscal && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.notaFiscal || '-'}</td>}
+
                                                 {vendasTableCols.vitalicio && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.vitalicio || '-'}</td>}
                                                 {vendasTableCols.assessoria && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.assessoria || '-'}</td>}
                                                 {vendasTableCols.formaPagamento && <td className="py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.formaPagamento || '-'}</td>}
