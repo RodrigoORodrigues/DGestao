@@ -1992,14 +1992,14 @@ export default function App() {
                     }
 
                     const isDupli = vendasList.some(v => v.reportId === savedId && v.reportRowIndex === i) 
-                                 || (r.cod && vendasList.some(v => v.codigo === r.cod));
+                                 || (r.cod && vendasList.some(v => v.numero === r.cod));
 
                     if(!isDupli) {
                         currentMaxNumeroVendas++;
                         let newNumeroVenda = String(currentMaxNumeroVendas).padStart(5, '0');
                         vendasParaInserir.push({
                             numero: newNumeroVenda,
-                            loja: r.loja || null, codigo: r.cod || null, dataVenda: r.data || null, 
+                            loja: r.loja || null, dataVenda: r.data || null, 
                             situacao: r.situacao || null, cliente: r.cliente || null, 
                             valor: r.valorTotal === '' || r.valorTotal === undefined || r.valorTotal === null ? 0 : parseFloat(r.valorTotal) || 0, 
                             comissao: r.comissao === '' || r.comissao === undefined || r.comissao === null ? null : parseFloat(r.comissao),
