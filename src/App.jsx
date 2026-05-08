@@ -2013,7 +2013,6 @@ export default function App() {
                             notas: r.notas || null, corretor: r.vendedor || null, 
                             parcela: r.parcela || '1', inicioVigencia: r.inicioVigencia || null, 
                             notaFiscal: r.notaFiscal || null,
-                            reportId: savedId, reportRowIndex: i,
                             empresa: targetEmpresa
                         });
                     }
