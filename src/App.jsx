@@ -229,6 +229,7 @@ export default function App() {
 
     const [savedReportsList, setSavedReportsList] = useState([]);
     const [currentReportId, setCurrentReportId] = useState(null);
+    const [currentReportEmpresa, setCurrentReportEmpresa] = useState('');
     const [reportName, setReportName] = useState('');
     const [reportPeriod, setReportPeriod] = useState('');
 
@@ -1645,6 +1646,7 @@ export default function App() {
         }
 
         setCurrentReportId(null); 
+        setCurrentReportEmpresa(empresaContexto);
         setReportName(`Relatório Automático - ${new Date().toLocaleDateString('pt-PT')}`); 
         setReportPeriod('');
 
@@ -1923,11 +1925,12 @@ export default function App() {
         const dadosParaSalvar = pdfData.filter(r => r.selected);
         if(dadosParaSalvar.length === 0) return showAlert('Não há linhas selecionadas para salvar.');
 
+        const targetEmpresa = currentReportEmpresa || nomeEmpresa;
         const dataToSave = { 
             nome: reportName || null, periodo: reportPeriod || null, dataCriacao: new Date().toISOString(), 
             criadoPor: currentUser?.username || 'Sistema', 
             dados: dadosParaSalvar,
-            empresa: nomeEmpresa
+            empresa: targetEmpresa
         };
         
         showConfirm("Deseja extrair as informações deste extrato e gerar as Vendas para alimentar o Dashboard automaticamente?", async () => {
@@ -1950,6 +1953,7 @@ export default function App() {
                 setLoadingMsg("A gerar vendas e atualizar dashboard...");
                 const clientesArrayTemp = [...clientes];
                 const clientesParaInserir = [];
+                const clientesParaAtualizar = new Map();
                 const vendasParaInserir = [];
                 
                 let currentMaxCodigo = clientesArrayTemp.reduce((max, c) => {
@@ -1965,8 +1969,8 @@ export default function App() {
                 for (let i = 0; i < dadosParaSalvar.length; i++) {
                     const r = dadosParaSalvar[i];
                     
-                    const hasCliente = clientesArrayTemp.some(c => c.nome.toLowerCase() === r.cliente.toLowerCase());
-                    if(!hasCliente && !clientesParaInserir.some(c => c.nome.toLowerCase() === r.cliente.toLowerCase())) {
+                    const existingCli = clientesArrayTemp.find(c => c.nome.toLowerCase() === r.cliente.toLowerCase());
+                    if(!existingCli && !clientesParaInserir.some(c => c.nome.toLowerCase() === r.cliente.toLowerCase())) {
                         currentMaxCodigo++;
                         let newCodigo = String(currentMaxCodigo).padStart(5, '0');
                         const newClient = {
@@ -1974,10 +1978,14 @@ export default function App() {
                             nome: r.cliente || null,
                             tipo: 'Pessoa física',
                             documento: null, telefone: null, celular: null, cep: null, logradouro: null, numero: null, bairro: null, cidade: null, uf: null, email: null, situacao: true, operadora: r.codigoOperadora || null, servico: r.servico || 'Plano de Saúde',
-                            empresa: nomeEmpresa
+                            empresa: targetEmpresa
                         };
                         clientesParaInserir.push(newClient);
                         clientesArrayTemp.push(newClient);
+                    } else if (existingCli && (!existingCli.operadora || existingCli.operadora.trim() === '' || existingCli.operadora === '-')) {
+                        if (!clientesParaAtualizar.has(existingCli.id) && r.codigoOperadora) {
+                            clientesParaAtualizar.set(existingCli.id, { operadora: r.codigoOperadora });
+                        }
                     }
 
                     const isDupli = vendasList.some(v => v.reportId === savedId && v.reportRowIndex === i) 
@@ -2001,13 +2009,18 @@ export default function App() {
                             parcela: r.parcela || '1', inicioVigencia: r.inicioVigencia || null, 
                             notaFiscal: r.notaFiscal || null,
                             reportId: savedId, reportRowIndex: i,
-                            empresa: nomeEmpresa
+                            empresa: targetEmpresa
                         });
                     }
                 }
 
                 if(clientesParaInserir.length > 0) {
                     await safeSupabaseInsert('clientes', clientesParaInserir);
+                }
+                if(clientesParaAtualizar.size > 0) {
+                    for (let [id, changes] of clientesParaAtualizar.entries()) {
+                        await safeSupabaseUpdate('clientes', changes, 'id', id);
+                    }
                 }
                 if(vendasParaInserir.length > 0) {
                     await safeSupabaseInsert('vendas', vendasParaInserir);
@@ -4324,7 +4337,13 @@ export default function App() {
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Ano</label><input type="number" value={formData.ano} onChange={(e) => setFormData({...formData, ano: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500" /></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mês</label><select value={formData.mes} onChange={(e) => setFormData({...formData, mes: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{MESES.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Categoria</label><select value={formData.categoria} onChange={(e) => setFormData({...formData, categoria: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label><select value={formData.empresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500"><option value={nomeEmpresa}>{nomeEmpresa}</option></select></div>
+                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label><select value={formData.empresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">
+                                    {(!currentUser?.empresa || currentUser.empresa === 'Todas') ? (
+                                        empresasList.map(e => <option key={e.nome} value={e.nome}>{e.nome}</option>)
+                                    ) : (
+                                        <option value={nomeEmpresa}>{nomeEmpresa}</option>
+                                    )}
+                                </select></div>
                                 <div className="space-y-2 md:col-span-1">
                                     <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Cód. Operadora</label>
                                     {formData.codigoOperadora === 'AMIL' ? (
