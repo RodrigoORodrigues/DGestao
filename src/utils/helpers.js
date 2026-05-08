@@ -49,16 +49,22 @@ export const calcularParcelaDaVigencia = (inicioVigencia, dataRecibo) => {
             if(d.includes('/')) {
                 const parts = d.split('/');
                 if (parts.length === 2) {
-                    return new Date(parts[1], parts[0] - 1, 1);
+                    if (parts[1].length === 4) {
+                        return new Date(parts[1], parts[0] - 1, 1); // MM/YYYY
+                    }
+                    return new Date(new Date().getFullYear(), parts[1] - 1, parts[0]); // DD/MM defaults to current year
                 }
                 return new Date(parts[2], parts[1] - 1, parts[0]);
             }
             if(d.includes('-')) {
                 const parts = d.split('-');
                 if(parts.length === 2) {
-                     return new Date(parts[0], parts[1] - 1, 1);
+                     if (parts[0].length === 4) {
+                         return new Date(parts[0], parts[1] - 1, 1); // YYYY-MM
+                     }
+                     return new Date(new Date().getFullYear(), parts[1] - 1, parts[0]); // MM-DD or something
                 }
-                return new Date(parts[0], parts[1] - 1, parts[2]);
+                return new Date(parts[0], parts[1] - 1, parts[2]); // YYYY-MM-DD
             }
             return new Date(d);
         };

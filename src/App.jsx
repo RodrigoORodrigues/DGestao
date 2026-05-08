@@ -698,7 +698,13 @@ export default function App() {
                 report.dados.forEach((dado, idx) => {
                     todasAsVendas.push({
                         id: `rep_${report.id}_${idx}`, isFromReport: true, reportId: report.id, reportRowIndex: idx,
-                        numero: dado.cod, cliente: dado.cliente, dataVenda: report.dataCriacao ? report.dataCriacao.split('T')[0] : dataDeHojeInterna(),
+                        numero: dado.cod, 
+                        cliente: dado.cliente, 
+                        dataVenda: dado.data && dado.data.includes('-') && dado.data.split('-')[0].length === 4 
+                            ? dado.data 
+                            : (dado.data && dado.data.includes('/') 
+                                ? dado.data.split('/').reverse().join('-') 
+                                : (report.dataCriacao ? report.dataCriacao.split('T')[0] : dataDeHojeInterna())),
                         situacao: dado.situacao, loja: dado.loja, valor: dado.valorTotal, parcela: dado.parcela || '', 
                         corretor: dado.vendedor || '', inicioVigencia: dado.inicioVigencia || '', notaFiscal: dado.notaFiscal || '',
                         contrato: dado.contrato || '', codigoOperadora: dado.codigoOperadora || 'AMIL', vidas: dado.vidas || '', 
