@@ -1623,160 +1623,157 @@ export default function App() {
         let textoNormalizado = texto.replace(/\s+/g, ' ').trim(); 
         let textoSemFalsoContrato = textoNormalizado.replace(/Total\s+contrato\s*:/gi, 'Total_Apurado:');
         
-        const blocosContrato = textoSemFalsoContrato.split(/Contrato\s*:/i); 
-        if (blocosContrato.length > 0) blocosContrato.shift();
-        
-        const novosRegistos = []; 
-        const clientesParaInserir = []; 
-        const clientesParaAtualizar = new Map();
-        const nomesClientesExistem = new Set(clientes.map(c => c.nome.toLowerCase()));
-        let alertasSequencia = [];
-        
-        let currentMaxVendaCodigo = vendasList.reduce((max, v) => {
-            let num = parseInt(v.numero, 10);
-            return !isNaN(num) && num > max ? num : max;
-        }, 0);
-
-        let currentMaxCodigo = clientes.reduce((max, c) => {
-            let v = parseInt(c.codigo, 10);
-            return !isNaN(v) && v > max ? v : max;
-        }, 0);
-
-        for (let bloco of blocosContrato) {
-            try {
-                bloco = bloco.trim(); 
-                if (bloco === "") continue;
-                
-                let codCliente = "N/D", nomeCliente = "";
-                
-                const matchNome = bloco.match(/^(\d+)\s*(?:-)?\s*(.+?)(?=\s+Fatura|\s+Proposta|\s+Data|\s+Qtd|\s+Forma|\s+\d{2}\/\d{4})/i);
-                if (matchNome) { 
-                    codCliente = matchNome[1].trim(); 
-                    nomeCliente = matchNome[2].trim(); 
-                    nomeCliente = nomeCliente.replace(/(?:\s+[\d\/\.\-,]+)+$/, '').trim(); 
-                }
-                if(!nomeCliente) continue;
-
-                currentMaxVendaCodigo++;
-                let codRegistro = String(currentMaxVendaCodigo).padStart(5, '0');
-                let contratoDetectado = codCliente !== "N/D" ? codCliente : "";
-
-                if(!nomesClientesExistem.has(nomeCliente.toLowerCase())) {
-                    nomesClientesExistem.add(nomeCliente.toLowerCase());
-                    currentMaxCodigo++;
-                    let newCodigo = String(currentMaxCodigo).padStart(5, '0');
-                    clientesParaInserir.push({ 
-                        codigo: contratoDetectado || newCodigo, 
-                        nome: nomeCliente, 
-                        tipo: 'Pessoa jurídica', 
-                        documento: '', 
-                        telefone: '', 
-                        celular: '', 
-                        email: '', 
-                        situacao: true,
-                        operadora: extratoOperadora,
-                        empresa: empresaContexto
-                    });
-                } else {
-                    let existingCli = clientes.find(c => c.nome.toLowerCase() === nomeCliente.toLowerCase());
-                    if (existingCli && (!existingCli.operadora || existingCli.operadora.trim() === '' || existingCli.operadora === '-')) {
-                        if (!clientesParaAtualizar.has(existingCli.id)) {
-                            clientesParaAtualizar.set(existingCli.id, { operadora: extratoOperadora });
-                        }
+        const parseBlocosExtrato = (blocosContrato) => {
+            for (let bloco of blocosContrato) {
+                try {
+                    bloco = bloco.trim(); 
+                    if (bloco === "") continue;
+                    
+                    let codCliente = "N/D", nomeCliente = "";
+                    
+                    const matchNome = bloco.match(/^(\d+)\s*(?:-)?\s*(.+?)(?=\s+Fatura|\s+Proposta|\s+Data|\s+Qtd|\s+Forma|\s+\d{2}\/\d{4})/i);
+                    if (matchNome) { 
+                        codCliente = matchNome[1].trim(); 
+                        nomeCliente = matchNome[2].trim(); 
+                        nomeCliente = nomeCliente.replace(/(?:\s+[\d\/\.\-,]+)+$/, '').trim(); 
                     }
-                }
+                    if(!nomeCliente) continue;
 
-                let valorTotal = 0, comissao = 0; 
-                let vidasDetectadas = "1";
-                
-                const regexValores = /Sem Repique\s+(\d{1,2},\d{2})\s+([\d\.]+,\d{2})\s+([\d\.]+,\d{2})/i; 
-                let matchValores = regexValores.exec(bloco);
-                if (matchValores) { 
-                    valorTotal = parseFloat(matchValores[2].replace(/\./g, '').replace(',', '.')); 
-                    comissao = parseFloat(matchValores[3].replace(/\./g, '').replace(',', '.')); 
-                } else {
-                    const regexFallback = /(\d{1,2},\d{2})\s+([\d\.]+,\d{2})\s+([\d\.]+,\d{2})\s+Médico/i; 
-                    let matchFallback = regexFallback.exec(bloco);
-                    if(matchFallback){ 
-                        valorTotal = parseFloat(matchFallback[2].replace(/\./g, '').replace(',', '.')); 
-                        comissao = parseFloat(matchFallback[3].replace(/\./g, '').replace(',', '.')); 
-                    }
-                }
+                    currentMaxVendaCodigo++;
+                    let codRegistro = String(currentMaxVendaCodigo).padStart(5, '0');
+                    let contratoDetectado = codCliente !== "N/D" ? codCliente : "";
 
-                const regexVidas = /(?:\s+)(\d+)\s+(?:\d{1,2},\d{2}\s+)?(?:[\d\.]+,\d{2})\s+(?:[\d\.]+,\d{2})/i; 
-                let matchVidas = regexVidas.exec(bloco);
-                if (matchVidas) { 
-                    vidasDetectadas = matchVidas[1]; 
-                }
-
-                if (valorTotal > 0) {
-                    let inicioVigenciaDetectada = ""; 
-                    const regexDataVigencia = /\b(\d{2}\/\d{2}\/\d{4})\b/; 
-                    let matchVigencia = regexDataVigencia.exec(bloco);
-                    if (matchVigencia) { 
-                        const partes = matchVigencia[1].split('/'); 
-                        inicioVigenciaDetectada = `${partes[2]}-${partes[1]}-${partes[0]}`; 
-                    }
-
-                    let vendedorDetectado = nomeEmpresa; 
-                    let parcelaDetectada = "1";
-                    let numeroEsperado = null;
-                    const historicoVendasCliente = vendasList.filter(v => 
-                        (v.cliente && v.cliente.toLowerCase() === nomeCliente.toLowerCase()) || 
-                        (codCliente !== "N/D" && v.numero === codCliente)
-                    );
-
-                    if (historicoVendasCliente.length > 0) {
-                        const ultimaVenda = historicoVendasCliente.sort((a,b) => new Date(b.dataVenda) - new Date(a.dataVenda))[0];
-                        if (ultimaVenda.corretor && ultimaVenda.corretor !== "Todos") vendedorDetectado = ultimaVenda.corretor;
-                        if (!inicioVigenciaDetectada && ultimaVenda.inicioVigencia) inicioVigenciaDetectada = ultimaVenda.inicioVigencia;
-                        
-                        if (ultimaVenda.parcela) { 
-                            let numeroAtual = parseInt(ultimaVenda.parcela.toString().replace(/\D/g, '')); 
-                            if (!isNaN(numeroAtual)) {
-                                numeroEsperado = numeroAtual + 1;
-                                parcelaDetectada = numeroEsperado.toString();
+                    if(!nomesClientesExistem.has(nomeCliente.toLowerCase())) {
+                        nomesClientesExistem.add(nomeCliente.toLowerCase());
+                        currentMaxCodigo++;
+                        let newCodigo = String(currentMaxCodigo).padStart(5, '0');
+                        clientesParaInserir.push({ 
+                            codigo: contratoDetectado || newCodigo, 
+                            nome: nomeCliente, 
+                            tipo: 'Pessoa jurídica', 
+                            documento: '', 
+                            telefone: '', 
+                            celular: '', 
+                            email: '', 
+                            situacao: true,
+                            operadora: extratoOperadora,
+                            empresa: empresaContexto
+                        });
+                    } else {
+                        let existingCli = clientes.find(c => c.nome.toLowerCase() === nomeCliente.toLowerCase());
+                        if (existingCli && (!existingCli.operadora || existingCli.operadora.trim() === '' || existingCli.operadora === '-')) {
+                            if (!clientesParaAtualizar.has(existingCli.id)) {
+                                clientesParaAtualizar.set(existingCli.id, { operadora: extratoOperadora });
                             }
                         }
                     }
 
-                    let dataRelatorioLocal = "01/2026"; // TODO: Should really parse from PDF report period
-                    let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataDeHojeInterna());
-                    if (calcParcela) {
-                        parcelaDetectada = calcParcela;
-                        let numCalculado = parseInt(calcParcela);
-                        if (numeroEsperado !== null && !isNaN(numCalculado) && numCalculado > numeroEsperado) {
-                            alertasSequencia.push(`Cliente ${nomeCliente}: Pulo detectado! Esperava parcela ${numeroEsperado}, calculada ${calcParcela}.`);
+                    let valorTotal = 0, comissao = 0; 
+                    let vidasDetectadas = "1";
+                    
+                    const regexValores = /Sem Repique\s+(\d{1,2},\d{2})\s+([\d\.]+,\d{2})\s+([\d\.]+,\d{2})/i; 
+                    let matchValores = regexValores.exec(bloco);
+                    if (matchValores) { 
+                        valorTotal = parseFloat(matchValores[2].replace(/\./g, '').replace(',', '.')); 
+                        comissao = parseFloat(matchValores[3].replace(/\./g, '').replace(',', '.')); 
+                    } else {
+                        const regexFallback = /(\d{1,2},\d{2})\s+([\d\.]+,\d{2})\s+([\d\.]+,\d{2})\s+Médico/i; 
+                        let matchFallback = regexFallback.exec(bloco);
+                        if(matchFallback){ 
+                            valorTotal = parseFloat(matchFallback[2].replace(/\./g, '').replace(',', '.')); 
+                            comissao = parseFloat(matchFallback[3].replace(/\./g, '').replace(',', '.')); 
                         }
                     }
 
-                    novosRegistos.push({ 
-                        cod: extratoCodOperadora || codRegistro, 
-                        contrato: contratoDetectado, 
-                        codOperadora: extratoCodOperadora || null,
-                        codigoOperadora: extratoOperadora, 
-                        vidas: vidasDetectadas,
-                        cliente: nomeCliente, 
-                        data: dataDeHojeInterna(), 
-                        situacao: `FATURADO ${empresaContextoUpper} NF`, 
-                        loja: empresaContextoUpper, 
-                        valorTotal, 
-                        comissao, 
-                        vendedor: nomeEmpresa, 
-                        parcela: parcelaDetectada,
-                        inicioVigencia: inicioVigenciaDetectada, 
-                        notaFiscal: reportDoc?.notaFiscal || (reportDoc?.parceiro?.match(/\(NF:\s*([^)]+)\)/)?.[1] || ''), 
-                        vitalicio: 'Sim', 
-                        assessoria: empresaContexto, 
-                        formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
-                        servico: '', 
-                        desconto: '', 
-                        selected: true
-                    });
+                    const regexVidas = /(?:\s+)(\d+)\s+(?:\d{1,2},\d{2}\s+)?(?:[\d\.]+,\d{2})\s+(?:[\d\.]+,\d{2})/i; 
+                    let matchVidas = regexVidas.exec(bloco);
+                    if (matchVidas) { 
+                        vidasDetectadas = matchVidas[1]; 
+                    }
+
+                    if (valorTotal > 0) {
+                        let inicioVigenciaDetectada = ""; 
+                        const regexDataVigencia = /\b(\d{2}\/\d{2}\/\d{4})\b/; 
+                        let matchVigencia = regexDataVigencia.exec(bloco);
+                        if (matchVigencia) { 
+                            const partes = matchVigencia[1].split('/'); 
+                            inicioVigenciaDetectada = `${partes[2]}-${partes[1]}-${partes[0]}`; 
+                        }
+
+                        let vendedorDetectado = nomeEmpresa; 
+                        let parcelaDetectada = "1";
+                        let numeroEsperado = null;
+                        const historicoVendasCliente = vendasList.filter(v => 
+                            (v.cliente && v.cliente.toLowerCase() === nomeCliente.toLowerCase()) || 
+                            (codCliente !== "N/D" && v.numero === codCliente)
+                        );
+
+                        if (historicoVendasCliente.length > 0) {
+                            const ultimaVenda = historicoVendasCliente.sort((a,b) => new Date(b.dataVenda) - new Date(a.dataVenda))[0];
+                            if (ultimaVenda.corretor && ultimaVenda.corretor !== "Todos") vendedorDetectado = ultimaVenda.corretor;
+                            if (!inicioVigenciaDetectada && ultimaVenda.inicioVigencia) inicioVigenciaDetectada = ultimaVenda.inicioVigencia;
+                            
+                            if (ultimaVenda.parcela) { 
+                                let numeroAtual = parseInt(ultimaVenda.parcela.toString().replace(/\D/g, '')); 
+                                if (!isNaN(numeroAtual)) {
+                                    numeroEsperado = numeroAtual + 1;
+                                    parcelaDetectada = numeroEsperado.toString();
+                                }
+                            }
+                        }
+
+                        let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataDeHojeInterna());
+                        if (calcParcela) {
+                            parcelaDetectada = calcParcela;
+                            let numCalculado = parseInt(calcParcela);
+                            if (numeroEsperado !== null && !isNaN(numCalculado) && numCalculado > numeroEsperado) {
+                                alertasSequencia.push(`Cliente ${nomeCliente}: Pulo detectado! Esperava parcela ${numeroEsperado}, calculada ${calcParcela}.`);
+                            }
+                        }
+
+                        novosRegistos.push({ 
+                            cod: extratoCodOperadora || codRegistro, 
+                            contrato: contratoDetectado, 
+                            codOperadora: extratoCodOperadora || null,
+                            codigoOperadora: extratoOperadora, 
+                            vidas: vidasDetectadas,
+                            cliente: nomeCliente, 
+                            data: dataDeHojeInterna(), 
+                            situacao: `FATURADO ${empresaContextoUpper} NF`, 
+                            loja: empresaContextoUpper, 
+                            valorTotal, 
+                            comissao, 
+                            vendedor: nomeEmpresa, 
+                            parcela: parcelaDetectada,
+                            inicioVigencia: inicioVigenciaDetectada, 
+                            notaFiscal: reportDoc?.notaFiscal || (reportDoc?.parceiro?.match(/\(NF:\s*([^)]+)\)/)?.[1] || ''), 
+                            vitalicio: 'Sim', 
+                            assessoria: empresaContexto, 
+                            formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
+                            servico: '', 
+                            desconto: '', 
+                            selected: true
+                        });
+                    }
+                } catch (e) { 
+                    console.warn("Erro bloco:", e); 
                 }
-            } catch (e) { 
-                console.warn("Erro bloco:", e); 
             }
+        };
+
+        if (extratoOperadora === 'MED SENIOR') {
+            let textoSemFalsoContrato = textoNormalizado.replace(/Total\s+contrato\s*:/gi, 'Total_Apurado:');
+            const blocosContrato = textoSemFalsoContrato.split(/Contrato\s*:/i); 
+            if (blocosContrato.length > 0) blocosContrato.shift();
+            
+            processarBlocosExtrato(blocosContrato);
+        } else {
+            // Lógica Padrão / AMIL
+            let textoSemFalsoContrato = textoNormalizado.replace(/Total\s+contrato\s*:/gi, 'Total_Apurado:');
+            const blocosContrato = textoSemFalsoContrato.split(/Contrato\s*:/i); 
+            if (blocosContrato.length > 0) blocosContrato.shift();
+            
+            processarBlocosExtrato(blocosContrato);
         }
         
         if(clientesParaInserir.length > 0) { 
