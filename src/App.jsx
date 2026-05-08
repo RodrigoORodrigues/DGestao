@@ -3465,7 +3465,20 @@ export default function App() {
                                         {reportTableCols.op && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400">Op. | Seg.</th>}
                                         {reportTableCols.vidas && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-indigo-600 dark:text-indigo-400">Vidas</th>}
                                         {reportTableCols.cliente && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700">Cliente</th>}
-                                        {reportTableCols.data && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center">Data</th>}
+                                        {reportTableCols.data && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center">Data
+                                            <div className="mt-1 font-normal">
+                                                <input type="date" title="Alterar todas as datas" className="text-[10px] text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1 outline-none no-print" onChange={(e) => {
+                                                    const rawDate = e.target.value;
+                                                    if(!rawDate) return;
+                                                    if(window.confirm(`Deseja alterar a data de TODAS as linhas para ${rawDate.split('-').reverse().join('/')}?`)) {
+                                                        setPdfData(prev => prev.map(l => {
+                                                            const calcParcela = calcularParcelaDaVigencia(l.inicioVigencia, rawDate);
+                                                            return { ...l, data: rawDate, parcela: calcParcela || l.parcela };
+                                                        }));
+                                                    }
+                                                }} />
+                                            </div>
+                                        </th>}
                                         {reportTableCols.loja && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center">Loja</th>}
                                         {reportTableCols.servico && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-amber-600 dark:text-amber-400">Serviço</th>}
                                         {reportTableCols.desconto && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-rose-600 dark:text-rose-400">Desc.</th>}
