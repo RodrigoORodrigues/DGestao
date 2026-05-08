@@ -1979,14 +1979,15 @@ export default function App() {
                             codigo: newCodigo,
                             nome: r.cliente || null,
                             tipo: 'Pessoa física',
-                            documento: null, telefone: null, celular: null, cep: null, logradouro: null, numero: null, bairro: null, cidade: null, uf: null, email: null, situacao: true, operadora: r.codigoOperadora || null, servico: r.servico || 'Plano de Saúde',
+                            documento: null, telefone: null, celular: null, cep: null, logradouro: null, numero: null, bairro: null, cidade: null, uf: null, email: null, situacao: true, operadora: r.codigoOperadora || currentReportOperadora || null, servico: r.servico || 'Plano de Saúde',
                             empresa: targetEmpresa
                         };
                         clientesParaInserir.push(newClient);
                         clientesArrayTemp.push(newClient);
                     } else if (existingCli && (!existingCli.operadora || existingCli.operadora.trim() === '' || existingCli.operadora === '-')) {
-                        if (!clientesParaAtualizar.has(existingCli.id) && r.codigoOperadora) {
-                            clientesParaAtualizar.set(existingCli.id, { operadora: r.codigoOperadora });
+                        const opToSet = r.codigoOperadora || currentReportOperadora;
+                        if (!clientesParaAtualizar.has(existingCli.id) && opToSet) {
+                            clientesParaAtualizar.set(existingCli.id, { operadora: opToSet });
                         }
                     }
 
@@ -2002,7 +2003,7 @@ export default function App() {
                             situacao: r.situacao || null, cliente: r.cliente || null, 
                             valor: r.valorTotal === '' || r.valorTotal === undefined || r.valorTotal === null ? 0 : parseFloat(r.valorTotal) || 0, 
                             comissao: r.comissao === '' || r.comissao === undefined || r.comissao === null ? null : parseFloat(r.comissao),
-                            contrato: r.contrato || null, codigoOperadora: r.codigoOperadora || null, 
+                            contrato: r.contrato || null, codigoOperadora: r.codigoOperadora || currentReportOperadora || null, 
                             vidas: r.vidas === '' || r.vidas === undefined || r.vidas === null ? null : parseInt(r.vidas, 10), 
                             vitalicio: r.vitalicio || null, assessoria: r.assessoria || null, 
                             formaPagamento: r.formaPagamento || null, servico: r.servico || null, 
