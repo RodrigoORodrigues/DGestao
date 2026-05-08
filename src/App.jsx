@@ -1634,15 +1634,8 @@ export default function App() {
         const empresaContexto = reportDoc?.empresa || nomeEmpresa;
         const empresaContextoUpper = empresaContexto.toUpperCase();
 
-        let extratoOperadora = 'AMIL';
-        let extratoCodOperadora = '';
-        if (reportDoc?.parceiro) {
-            const matchOp = reportDoc.parceiro.match(/^\[([^|]+)\|([^\]]*)\]/);
-            if (matchOp) {
-                extratoOperadora = matchOp[1].trim();
-                extratoCodOperadora = matchOp[2].trim();
-            }
-        }
+        let extratoOperadora = reportDoc?.codigoOperadora || 'AMIL';
+        let extratoCodOperadora = reportDoc?.codOperadora || '';
 
         setCurrentReportId(null); 
         setReportName(`Relatório Automático - ${new Date().toLocaleDateString('pt-PT')}`); 
@@ -1771,9 +1764,9 @@ export default function App() {
                     }
 
                     novosRegistos.push({ 
-                        cod: extratoCodOperadora || reportDoc?.codOperadora || codRegistro, 
+                        cod: extratoCodOperadora || codRegistro, 
                         contrato: contratoDetectado, 
-                        codigoOperadora: extratoOperadora || reportDoc?.codigoOperadora || 'AMIL', 
+                        codigoOperadora: extratoOperadora, 
                         vidas: vidasDetectadas,
                         cliente: nomeCliente, 
                         data: dataDeHojeInterna(), 
@@ -4325,10 +4318,12 @@ export default function App() {
                                     <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Operadora | Seguradora</label>
                                     <select required className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={formData.codigoOperadora || ''} onChange={e => setFormData({...formData, codigoOperadora: e.target.value})}>
                                         <option value="">Selecione uma Operadora | Seguradora</option>
-                                        {formData.categoria === 'Operadoras' 
-                                            ? LISTA_OPERADORAS.map(op => <option key={op} value={op}>{op}</option>)
-                                            : LISTA_SEGURADORAS.map(seg => <option key={seg} value={seg}>{seg}</option>)
-                                        }
+                                        <optgroup label="Operadoras">
+                                            {LISTA_OPERADORAS.map(op => <option key={op} value={op}>{op}</option>)}
+                                        </optgroup>
+                                        <optgroup label="Seguradoras">
+                                            {LISTA_SEGURADORAS.map(seg => <option key={seg} value={seg}>{seg}</option>)}
+                                        </optgroup>
                                         <option value="OUTRA">OUTRA</option>
                                     </select>
                                     {formData.codigoOperadora === 'OUTRA' && (
