@@ -41,6 +41,34 @@ export async function safeSupabaseUpdate(table, updateObj, eqField, eqValue) {
     return { data, error: null };
 }
 
+export async function syncGlobalSysConfigToDB(empresas, printPresets) {
+    if (!supabase) return;
+    try {
+        const { data: existing } = await supabase.from('savedReports').select('*').eq('nome', '___LOCAL_SYS_CONFIG___').limit(1);
+        
+        let existingDados = {};
+        if (existing && existing.length > 0) {
+            existingDados = Array.isArray(existing[0].dados) ? existing[0].dados[0] : existing[0].dados;
+            if (!existingDados) existingDados = {};
+        }
+
+        const payload = { 
+            nome: '___LOCAL_SYS_CONFIG___', 
+            dados: { 
+                empresas: empresas || existingDados.empresas || JSON.parse(localStorage.getItem('protetta_empresas') || '[]'),
+                print_presets: printPresets || existingDados.print_presets || JSON.parse(localStorage.getItem('protetta_print_presets') || '[]')
+            },
+            empresa: 'Todas'
+        };
+        
+        if (existing && existing.length > 0) {
+            await safeSupabaseUpdate('savedReports', payload, 'id', existing[0].id);
+        } else {
+            await safeSupabaseInsert('savedReports', [{...payload, id: 0, periodo: 'System', dataCriacao: new Date().toISOString(), criadoPor: 'System' }]);
+        }
+    } catch(e) { console.error("SysConfig Sync Failed", e); }
+}
+
 import { 
     SYSTEM_MODULES, EMPRESAS_INTERNAS, CATEGORIAS, MESES, LISTA_OPERADORAS, LISTA_SEGURADORAS,
     dataDeHojeInterna, formatarMoeda, formatarDataVisivel, calcularParcelaDaVigencia,
@@ -149,11 +177,14 @@ export default function App() {
         setRawEmpresasList(newList);
         localStorage.setItem('protetta_empresas', JSON.stringify(newList));
         
+        // Save to global DB fallback
+        syncGlobalSysConfigToDB(newList, null);
+        
         if (supabase) {
             try {
                 const { error } = await supabase.from('empresas').upsert(newList, { onConflict: 'id' });
                 if (error && (error.message?.includes('does not exist') || error.code === '42P01')) {
-                    console.warn("Tabela 'empresas' ausente no Supabase. Os dados das empresas estão apenas locais.");
+                    // Handled gracefully with syncGlobalSysConfigToDB
                 } else if (error) {
                     console.error("Erro ao salvar empresas na nuvem:", error);
                 }
@@ -393,6 +424,11 @@ export default function App() {
                 supabase.from('empresas').select('*').catch(() => ({ data: null, error: true }))
             ]);
             
+            // Sys config injected in savedReports
+            let sysConfigRow = resSaved?.data?.find(r => r.nome === '___LOCAL_SYS_CONFIG___');
+            let sysConfig = sysConfigRow ? (Array.isArray(sysConfigRow.dados) ? sysConfigRow.dados[0] : sysConfigRow.dados) : {};
+            if (!sysConfig) sysConfig = {};
+            
             // Reconstruct and update companies list based on data
             setRawEmpresasList(prev => {
                 let map = new Map(prev.map(e => [e.nome.toUpperCase(), e]));
@@ -405,12 +441,22 @@ export default function App() {
                             map.set(dbEmp.nome.toUpperCase(), dbEmp);
                             changed = true;
                         } else {
-                            // Update local attributes from cloud
                             let existing = map.get(dbEmp.nome.toUpperCase());
                             if (!existing.cnpj && dbEmp.cnpj) {
                                 map.set(dbEmp.nome.toUpperCase(), { ...existing, ...dbEmp });
                                 changed = true;
                             }
+                        }
+                    });
+                }
+                
+                // Add from SysConfig
+                if (sysConfig.empresas && Array.isArray(sysConfig.empresas)) {
+                    sysConfig.empresas.forEach(dbEmp => {
+                        if (!map.has(dbEmp.nome.toUpperCase())) { map.set(dbEmp.nome.toUpperCase(), dbEmp); changed = true; }
+                        else {
+                            let existing = map.get(dbEmp.nome.toUpperCase());
+                            if (!existing.cnpj && dbEmp.cnpj) { map.set(dbEmp.nome.toUpperCase(), { ...existing, ...dbEmp }); changed = true; }
                         }
                     });
                 }
@@ -437,6 +483,7 @@ export default function App() {
                     localStorage.setItem('protetta_empresas', JSON.stringify(newList));
                     // Try to save to Supabase
                     supabase.from('empresas').upsert(newList, { onConflict: 'id' }).catch(() => {});
+                    syncGlobalSysConfigToDB(newList, null);
                     return newList;
                 }
                 return prev;
@@ -500,16 +547,45 @@ export default function App() {
 
             try {
                 const { data: pData, error: pErr } = await supabase.from('print_presets').select('*');
-                if (!pErr && pData) {
-                    setPrintPresets(pData);
-                } else {
-                    const saved = localStorage.getItem('protetta_print_presets');
-                    if (saved) setPrintPresets(JSON.parse(saved));
+                let mergedPresets = new Map();
+                
+                // Add local presets to map
+                const savedLocalStr = localStorage.getItem('protetta_print_presets');
+                if (savedLocalStr) {
+                    try {
+                        const savedLocal = JSON.parse(savedLocalStr);
+                        if (Array.isArray(savedLocal)) {
+                            savedLocal.forEach(p => mergedPresets.set(p.name, p));
+                        }
+                    } catch(e){}
+                }
+                
+                // Add sysConfig presets
+                if (sysConfig.print_presets && Array.isArray(sysConfig.print_presets)) {
+                    sysConfig.print_presets.forEach(p => mergedPresets.set(p.name, p));
+                }
+                
+                // Add DB presets to map (override local if conflict)
+                if (!pErr && pData && pData.length > 0) {
+                    pData.forEach(p => mergedPresets.set(p.name, p));
+                }
+                
+                const finalPresets = Array.from(mergedPresets.values());
+                setPrintPresets(finalPresets);
+                
+                // Push local-only to DB
+                if (finalPresets.length > 0) {
+                    supabase.from('print_presets').upsert(finalPresets, { onConflict: 'id' }).catch(()=>{});
+                    syncGlobalSysConfigToDB(null, finalPresets);
                 }
             } catch(e) {
                 const saved = localStorage.getItem('protetta_print_presets');
                 if (saved) setPrintPresets(JSON.parse(saved));
             }
+
+            // Sync whatever was loaded/is local back to DB as fallback
+            syncGlobalSysConfigToDB(null, null);
+
         } catch (err) { console.error("Erro ao carregar Supabase:", err); }
     };
 
@@ -2367,18 +2443,21 @@ export default function App() {
             const { data, error } = await supabase.from('print_presets').insert([newPreset]).select();
             if (error) throw error;
             if (data && data.length > 0) {
-                setPrintPresets(prev => [...prev.filter(p => p.name !== newPresetName), data[0]]);
+                const updated = [...printPresets.filter(p => p.name !== newPresetName), data[0]];
+                setPrintPresets(updated);
+                syncGlobalSysConfigToDB(null, updated);
                 setSelectedPreset(data[0].id || data[0].name);
                 showAlert("Seleção guardada com sucesso no Banco de Dados!");
             }
         } catch (err) {
-            console.warn("Tabela print_presets ausente, usando cache local:", err);
+            console.warn("Tabela print_presets ausente, usando global cache:", err);
             const newLocalPreset = { id: Date.now().toString(), name: newPresetName, cols: printCols };
             const updated = [...printPresets.filter(p => p.name !== newPresetName), newLocalPreset];
             setPrintPresets(updated);
             localStorage.setItem('protetta_print_presets', JSON.stringify(updated));
+            syncGlobalSysConfigToDB(null, updated);
             setSelectedPreset(newLocalPreset.id);
-            showAlert("Seleção guardada no seu computador.");
+            showAlert("Seleção guardada globalmente no BD.");
         } finally {
             setLoading(false); setNewPresetName('');
         }
@@ -2395,10 +2474,11 @@ export default function App() {
         setLoading(true); setLoadingMsg("Apagando...");
         try {
             const isLocal = printPresets.find(p => String(p.id) === String(idOrName) || p.name === idOrName)?.id?.toString().length > 10;
-            if (!isLocal && supabase) await supabase.from('print_presets').delete().eq('id', idOrName);
+            if (!isLocal && supabase) { await supabase.from('print_presets').delete().eq('id', idOrName).catch(()=>{}); }
             
             const updated = printPresets.filter(p => String(p.id) !== String(idOrName) && p.name !== idOrName);
             setPrintPresets(updated); localStorage.setItem('protetta_print_presets', JSON.stringify(updated));
+            syncGlobalSysConfigToDB(null, updated);
             
             if (selectedPreset === idOrName) { setSelectedPreset(''); setPrintCols(defaultPrintCols); }
         } catch(e) { showAlert("Erro ao apagar: " + e.message); } finally { setLoading(false); }
