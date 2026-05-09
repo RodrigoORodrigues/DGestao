@@ -139,7 +139,7 @@ export default function App() {
         return rawEmpresasList.filter(e => e.nome.toUpperCase() === currentUser.empresa.toUpperCase());
     }, [rawEmpresasList, currentUser]);
 
-    const setEmpresasList = (newListOrFunc) => {
+    const setEmpresasList = async (newListOrFunc) => {
         let newList;
         if (typeof newListOrFunc === 'function') {
             newList = newListOrFunc(rawEmpresasList);
@@ -148,6 +148,17 @@ export default function App() {
         }
         setRawEmpresasList(newList);
         localStorage.setItem('protetta_empresas', JSON.stringify(newList));
+        
+        if (supabase) {
+            try {
+                const { error } = await supabase.from('empresas').upsert(newList, { onConflict: 'id' });
+                if (error && (error.message?.includes('does not exist') || error.code === '42P01')) {
+                    console.warn("Tabela 'empresas' ausente no Supabase. Os dados das empresas estão apenas locais.");
+                } else if (error) {
+                    console.error("Erro ao salvar empresas na nuvem:", error);
+                }
+            } catch(e) {}
+        }
     };
 
     const activeEmpresa = (currentUser?.empresa && currentUser?.empresa !== 'Todas') 
@@ -376,10 +387,61 @@ export default function App() {
     const loadFromDB = async () => {
         if(!supabase) return;
         try {
-            const [resUsers, resCli, resVendas, resSaved, resRep] = await Promise.all([
+            const [resUsers, resCli, resVendas, resSaved, resRep, resEmpresas] = await Promise.all([
                 supabase.from('users').select('*'), supabase.from('clientes').select('*'),
-                supabase.from('vendas').select('*'), supabase.from('savedReports').select('*'), supabase.from('reports').select('*')
+                supabase.from('vendas').select('*'), supabase.from('savedReports').select('*'), supabase.from('reports').select('*'),
+                supabase.from('empresas').select('*').catch(() => ({ data: null, error: true }))
             ]);
+            
+            // Reconstruct and update companies list based on data
+            setRawEmpresasList(prev => {
+                let map = new Map(prev.map(e => [e.nome.toUpperCase(), e]));
+                let changed = false;
+                
+                // Add from db if table exists
+                if (resEmpresas && resEmpresas.data && resEmpresas.data.length > 0) {
+                    resEmpresas.data.forEach(dbEmp => {
+                        if (!map.has(dbEmp.nome.toUpperCase())) {
+                            map.set(dbEmp.nome.toUpperCase(), dbEmp);
+                            changed = true;
+                        } else {
+                            // Update local attributes from cloud
+                            let existing = map.get(dbEmp.nome.toUpperCase());
+                            if (!existing.cnpj && dbEmp.cnpj) {
+                                map.set(dbEmp.nome.toUpperCase(), { ...existing, ...dbEmp });
+                                changed = true;
+                            }
+                        }
+                    });
+                }
+                
+                // Extract from related data
+                let extractedEmpresas = new Set();
+                resUsers?.data?.forEach(u => { if (u.empresa && u.empresa !== 'Todas') extractedEmpresas.add(u.empresa.toUpperCase()); });
+                resCli?.data?.forEach(c => { if (c.empresa) extractedEmpresas.add(c.empresa.toUpperCase()); });
+                resVendas?.data?.forEach(v => { 
+                    if (v.loja) extractedEmpresas.add(v.loja.toUpperCase().replace(' SEGUROS', '').trim());
+                    if (v.empresa) extractedEmpresas.add(v.empresa.toUpperCase());
+                });
+                
+                extractedEmpresas.forEach(empName => {
+                    if (empName && !map.has(empName)) {
+                        let newId = map.size > 0 ? Math.max(...Array.from(map.values()).map(e => e.id || 0)) + 1 : 1;
+                        map.set(empName, { id: newId, nome: empName, cnpj: '', logo: '', isDefault: map.size === 0 });
+                        changed = true;
+                    }
+                });
+                
+                if (changed) {
+                    const newList = Array.from(map.values());
+                    localStorage.setItem('protetta_empresas', JSON.stringify(newList));
+                    // Try to save to Supabase
+                    supabase.from('empresas').upsert(newList, { onConflict: 'id' }).catch(() => {});
+                    return newList;
+                }
+                return prev;
+            });
+
             const userFilters = (data) => {
                 if (!data) return [];
                 if (currentUser?.empresa === 'Todas' || currentUser?.role === 'master' || currentUser?.role === 'admin') return data;
