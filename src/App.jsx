@@ -382,6 +382,7 @@ export default function App() {
             ]);
             const userFilters = (data) => {
                 if (!data) return [];
+                if (currentUser?.empresa === 'Todas' || currentUser?.role === 'master' || currentUser?.role === 'admin') return data;
                 const targetEmp = nomeEmpresaUpper;
                 return data.filter(item => {
                     let emp = (item?.empresa || item?.loja || '').toUpperCase();
