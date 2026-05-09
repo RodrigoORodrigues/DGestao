@@ -55,8 +55,8 @@ export async function syncGlobalSysConfigToDB(empresas, printPresets) {
         const payload = { 
             nome: '___LOCAL_SYS_CONFIG___', 
             dados: { 
-                empresas: empresas || existingDados.empresas || JSON.parse(localStorage.getItem('protetta_empresas') || '[]'),
-                print_presets: printPresets || existingDados.print_presets || JSON.parse(localStorage.getItem('protetta_print_presets') || '[]')
+                empresas: (empresas && empresas.length > 0) ? empresas : (existingDados.empresas || JSON.parse(localStorage.getItem('protetta_empresas') || '[]')),
+                print_presets: (printPresets && printPresets.length > 0) ? printPresets : (existingDados.print_presets || JSON.parse(localStorage.getItem('protetta_print_presets') || '[]'))
             },
             empresa: 'Todas'
         };
@@ -491,12 +491,11 @@ export default function App() {
 
             const userFilters = (data) => {
                 if (!data) return [];
-                if (currentUser?.empresa === 'Todas' || currentUser?.role === 'master' || currentUser?.role === 'admin') return data;
-                const targetEmp = nomeEmpresaUpper;
+                const targetEmp = (nomeEmpresaUpper || '').trim();
                 return data.filter(item => {
-                    let emp = (item?.empresa || item?.loja || '').toUpperCase();
-                    if (!emp) emp = 'PROTETTA'; // keep items with no company for backward compat, assigning them to default
-                    if (emp === targetEmp || emp.includes(targetEmp)) return true;
+                    let emp = (item?.empresa || item?.loja || '').toUpperCase().trim();
+                    if (!emp || emp === 'TODAS') return true; // Show 'Todas' items to everyone, or items with no company
+                    if (emp === targetEmp || emp.includes(targetEmp) || targetEmp.includes(emp)) return true;
                     return false;
                 });
             };
@@ -514,7 +513,12 @@ export default function App() {
             }
             if (resCli.data) setClientes(userFilters(resCli.data));
             if (resVendas.data) setVendasList(userFilters(resVendas.data));
-            if (resSaved.data) setSavedReportsList(userFilters(resSaved.data));
+            if (resSaved.data) {
+                const validReports = resSaved.data.filter(r => r.nome !== '___LOCAL_SYS_CONFIG___');
+                const filtered = userFilters(validReports);
+                console.log("Loaded Saved Reports from Supabase:", validReports.length, "Filtered:", filtered.length, filtered);
+                setSavedReportsList(filtered);
+            }
             if (resRep.data) {
                 let parsedReports = resRep.data.map(r => {
                     let parceiro = r.parceiro || '';
