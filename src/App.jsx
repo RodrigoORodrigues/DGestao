@@ -421,7 +421,7 @@ export default function App() {
             const [resUsers, resCli, resVendas, resSaved, resRep, resEmpresas] = await Promise.all([
                 supabase.from('users').select('*'), supabase.from('clientes').select('*'),
                 supabase.from('vendas').select('*'), supabase.from('savedReports').select('*'), supabase.from('reports').select('*'),
-                supabase.from('empresas').select('*').catch(() => ({ data: null, error: true }))
+                supabase.from('empresas').select('*').then(res => res, () => ({ data: null, error: true }))
             ]);
             
             // Sys config injected in savedReports
@@ -482,7 +482,7 @@ export default function App() {
                     const newList = Array.from(map.values());
                     localStorage.setItem('protetta_empresas', JSON.stringify(newList));
                     // Try to save to Supabase
-                    supabase.from('empresas').upsert(newList, { onConflict: 'id' }).catch(() => {});
+                    supabase.from('empresas').upsert(newList, { onConflict: 'id' }).then(() => {}, () => {});
                     syncGlobalSysConfigToDB(newList, null);
                     return newList;
                 }
@@ -575,7 +575,7 @@ export default function App() {
                 
                 // Push local-only to DB
                 if (finalPresets.length > 0) {
-                    supabase.from('print_presets').upsert(finalPresets, { onConflict: 'id' }).catch(()=>{});
+                    supabase.from('print_presets').upsert(finalPresets, { onConflict: 'id' }).then(()=>{}, ()=>{});
                     syncGlobalSysConfigToDB(null, finalPresets);
                 }
             } catch(e) {
@@ -2474,7 +2474,9 @@ export default function App() {
         setLoading(true); setLoadingMsg("Apagando...");
         try {
             const isLocal = printPresets.find(p => String(p.id) === String(idOrName) || p.name === idOrName)?.id?.toString().length > 10;
-            if (!isLocal && supabase) { await supabase.from('print_presets').delete().eq('id', idOrName).catch(()=>{}); }
+            if (!isLocal && supabase) { 
+                try { await supabase.from('print_presets').delete().eq('id', idOrName); } catch(e) {} 
+            }
             
             const updated = printPresets.filter(p => String(p.id) !== String(idOrName) && p.name !== idOrName);
             setPrintPresets(updated); localStorage.setItem('protetta_print_presets', JSON.stringify(updated));
