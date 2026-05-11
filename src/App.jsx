@@ -300,7 +300,7 @@ export default function App() {
     const [selectedInconsistencias, setSelectedInconsistencias] = useState([]);
 
     const vendasColLabels = {
-        numero: 'Registo', cliente: 'Cliente', dataVenda: 'Data', situacao: 'Situação', valor: 'Valor',
+        numero: 'Registo', cliente: 'Cliente', dataVenda: 'Data', situacao: 'Situação', valor: 'Valor', comissao: 'Comissão',
         contrato: 'Contrato', codOperadora: 'Cód. Op.', codigoOperadora: 'Operadora', vidas: 'Vidas', loja: 'Loja',
         servico: 'Serviço', corretor: 'Corretor', parcela: 'Parcela', inicioVigencia: 'Início Vigência',
         notaFiscal: 'NF', vitalicio: 'Vitalício', assessoria: 'Assessoria', formaPagamento: 'Pagamento',
@@ -309,7 +309,7 @@ export default function App() {
     
     // As colunas originais padrão para Vendas
     const defaultVendasCols = {
-        numero: true, cliente: true, dataVenda: true, situacao: true, valor: true,
+        numero: true, cliente: true, dataVenda: true, situacao: true, valor: true, comissao: true,
         contrato: false, codOperadora: false, codigoOperadora: false, vidas: false, loja: false,
         servico: false, corretor: false, parcela: false, inicioVigencia: false,
         notaFiscal: true, vitalicio: false, assessoria: false, formaPagamento: false,
@@ -945,7 +945,7 @@ export default function App() {
                         corretor: dado.vendedor || '', inicioVigencia: dado.inicioVigencia || '', notaFiscal: dado.notaFiscal || '',
                         contrato: dado.contrato || '', codigoOperadora: dado.codigoOperadora || 'AMIL', vidas: dado.vidas || '', 
                         vitalicio: dado.vitalicio || '', assessoria: dado.assessoria || nomeEmpresa, formaPagamento: dado.formaPagamento || (nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta'),
-                        servico: dado.servico || '', desconto: dado.desconto || '' 
+                        servico: dado.servico || '', desconto: dado.desconto || '', notas: dado.notas || '', comissao: dado.comissao || 0
                     });
                 });
             }
@@ -1173,13 +1173,90 @@ export default function App() {
             'Parcela': v.parcela,
             'Vidas': v.vidas,
             'Nota Fiscal': v.notaFiscal || 'Sem NF',
-            'Valor (R$)': v.valor
+            'Valor (R$)': v.valor,
+            'Comissão (R$)': v.comissao,
+            'Notas': v.notas || '-'
         }));
         const ws = XLSX.utils.json_to_sheet(dadosTratados);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Relatorio_Vendas");
         XLSX.writeFile(wb, `DonGestao_Vendas_${dataDeHojeInterna()}.xlsx`);
         setShowVendasAcoesMenu(false);
+    };
+
+    const reorganizarRegistosVendas = async () => {
+        showConfirm("ATENÇÃO: Deseja reorganizar todos os números de registo de vendas por ordem de data, começando do 00001? Isso atualizará o número de todas as vendas e relatórios salvos. Recomenda-se realizar o backup antes desta operação.", async () => {
+            setLoading(true); setLoadingMsg("Reorganizando registos...");
+            try {
+                let combined = [];
+                vendasList.forEach(v => {
+                    combined.push({
+                        type: 'venda',
+                        id: v.id,
+                        dataVenda: v.dataVenda || '1970-01-01',
+                        item: v
+                    });
+                });
+                savedReportsList.forEach(rep => {
+                    if (rep.dados && Array.isArray(rep.dados)) {
+                        rep.dados.forEach((dado, idx) => {
+                            combined.push({
+                                type: 'report',
+                                reportId: rep.id,
+                                reportIndex: idx,
+                                dataVenda: dado.dataVenda || dado.data || '1970-01-01',
+                                item: dado
+                            });
+                        });
+                    }
+                });
+                
+                // Sort by dataVenda ASC
+                combined.sort((a, b) => new Date(a.dataVenda) - new Date(b.dataVenda));
+                
+                let counter = 1;
+                const vendasUpdates = [];
+                const reportsUpdatesMap = new Map();
+                
+                const updatedReportsDados = {};
+                savedReportsList.forEach(rep => {
+                    if (rep.dados && Array.isArray(rep.dados)) {
+                        updatedReportsDados[rep.id] = [...rep.dados];
+                    }
+                });
+
+                combined.forEach(obj => {
+                    const newCode = String(counter++).padStart(5, '0');
+                    if (obj.type === 'venda') {
+                        if (obj.item.numero !== newCode) {
+                            vendasUpdates.push({ id: obj.id, numero: newCode });
+                        }
+                    } else if (obj.type === 'report') {
+                        const currentCode = updatedReportsDados[obj.reportId][obj.reportIndex].numero || updatedReportsDados[obj.reportId][obj.reportIndex].cod;
+                        if (currentCode !== newCode) {
+                            updatedReportsDados[obj.reportId][obj.reportIndex].numero = newCode;
+                            updatedReportsDados[obj.reportId][obj.reportIndex].cod = newCode;
+                            reportsUpdatesMap.set(obj.reportId, updatedReportsDados[obj.reportId]);
+                        }
+                    }
+                });
+
+                for (let v of vendasUpdates) {
+                    await safeSupabaseUpdate('vendas', { numero: v.numero }, 'id', v.id);
+                }
+                for (let [rId, newDados] of reportsUpdatesMap.entries()) {
+                    await safeSupabaseUpdate('savedReports', { dados: newDados }, 'id', rId);
+                }
+
+                await loadFromDB();
+                showAlert("Registos reorganizados com sucesso!");
+                setShowVendasAcoesMenu(false);
+            } catch (e) {
+                showAlert("Erro ao reorganizar: " + e.message);
+            } finally {
+                setLoading(false);
+            }
+        });
     };
 
     const getSituacaoColor = (situacao) => {
@@ -1193,7 +1270,7 @@ export default function App() {
     const abrirModalVenda = (venda = null) => {
         if (venda) setVendaForm({ ...venda });
         else setVendaForm({ 
-            id: null, numero: getNextSequenceNumber(vendasList, v => v.numero), cliente: '', dataVenda: dataDeHojeInterna(), situacao: `FATURADO ${nomeEmpresaUpper} NF`, 
+            id: null, numero: getNextSequenceNumber(getAllVendas(), v => v.numero), cliente: '', dataVenda: dataDeHojeInterna(), situacao: `FATURADO ${nomeEmpresaUpper} NF`, 
             loja: `${nomeEmpresaUpper} SEGUROS`, valor: 0, contrato: '', codOperadora: '', codigoOperadora: '', vidas: '', parcela: '', inicioVigencia: '', notaFiscal: '', 
             corretor: nomeEmpresa, vitalicio: 'Sim', assessoria: nomeEmpresa, formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
             servico: '', desconto: '', notas: '' 
@@ -1205,7 +1282,7 @@ export default function App() {
         const copia = {
             ...venda,
             id: null,
-            numero: getNextSequenceNumber(vendasList, v => v.numero),
+            numero: getNextSequenceNumber(getAllVendas(), v => v.numero),
             isFromReport: false,
             reportId: null,
             reportRowIndex: null,
@@ -1273,7 +1350,7 @@ export default function App() {
                             vendedor: dataToSave.corretor, parcela: dataToSave.parcela, inicioVigencia: dataToSave.inicioVigencia, notaFiscal: dataToSave.notaFiscal, 
                             contrato: dataToSave.contrato, codOperadora: dataToSave.codOperadora, codigoOperadora: dataToSave.codigoOperadora, vidas: dataToSave.vidas,
                             vitalicio: dataToSave.vitalicio, assessoria: dataToSave.assessoria, formaPagamento: dataToSave.formaPagamento,
-                            servico: dataToSave.servico, desconto: dataToSave.desconto, notas: dataToSave.notas 
+                            servico: dataToSave.servico, desconto: dataToSave.desconto, notas: dataToSave.notas, comissao: dataToSave.comissao
                         };
                         await safeSupabaseUpdate('savedReports', { dados: dadosAtualizados }, 'id', rep.data.id);
                     }
@@ -1892,9 +1969,8 @@ export default function App() {
         const clientesParaInserir = []; 
         const clientesParaAtualizar = new Map();
         const nomesClientesExistem = new Set(clientes.map(c => c.nome.toLowerCase()));
-        let alertasSequencia = [];
         
-        let currentMaxVendaCodigo = vendasList.reduce((max, v) => {
+        let currentMaxVendaCodigo = getAllVendas().reduce((max, v) => {
             let num = parseInt(v.numero, 10);
             return !isNaN(num) && num > max ? num : max;
         }, 0);
@@ -2006,10 +2082,6 @@ export default function App() {
                         let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataDeHojeInterna());
                         if (calcParcela) {
                             parcelaDetectada = calcParcela;
-                            let numCalculado = parseInt(calcParcela);
-                            if (numeroEsperado !== null && !isNaN(numCalculado) && numCalculado > numeroEsperado) {
-                                alertasSequencia.push(`Cliente ${nomeCliente}: Pulo detectado! Esperava parcela ${numeroEsperado}, calculada ${calcParcela}.`);
-                            }
                         }
 
                         novosRegistos.push({ 
@@ -2135,10 +2207,6 @@ export default function App() {
                         let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataDeHojeInterna());
                         if (calcParcela) {
                             parcelaDetectada = calcParcela;
-                            let numCalculado = parseInt(calcParcela);
-                            if (numeroEsperado !== null && !isNaN(numCalculado) && numCalculado > numeroEsperado) {
-                                alertasSequencia.push(`Cliente ${nomeCliente}: Pulo detectado! Esperava parcela ${numeroEsperado}, calculada ${calcParcela}.`);
-                            }
                         }
 
                         novosRegistos.push({ 
@@ -2204,11 +2272,7 @@ export default function App() {
             await loadFromDB(); 
         }
         setPdfData(novosRegistos); 
-        if (alertasSequencia.length > 0) {
-            showAlert(`Extrato processado!\n\nAVISO: Ocorreram os seguintes pulos de sequência:\n\n${alertasSequencia.join('\n')}`);
-        } else {
-            showAlert("Extrato processado com sucesso! Nomes limpos e parcelas calculadas.");
-        }
+        showAlert("Extrato processado com sucesso! Nomes limpos e parcelas calculadas.");
     };
 
     const toggleSelectAll = (e) => {
@@ -2278,8 +2342,21 @@ export default function App() {
     const deleteRowFromReport = (idx) => {
         showConfirm("Deseja apagar esta linha do relatório?", () => { setPdfData(prev => prev.filter((_, i) => i !== idx)); if (editRowIndex === idx) setEditRowIndex(-1); else if (editRowIndex > idx) setEditRowIndex(editRowIndex - 1); });
     };
+    const duplicateRowInReport = (idx, linha) => {
+        showConfirm("Deseja duplicar esta linha do relatório?", () => {
+            const novaLinha = { ...linha };
+            setPdfData(prev => {
+                const arr = [...prev];
+                arr.splice(idx + 1, 0, novaLinha);
+                return arr;
+            });
+            if (editRowIndex >= 0 && editRowIndex > idx) {
+                setEditRowIndex(editRowIndex + 1);
+            }
+        });
+    };
     const addManualRow = () => {
-        let currentMaxVendaCodigo = vendasList.reduce((max, v) => {
+        let currentMaxVendaCodigo = getAllVendas().reduce((max, v) => {
             let num = parseInt(v.numero, 10);
             return !isNaN(num) && num > max ? num : max;
         }, 0);
@@ -2314,8 +2391,36 @@ export default function App() {
             dados: dadosParaSalvar,
             empresa: targetEmpresa
         };
-        
-        showConfirm("Deseja extrair as informações deste extrato e gerar as Vendas para alimentar o Dashboard automaticamente?", async () => {
+
+        let alertasSequencia = [];
+        for (let r of dadosParaSalvar) {
+            const historicoVendasCliente = vendasList.filter(v => 
+                (v.cliente && v.cliente.toLowerCase() === r.cliente.toLowerCase()) || 
+                (r.contrato && v.contrato === r.contrato)
+            );
+            
+            let numeroEsperado = null;
+            if (historicoVendasCliente.length > 0) {
+                const ultimaVenda = historicoVendasCliente.sort((a,b) => new Date(b.dataVenda) - new Date(a.dataVenda))[0];
+                if (ultimaVenda.parcela) { 
+                    let numeroAtual = parseInt(ultimaVenda.parcela.toString().replace(/\D/g, '')); 
+                    if (!isNaN(numeroAtual)) {
+                        numeroEsperado = numeroAtual + 1;
+                    }
+                }
+            }
+            let numCalculado = parseInt(r.parcela);
+            if (numeroEsperado !== null && !isNaN(numCalculado) && numCalculado > numeroEsperado) {
+                alertasSequencia.push(`Cliente ${r.cliente}: Pulo detectado! Esperava parcela ${numeroEsperado}, inserida/calculada ${r.parcela}.`);
+            }
+        }
+
+        let msgConfir = "Deseja extrair as informações deste extrato e gerar as Vendas para alimentar o Dashboard automaticamente?";
+        if (alertasSequencia.length > 0) {
+            msgConfir = `AVISO: Ocorreram os seguintes pulos de sequência ao salvar:\n\n${alertasSequencia.join('\n')}\n\n` + msgConfir;
+        }
+
+        showConfirm(msgConfir, async () => {
             setLoading(true); setLoadingMsg("Guardando relatório na cloud...");
             try {
                 let savedId = currentReportId;
@@ -3159,6 +3264,9 @@ export default function App() {
                                             <button onClick={() => { setCurrentView('inconsistencias'); setShowVendasAcoesMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:text-amber-600 dark:hover:text-amber-400 text-slate-700 dark:text-slate-300 font-medium flex items-center transition-colors border-t border-slate-100 dark:border-slate-700">
                                                 <AlertTriangle size={16} className="mr-2"/> Painel de Inconsistências
                                             </button>
+                                            <button onClick={reorganizarRegistosVendas} className="w-full text-left px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400 text-slate-700 dark:text-slate-300 font-medium flex items-center transition-colors border-t border-slate-100 dark:border-slate-700">
+                                                <ListFilter size={16} className="mr-2"/> Reordenar Sequência
+                                            </button>
                                         </div>
                                     )}
                                 </div>
@@ -3525,6 +3633,11 @@ export default function App() {
                                                 Valor {getSortIcon('valor')}
                                             </th>
                                         )}
+                                        {vendasTableCols.comissao && (
+                                            <th onClick={() => handleSortVendas('comissao')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-sky-600 dark:text-sky-400 border-r border-slate-200 dark:border-slate-700 w-32 text-right">
+                                                Comissão {getSortIcon('comissao')}
+                                            </th>
+                                        )}
                                         {vendasTableCols.parcela && (
                                             <th onClick={() => handleSortVendas('parcela')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">
                                                 Parcela {getSortIcon('parcela')}
@@ -3593,7 +3706,8 @@ export default function App() {
                                                 {vendasTableCols.servico && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.servico || '-'}</td>}
                                                 {vendasTableCols.corretor && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.corretor || '-'}</td>}
                                                 {vendasTableCols.situacao && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-center border-r border-slate-200 dark:border-slate-700"><span className={`${getSituacaoColor(venda.situacao)} px-3 py-1 rounded text-xs font-bold uppercase`}>{venda.situacao}</span></td>}
-                                                {vendasTableCols.valor && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-800 dark:text-slate-200 font-medium text-right border-r border-slate-200 dark:border-slate-700">{formatarMoeda(venda.valor)}</td>}
+                                                {vendasTableCols.valor && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-emerald-800 dark:text-emerald-200 font-medium text-right border-r border-slate-200 dark:border-slate-700">{formatarMoeda(venda.valor)}</td>}
+                                                {vendasTableCols.comissao && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-sky-800 dark:text-sky-200 font-medium text-right border-r border-slate-200 dark:border-slate-700">{formatarMoeda(venda.comissao)}</td>}
                                                 {vendasTableCols.parcela && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.parcela || '-'}</td>}
                                                 {vendasTableCols.inicioVigencia && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{formatarDataVisivel(venda.inicioVigencia)}</td>}
                                                 {vendasTableCols.notaFiscal && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.notaFiscal || '-'}</td>}
@@ -4031,6 +4145,7 @@ export default function App() {
                                                     <td className="py-1 px-1 text-center no-print">
                                                         <div className="flex gap-1 justify-center">
                                                             <button onClick={() => prepararEmissaoNF(linha)} className="text-blue-500 hover:text-blue-400 p-1 transition-colors" title="Emitir NF-e Deste Serviço"><Receipt size={14}/></button>
+                                                            <button onClick={() => duplicateRowInReport(idx, linha)} className="text-yellow-500 hover:text-yellow-400 p-1 transition-colors" title="Duplicar Linha"><Copy size={14}/></button>
                                                             <button onClick={() => startEditingRow(idx, linha)} className="text-amber-500 hover:text-amber-400 p-1 transition-colors" title="Editar Linha"><Edit size={14}/></button>
                                                             <button onClick={() => deleteRowFromReport(idx)} className="text-rose-500 hover:text-rose-400 p-1 transition-colors" title="Apagar Linha"><Trash2 size={14}/></button>
                                                         </div>

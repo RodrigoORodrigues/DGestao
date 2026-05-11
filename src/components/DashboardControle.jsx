@@ -16,15 +16,11 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
     const [selectedOperatorMonth, setSelectedOperatorMonth] = useState('Todos');
     const reportRef = useRef();
 
-    const OPERATORS = [
-        { key: 'AMIL', color: '#0052cc' }, { key: 'SULAMERICA', color: '#fbbf24' },
-        { key: 'PORTO', color: '#0ea5e9' }, { key: 'BRADESCO', color: '#dc2626' },
-        { key: 'MEDSENIOR', color: '#9333ea' }, { key: 'ASSIM', color: '#16a34a' },
-        { key: 'QUALICORP', color: '#64748b' }, { key: 'MONGERAL', color: '#ec4899' },
-        { key: 'OMINT', color: '#f97316' }, { key: 'TOKIO', color: '#14b8a6' },
-        { key: 'SUPERMED', color: '#f43f5e' }, { key: 'KLINI', color: '#8b5cf6' },
-        { key: 'NOTREDAME', color: '#d97706' }, { key: 'CASSI', color: '#10b981' },
-        { key: 'UNIMED', color: '#059669' }
+    const BASE_COLORS = [
+        '#0052cc', '#fbbf24', '#0ea5e9', '#dc2626', '#9333ea', '#16a34a',
+        '#64748b', '#ec4899', '#f97316', '#14b8a6', '#f43f5e', '#8b5cf6',
+        '#d97706', '#10b981', '#059669', '#3b82f6', '#10b981', '#f59e0b',
+        '#ef4444', '#8b5cf6'
     ];
 
     const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -37,15 +33,10 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
     };
 
     const operatorData = {};
-    OPERATORS.forEach(op => {
-        operatorData[op.key] = Array(12).fill(0);
-    });
+    const recordedOperators = new Set();
 
     if (vendasList && vendasList.length > 0) {
         vendasList.forEach(v => {
-            // Conta todas as vendas, ou só vitalício? "QUADRO RESUMO VITALÍCIOS - 2025" 
-            // O usuário disse: "que os gráficos sejam alimentados automáticamente com os dados dos relatórios"
-            // Vamos filtrar pelo ano
             const dateStr = v.dataVenda || v.inicioVigencia;
             if (!dateStr) return;
             const dateObj = new Date(dateStr);
@@ -68,11 +59,29 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
             if (isProtettaAssessoria && !isProtettaLoja) processedData[`${nomeEmpresaUpper} - ASSESSORIA`][monthObj] += val;
 
             processedData[`TOTAL ${nomeEmpresaUpper}`][monthObj] += val;
+            
+            let isIncludedInOperator = false;
+            if (selectedEntity === `${nomeEmpresaUpper} - ASSESSORIA` && isProtettaAssessoria && !isProtettaLoja) isIncludedInOperator = true;
+            else if (selectedEntity === nomeEmpresaUpper && isProtettaLoja) isIncludedInOperator = true;
+            else if (selectedEntity === `TOTAL ${nomeEmpresaUpper}`) isIncludedInOperator = true;
 
-            const opName = (v.codigoOperadora || '').toUpperCase();
-            if (operatorData[opName] !== undefined) {
-                operatorData[opName][monthObj] += val;
+            const originalOpName = (v.codigoOperadora || '').toUpperCase().trim();
+            let opName = originalOpName;
+            
+            if (!opName || !isIncludedInOperator) return;
+
+            // Map common aliases to ensure grouping
+            if (opName.includes('PORTO')) opName = 'PORTO SEGURO';
+            else if (opName.includes('MED SENIOR') || opName === 'MEDSENIOR') opName = 'MED SENIOR';
+            else if (opName.includes('NOTRE DAME') || opName === 'NOTREDAME' || opName === 'GNDI') opName = 'NOTRE DAME';
+            else if (opName.includes('SULA') || opName === 'SULAMERICA') opName = 'SULAMERICA';
+            else if (opName.includes('TOKIO')) opName = 'TOKIO MARINE';
+
+            if (!operatorData[opName]) {
+                operatorData[opName] = Array(12).fill(0);
+                recordedOperators.add(opName);
             }
+            operatorData[opName][monthObj] += val;
         });
     }
 
@@ -97,12 +106,25 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
 
     const semesterData = [data.slice(0,6).reduce((a,b)=>a+b,0), data.slice(6,12).reduce((a,b)=>a+b,0)];
 
-    let opChartData = [];
-    OPERATORS.forEach(op => {
+    // Aggregating operator data for the chart
+    let opChartLabels = [];
+    let opChartDataValues = [];
+    let opChartColors = [];
+    
+    // Sort operators by total value desc
+    const sortedOperators = Array.from(recordedOperators).map(op => {
+        const totalOpVal = operatorData[op].reduce((a,b)=>a+b,0);
+        return { name: op, total: totalOpVal };
+    }).sort((a,b) => b.total - a.total);
+
+    sortedOperators.forEach((opObj, index) => {
+        opChartLabels.push(opObj.name);
+        opChartColors.push(BASE_COLORS[index % BASE_COLORS.length]);
+        
         if (selectedOperatorMonth === 'Todos') {
-            opChartData.push(operatorData[op.key].reduce((a,b)=>a+b,0));
+            opChartDataValues.push(opObj.total);
         } else {
-            opChartData.push(operatorData[op.key][parseInt(selectedOperatorMonth)]);
+            opChartDataValues.push(operatorData[opObj.name][parseInt(selectedOperatorMonth)]);
         }
     });
 
@@ -224,7 +246,7 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
                 </div>
                 <div className="aspect-[21/9]">
                     <Bar 
-                        data={{ labels: OPERATORS.map(op=>op.key), datasets: [{ label: 'Valor (R$)', data: opChartData, backgroundColor: OPERATORS.map(op=>op.color), borderRadius: 6 }] }}
+                        data={{ labels: opChartLabels, datasets: [{ label: 'Valor (R$)', data: opChartDataValues, backgroundColor: opChartColors, borderRadius: 6 }] }}
                         options={{ layout: { padding: { top: 30 } }, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, color: '#64748b', anchor: 'end', align: 'top', formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v), font: {size: 11, weight: 'bold'} } }, scales: { y: { display: false }, x: { title: { display: true, text: 'Operadoras' }, grid: { display: false }, ticks: { font: {size: 9} } } } }}
                     />
                 </div>
