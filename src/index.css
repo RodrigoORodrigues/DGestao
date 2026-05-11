@@ -39,7 +39,7 @@
   :where(html:not(.dark), .dark) thead th {
     color: #f8fafc;
     border-color: #1e293b !important;
-    resize: horizontal;
+    resize: both;
     overflow: auto;
   }
   

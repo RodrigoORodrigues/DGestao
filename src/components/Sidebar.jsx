@@ -23,14 +23,28 @@ export default function Sidebar({ currentUser, currentView, setCurrentView, hasA
         return saved === 'true';
     });
     
+    useEffect(() => {
+        const handleSync = () => {
+            const savedWidth = localStorage.getItem('protetta_sidebar_width');
+            if (savedWidth) setWidth(parseInt(savedWidth, 10));
+            const savedCollapsed = localStorage.getItem('protetta_sidebar_collapsed');
+            setCollapsed(savedCollapsed === 'true');
+        };
+        window.addEventListener('protetta_sidebar_sync', handleSync);
+        return () => window.removeEventListener('protetta_sidebar_sync', handleSync);
+    }, []);
+
     const isResizing = useRef(false);
 
     useEffect(() => {
         localStorage.setItem('protetta_sidebar_width', width.toString());
+        // Sync via event back to app if we want, or rely on a new event
+        window.dispatchEvent(new CustomEvent('protetta_sidebar_changed', { detail: { width, collapsed } }));
     }, [width]);
 
     useEffect(() => {
         localStorage.setItem('protetta_sidebar_collapsed', collapsed.toString());
+        window.dispatchEvent(new CustomEvent('protetta_sidebar_changed', { detail: { width, collapsed } }));
     }, [collapsed]);
 
     const resize = useCallback((e) => {

@@ -41,6 +41,32 @@ export async function safeSupabaseUpdate(table, updateObj, eqField, eqValue) {
     return { data, error: null };
 }
 
+export async function syncUserPrefsToDB(userId, prefs) {
+    if (!userId) return;
+    try {
+        const nomePref = `___USER_PREFS_${userId}___`;
+        const { data: existing } = await supabase.from('savedReports').select('*').eq('nome', nomePref).limit(1);
+        
+        let existingDados = {};
+        if (existing && existing.length > 0) {
+            existingDados = Array.isArray(existing[0].dados) ? existing[0].dados[0] : existing[0].dados;
+            if (!existingDados) existingDados = {};
+        }
+
+        const payload = { 
+            nome: nomePref, 
+            dados: { ...existingDados, ...prefs },
+            empresa: 'System_Prefs'
+        };
+        
+        if (existing && existing.length > 0) {
+            await safeSupabaseUpdate('savedReports', payload, 'id', existing[0].id);
+        } else {
+            await safeSupabaseInsert('savedReports', [{...payload, id: 0, periodo: 'System', dataCriacao: new Date().toISOString(), criadoPor: `User_${userId}` }]);
+        }
+    } catch(e) { console.error("User Prefs Sync Failed", e); }
+}
+
 export async function syncGlobalSysConfigToDB(empresas, printPresets) {
     if (!supabase) return;
     try {
@@ -590,6 +616,28 @@ export default function App() {
             // Sync whatever was loaded/is local back to DB as fallback
             syncGlobalSysConfigToDB(null, null);
 
+            if (currentUser) {
+                let userPrefsRow = resSaved?.data?.find(r => r.nome === `___USER_PREFS_${currentUser.id}___`);
+                if (userPrefsRow) {
+                    let prefs = Array.isArray(userPrefsRow.dados) ? userPrefsRow.dados[0] : userPrefsRow.dados;
+                    if (prefs) {
+                        if (prefs.theme !== undefined) setIsDarkMode(prefs.theme === 'dark' || prefs.theme === true);
+                        if (prefs.printCols) setPrintCols(prefs.printCols);
+                        if (prefs.vendasTableCols) setVendasTableCols(prefs.vendasTableCols);
+                        if (prefs.reportTableCols) setReportTableCols(prefs.reportTableCols);
+                        if (prefs.cols) setCols(prefs.cols);
+                        if (prefs.sidebar_width !== undefined) {
+                            localStorage.setItem('protetta_sidebar_width', prefs.sidebar_width.toString());
+                            window.dispatchEvent(new Event('protetta_sidebar_sync')); // Custom event for Sidebar
+                        }
+                        if (prefs.sidebar_collapsed !== undefined) {
+                            localStorage.setItem('protetta_sidebar_collapsed', prefs.sidebar_collapsed.toString());
+                            window.dispatchEvent(new Event('protetta_sidebar_sync'));
+                        }
+                    }
+                }
+            }
+
         } catch (err) { console.error("Erro ao carregar Supabase:", err); }
     };
 
@@ -635,6 +683,46 @@ export default function App() {
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, [showVendasAcoesMenu, showVendasPeriodMenu, showReportColsMenu, showVendasColsMenu]);
+
+    useEffect(() => {
+        if (!currentUser) return;
+        const handleSidebarChanged = (e) => {
+            const { width, collapsed } = e.detail;
+            const prefs = {
+                theme: isDarkMode ? 'dark' : 'light',
+                printCols,
+                vendasTableCols,
+                reportTableCols,
+                cols,
+                sidebar_width: width,
+                sidebar_collapsed: collapsed
+            };
+            syncUserPrefsToDB(currentUser.id, prefs);
+        };
+        window.addEventListener('protetta_sidebar_changed', handleSidebarChanged);
+        return () => window.removeEventListener('protetta_sidebar_changed', handleSidebarChanged);
+    }, [currentUser, isDarkMode, printCols, vendasTableCols, reportTableCols, cols]);
+
+    useEffect(() => {
+        if (!currentUser) return;
+        const prefs = {
+            theme: isDarkMode ? 'dark' : 'light',
+            printCols,
+            vendasTableCols,
+            reportTableCols,
+            cols
+        };
+        const timeoutId = setTimeout(() => {
+            const sidebarWidth = localStorage.getItem('protetta_sidebar_width');
+            const sidebarCollapsed = localStorage.getItem('protetta_sidebar_collapsed');
+            const finalPrefs = { ...prefs };
+            if (sidebarWidth) finalPrefs.sidebar_width = parseInt(sidebarWidth, 10);
+            if (sidebarCollapsed) finalPrefs.sidebar_collapsed = sidebarCollapsed === 'true';
+            
+            syncUserPrefsToDB(currentUser.id, finalPrefs);
+        }, 3000);
+        return () => clearTimeout(timeoutId);
+    }, [currentUser, isDarkMode, printCols, vendasTableCols, reportTableCols, cols]);
 
     useEffect(() => { if(currentUser) loadFromDB(); }, [currentUser, nomeEmpresaUpper]);
     
@@ -1954,7 +2042,140 @@ export default function App() {
             }
         };
 
-        if (extratoOperadora === 'MED SENIOR') {
+        const parseSulAmericaExtrato = (blocosSulAmerica) => {
+            for (let bloco of blocosSulAmerica) {
+                try {
+                    bloco = bloco.trim(); 
+                    if (bloco === "") continue;
+                    
+                    let nomeCliente = "";
+                    let inicioVigenciaDetectada = "";
+                    let valorTotal = 0;
+                    let comissao = 0;
+                    let parcelaDetectada = "1";
+                    let contratoDetectado = "";
+
+                    const matchNome = bloco.match(/^(.*?)\s+Ap[oó]lice\/T[ií]tulo/i) || bloco.match(/^(.*?)\s+Tipo de documento/i) ||  bloco.match(/^(.*?)\s+Contrato/i);
+                    if(matchNome) nomeCliente = matchNome[1].trim();
+                    if(!nomeCliente) continue;
+
+                    const matchContrato = bloco.match(/Contrato\/Empresa\s*:\s*(.*?)\s+(?:Item\/Plano|Valor)/i);
+                    const matchProposta = bloco.match(/Proposta\s*:\s*(\w+)/i);
+
+                    if (matchProposta && matchProposta[1].trim() !== "") {
+                        contratoDetectado = matchProposta[1].trim();
+                    } else if (matchContrato && matchContrato[1].trim() !== "" && matchContrato[1].trim() !== "-") {
+                        contratoDetectado = matchContrato[1].trim();
+                    }
+
+                    const matchValor = bloco.match(/Valor Pr[eê]mio Total\s*:\s*R\$\s*([\d.,]+)/i);
+                    if(matchValor) valorTotal = parseFloat(matchValor[1].replace(/\./g, "").replace(",", "."));
+
+                    const matchComissao = bloco.match(/Valor Remunera[cç][aã]o\s*:\s*R\$\s*([\d.,]+)/i);
+                    if(matchComissao) comissao = parseFloat(matchComissao[1].replace(/\./g, "").replace(",", "."));
+
+                    const matchParcela = bloco.match(/Parcela atual\s*:\s*(\d+)/i) || bloco.match(/Parcela remunera[cç][aã]o\s*:\s*(\d+)/i);
+                    if(matchParcela) parcelaDetectada = matchParcela[1];
+
+                    const matchData = bloco.match(/In[ií]cio de Vig[eê]ncia\s*:\s*(\d{2}\/\d{2}\/\d{4})/i);
+                    if(matchData) {
+                        const partes = matchData[1].split("/");
+                        inicioVigenciaDetectada = `${partes[2]}-${partes[1]}-${partes[0]}`;
+                    }
+
+                    if (valorTotal > 0) {
+                        currentMaxVendaCodigo++;
+                        let codRegistro = String(currentMaxVendaCodigo).padStart(5, '0');
+
+                        if(!nomesClientesExistem.has(nomeCliente.toLowerCase())) {
+                            nomesClientesExistem.add(nomeCliente.toLowerCase());
+                            currentMaxCodigo++;
+                            let newCodigo = String(currentMaxCodigo).padStart(5, '0');
+                            clientesParaInserir.push({ 
+                                codigo: contratoDetectado || newCodigo, 
+                                nome: nomeCliente, 
+                                tipo: 'Pessoa jurídica', 
+                                documento: '', 
+                                telefone: '', 
+                                celular: '', 
+                                email: '', 
+                                situacao: true,
+                                operadora: extratoOperadora,
+                                empresa: empresaContexto
+                            });
+                        } else {
+                            let existingCli = clientes.find(c => c.nome.toLowerCase() === nomeCliente.toLowerCase());
+                            if (existingCli && (!existingCli.operadora || existingCli.operadora.trim() === '' || existingCli.operadora === '-')) {
+                                if (!clientesParaAtualizar.has(existingCli.id)) {
+                                    clientesParaAtualizar.set(existingCli.id, { operadora: extratoOperadora });
+                                }
+                            }
+                        }
+
+                        let vendedorDetectado = nomeEmpresa; 
+                        let numeroEsperado = null;
+                        const historicoVendasCliente = vendasList.filter(v => 
+                            (v.cliente && v.cliente.toLowerCase() === nomeCliente.toLowerCase()) || 
+                            (contratoDetectado && v.contrato === contratoDetectado)
+                        );
+
+                        if (historicoVendasCliente.length > 0) {
+                            const ultimaVenda = historicoVendasCliente.sort((a,b) => new Date(b.dataVenda) - new Date(a.dataVenda))[0];
+                            if (ultimaVenda.corretor && ultimaVenda.corretor !== "Todos") vendedorDetectado = ultimaVenda.corretor;
+                            if (!inicioVigenciaDetectada && ultimaVenda.inicioVigencia) inicioVigenciaDetectada = ultimaVenda.inicioVigencia;
+                            
+                            if (ultimaVenda.parcela) { 
+                                let numeroAtual = parseInt(ultimaVenda.parcela.toString().replace(/\D/g, '')); 
+                                if (!isNaN(numeroAtual)) {
+                                    numeroEsperado = numeroAtual + 1;
+                                }
+                            }
+                        }
+
+                        let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataDeHojeInterna());
+                        if (calcParcela) {
+                            parcelaDetectada = calcParcela;
+                            let numCalculado = parseInt(calcParcela);
+                            if (numeroEsperado !== null && !isNaN(numCalculado) && numCalculado > numeroEsperado) {
+                                alertasSequencia.push(`Cliente ${nomeCliente}: Pulo detectado! Esperava parcela ${numeroEsperado}, calculada ${calcParcela}.`);
+                            }
+                        }
+
+                        novosRegistos.push({ 
+                            cod: extratoCodOperadora || codRegistro, 
+                            contrato: contratoDetectado, 
+                            codOperadora: extratoCodOperadora || null,
+                            codigoOperadora: extratoOperadora, 
+                            vidas: "1",
+                            cliente: nomeCliente, 
+                            data: dataDeHojeInterna(), 
+                            situacao: `FATURADO ${empresaContextoUpper} NF`, 
+                            loja: empresaContextoUpper, 
+                            valorTotal, 
+                            comissao, 
+                            vendedor: vendedorDetectado, 
+                            parcela: parcelaDetectada,
+                            inicioVigencia: inicioVigenciaDetectada, 
+                            notaFiscal: reportDoc?.notaFiscal || (reportDoc?.parceiro?.match(/\(NF:\s*([^)]+)\)/)?.[1] || ''), 
+                            vitalicio: 'Sim', 
+                            assessoria: empresaContexto, 
+                            formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
+                            servico: 'Saúde', 
+                            desconto: '', 
+                            selected: true
+                        });
+                    }
+                } catch (e) {
+                    console.warn("Erro bloco sulamerica:", e);
+                }
+            }
+        };
+
+        if (extratoOperadora === 'SULAMERICA' || extratoOperadora.toUpperCase().includes('SUL AMERICA')) {
+            const blocosSulAmerica = textoNormalizado.split(/Nome\s*:/i);
+            if (blocosSulAmerica.length > 0) blocosSulAmerica.shift();
+            parseSulAmericaExtrato(blocosSulAmerica);
+        } else if (extratoOperadora === 'MED SENIOR') {
             let textoSemFalsoContrato = textoNormalizado.replace(/Total\s+contrato\s*:/gi, 'Total_Apurado:');
             const blocosContrato = textoSemFalsoContrato.split(/Contrato\s*:/i); 
             if (blocosContrato.length > 0) blocosContrato.shift();
@@ -3665,13 +3886,13 @@ export default function App() {
                                                     className="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] px-2 py-0.5 rounded focus:outline-none transition-colors w-full"
                                                     onClick={() => {
                                                         if(!globalDateInput) return;
-                                                        if(window.confirm(`Deseja alterar a data de TODAS as linhas para ${globalDateInput.split('-').reverse().join('/')}?`)) {
+                                                        showConfirm(`Deseja alterar a data de TODAS as linhas para ${globalDateInput.split('-').reverse().join('/')}?`, () => {
                                                             setPdfData(prev => prev.map(l => {
                                                                 const calcParcela = calcularParcelaDaVigencia(l.inicioVigencia, globalDateInput);
                                                                 return { ...l, data: globalDateInput, parcela: calcParcela || l.parcela };
                                                             }));
                                                             setReportName(`Relatório ${globalDateInput.split('-').reverse().join('/')}`);
-                                                        }
+                                                        });
                                                     }}
                                                 >
                                                     Inserir
