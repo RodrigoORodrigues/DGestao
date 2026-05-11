@@ -1014,8 +1014,8 @@ export default function App() {
     const inconsistenciasList = useMemo(() => {
         const groups = {};
         const dataLimite = '2026-01-01';
-
-        vendasList.filter(v => {
+        
+        getAllVendas().filter(v => {
             const dv = v.dataVenda || v.dataCadastro || '';
             return dv <= dataDeHojeInterna();
         }).forEach(v => {
@@ -1072,7 +1072,7 @@ export default function App() {
             }
         });
         return inconsistencias;
-    }, [vendasList]);
+    }, [vendasList, savedReportsList]);
 
     const handleSelectAllInconsistencias = () => {
         if (selectedInconsistencias.length === inconsistenciasList.length && inconsistenciasList.length > 0) {
