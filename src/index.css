@@ -39,6 +39,8 @@
   :where(html:not(.dark), .dark) thead th {
     color: #f8fafc;
     border-color: #1e293b !important;
+    resize: horizontal;
+    overflow: auto;
   }
   
   :where(html:not(.dark), .dark) thead th:hover {
@@ -48,8 +50,8 @@
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 14px;
+  height: 14px;
 }
 
 ::-webkit-scrollbar-track {

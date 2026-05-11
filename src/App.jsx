@@ -2508,7 +2508,7 @@ export default function App() {
             if (printCols.op) tableRows += `<td>${linha.codigoOperadora || 'AMIL'}</td>`;
             if (printCols.vidas) tableRows += `<td>${linha.vidas || '-'}</td>`;
             if (printCols.cliente) tableRows += `<td>${linha.cliente || '-'}</td>`;
-            if (printCols.data) tableRows += `<td>${linha.data || '-'}</td>`;
+            if (printCols.data) tableRows += `<td>${linha.data ? formatarDataVisivel(linha.data) : '-'}</td>`;
             if (printCols.loja) tableRows += `<td>${linha.loja || '-'}</td>`;
             if (printCols.servico) tableRows += `<td>${linha.servico || '-'}</td>`;
             if (printCols.desconto) tableRows += `<td>${linha.desconto || '-'}</td>`;
@@ -3795,7 +3795,7 @@ export default function App() {
                                                     {reportTableCols.op && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 font-medium text-slate-600 dark:text-slate-300 text-center text-xs">{linha.codigoOperadora || currentReportOperadora || 'AMIL'}</td>}
                                                     {reportTableCols.vidas && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-slate-700 dark:text-slate-300 text-xs">{linha.vidas || '-'}</td>}
                                                     {reportTableCols.cliente && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs truncate max-w-[150px]" title={linha.cliente}>{linha.cliente}</td>}
-                                                    {reportTableCols.data && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center text-slate-500 dark:text-slate-400 text-[11px]">{linha.data}</td>}
+                                                    {reportTableCols.data && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center text-slate-500 dark:text-slate-400 text-[11px]">{linha.data ? formatarDataVisivel(linha.data) : ''}</td>}
                                                     {reportTableCols.loja && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center text-slate-500 dark:text-slate-400 text-xs">{linha.loja}</td>}
                                                     {reportTableCols.servico && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[11px]">{linha.servico || '-'}</td>}
                                                     {reportTableCols.desconto && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-rose-500 dark:text-rose-400 text-[11px]">{linha.desconto || '-'}</td>}
@@ -4858,10 +4858,10 @@ export default function App() {
                                         </div>
                                     ) : (
                                         backupList.map((backup) => (
-                                            <div key={backup.id} className={`flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-750 border border-slate-200 dark:border-slate-700 rounded-lg ${backup.id === 'error' ? 'border-red-400' : 'hover:border-blue-400'} transition-colors`}>
+                                            <div key={backup.id} className={`flex items-center justify-between p-3 bg-white border border-slate-200 dark:border-slate-300 rounded-lg ${backup.id === 'error' ? 'border-red-400' : 'hover:border-blue-400'} transition-colors`}>
                                                 <div>
-                                                    <p className={`text-sm font-medium ${backup.id === 'error' ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-200'}`}>{backup.name.replace('backups/', '')}</p>
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400">Criado em: {new Date(backup.created_at).toLocaleString()}</p>
+                                                    <p className={`text-sm font-bold ${backup.id === 'error' ? 'text-red-600' : 'text-black'}`}>{backup.name.replace('backups/', '')}</p>
+                                                    <p className="text-xs text-slate-600">Criado em: {new Date(backup.created_at).toLocaleString()}</p>
                                                 </div>
                                                 {backup.id !== 'error' && (
                                                 <button onClick={() => handleRestoreBackup(backup.name.replace('backups/', ''))} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg flex items-center transition-colors shadow-sm">

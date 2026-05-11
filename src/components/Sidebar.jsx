@@ -190,7 +190,7 @@ export default function Sidebar({ currentUser, currentView, setCurrentView, hasA
             {/* Drag Handle */}
             {!collapsed && (
                 <div 
-                    className="absolute top-0 right-0 w-2 h-full cursor-col-resize hover:bg-blue-500/50 group flex items-center justify-center transition-colors duration-200 z-20"
+                    className="absolute top-0 right-0 w-2 h-full cursor-col-resize group flex items-center justify-center transition-colors duration-200 z-20"
                     onMouseDown={startResizing}
                 >
                     <div className="opacity-0 group-hover:opacity-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-sm -ml-4 p-0.5 transition-opacity duration-200">
