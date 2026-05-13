@@ -5250,9 +5250,9 @@ export default function App() {
                         </header>
                         <form onSubmit={handleSubmitExtrato} onInvalid={(e) => e.currentTarget.classList.add('show-errors')} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 shadow-xl space-y-6 transition-colors duration-200">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Ano</label><input type="number" value={formData.ano} onChange={(e) => setFormData({...formData, ano: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500" /></div>
-                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mês</label><select value={formData.mes} onChange={(e) => setFormData({...formData, mes: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{MESES.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
-                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Categoria</label><select value={formData.categoria} onChange={(e) => setFormData({...formData, categoria: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Ano</label><input type="number" value={formData.ano} onChange={(e) => {setFormData({...formData, ano: e.target.value}); setFormError('');}} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500" /></div>
+                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mês</label><select value={formData.mes} onChange={(e) => {setFormData({...formData, mes: e.target.value}); setFormError('');}} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{MESES.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
+                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Categoria</label><select value={formData.categoria} onChange={(e) => {setFormData({...formData, categoria: e.target.value}); setFormError('');}} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label>
                                     <select disabled value={formData.empresa || nomeEmpresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-500 dark:text-slate-400 focus:outline-none cursor-not-allowed">
@@ -5262,19 +5262,19 @@ export default function App() {
                                 <div className="space-y-2 md:col-span-1">
                                     <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Cód. Operadora</label>
                                     {formData.codigoOperadora === 'AMIL' ? (
-                                        <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={formData.codOperadora || ''} onChange={e => setFormData({...formData, codOperadora: e.target.value})}>
+                                        <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={formData.codOperadora || ''} onChange={e => {setFormData({...formData, codOperadora: e.target.value}); setFormError('');}}>
                                             <option value="">Selecione a Pasta</option>
                                             <option value="139491">139491</option>
                                             <option value="162191">162191</option>
                                             <option value="224138">224138</option>
                                         </select>
                                     ) : (
-                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Módulo opcional" value={formData.codOperadora || ''} onChange={e => setFormData({...formData, codOperadora: e.target.value})} />
+                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Módulo opcional" value={formData.codOperadora || ''} onChange={e => {setFormData({...formData, codOperadora: e.target.value}); setFormError('');}} />
                                     )}
                                 </div>
                                 <div className="space-y-2 md:col-span-1">
                                     <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Op. | Seg.</label>
-                                    <select required className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={formData.codigoOperadora || ''} onChange={e => setFormData({...formData, codigoOperadora: e.target.value})}>
+                                    <select required className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={formData.codigoOperadora || ''} onChange={e => {setFormData({...formData, codigoOperadora: e.target.value}); setFormError('');}}>
                                         <option value="">Selecione uma Op. | Seg.</option>
                                         <optgroup label="Operadoras">
                                             {LISTA_OPERADORAS.map(op => <option key={op} value={op}>{op}</option>)}
@@ -5291,7 +5291,7 @@ export default function App() {
                                                 placeholder="Digite o nome da Op. | Seg." 
                                                 className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" 
                                                 value={formData.codigoOperadoraOutra || ''} 
-                                                onChange={e => setFormData({...formData, codigoOperadoraOutra: e.target.value})} 
+                                                onChange={e => {setFormData({...formData, codigoOperadoraOutra: e.target.value}); setFormError('');}} 
                                             />
                                         </div>
                                     )}
@@ -5304,7 +5304,7 @@ export default function App() {
                                         type="text" 
                                         list="historico-notas-list"
                                         value={formData.notaFiscal || ''} 
-                                        onChange={(e) => setFormData({...formData, notaFiscal: e.target.value})} 
+                                        onChange={(e) => {setFormData({...formData, notaFiscal: e.target.value}); setFormError('');}} 
                                         className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-3 text-slate-900 dark:text-white outline-none focus:border-blue-500" 
                                         placeholder="Selecione ou digite a NF..." 
                                     />
@@ -5318,7 +5318,7 @@ export default function App() {
                                 </div>
                                 <div className="space-y-2 md:col-span-1">
                                     <label className="text-sm font-bold text-blue-600 dark:text-blue-400">Nome do Arquivo</label>
-                                    <input type="text" value={formData.parceiro} onChange={(e) => setFormData({...formData, parceiro: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-3 text-slate-900 dark:text-white outline-none focus:border-blue-500" placeholder="Ex: Extrato Amil Mensal..." />
+                                    <input type="text" value={formData.parceiro} onChange={(e) => {setFormData({...formData, parceiro: e.target.value}); setFormError('');}} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-3 text-slate-900 dark:text-white outline-none focus:border-blue-500" placeholder="Ex: Extrato Amil Mensal..." />
                                 </div>
                             </div>
                             <div className="space-y-2">
