@@ -495,9 +495,9 @@ export default function App() {
                             changed = true; 
                         } else {
                             let existing = map.get(dbEmp.nome.toUpperCase());
-                            // Only update from sysConfig if it introduces new CNPJ and there's no DB table info overriding
-                            if (!existing.cnpj && dbEmp.cnpj) { 
-                                map.set(dbEmp.nome.toUpperCase(), { ...existing, cnpj: dbEmp.cnpj }); 
+                            // Always sync from SysConfig (DB) to local state to guarantee DB is the source of truth
+                            if (existing.cnpj !== dbEmp.cnpj || existing.logo !== dbEmp.logo || existing.isDefault !== dbEmp.isDefault || existing.nome !== dbEmp.nome) { 
+                                map.set(dbEmp.nome.toUpperCase(), { ...existing, ...dbEmp }); 
                                 changed = true; 
                             }
                         }
