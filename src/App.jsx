@@ -109,7 +109,7 @@ import {
     Folder, FileText, Plus, Home, ChevronRight, ChevronDown, Save, ArrowLeft, 
     Building2, FolderTree, FileSpreadsheet, Download, X, Search, Eye, EyeOff, 
     Layers, Settings, Database, RefreshCw, Trash2, HardDrive, Users, FileCheck, 
-    CheckCircle, XCircle, Edit, ListFilter, Upload, Sun, Moon, Printer, Archive, 
+    CheckCircle, XCircle, Edit, Edit2, ListFilter, Upload, Sun, Moon, Printer, Archive, 
     History, AlertCircle, Lock, User, Key, LogOut, Shield, ShoppingCart, Receipt, 
     Send, Percent, DollarSign, FileOutput, Copy, Info, Tag, AlertTriangle, LayoutGrid, List, Phone, Mail
 } from 'lucide-react';
@@ -241,6 +241,8 @@ export default function App() {
     const [extratosModalViewMode, setExtratosModalViewMode] = useState('cards'); // 'cards' ou 'lines'
     const [modalMoverExtratosOpen, setModalMoverExtratosOpen] = useState(false);
     const [moverExtratosForm, setMoverExtratosForm] = useState({ ano: new Date().getFullYear().toString(), mes: MESES[0], categoria: CATEGORIAS[0], empresa: 'PROTETTA' });
+    const [modalEditarExtratoOpen, setModalEditarExtratoOpen] = useState(false);
+    const [editarExtratoForm, setEditarExtratoForm] = useState({ id: null, parceiro: '', notaFiscal: '', codigoOperadora: '', codOperadora: '', codigoOperadoraOutra: '' });
     
     const [modalPrintOpen, setModalPrintOpen] = useState(false);
     const [printConfig, setPrintConfig] = useState({ orientation: 'landscape', scale: 100 });
@@ -1816,6 +1818,66 @@ export default function App() {
             showAlert("Extratos movidos com sucesso!", "success");
         } catch (error) {
             showAlert("Erro ao mover: " + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleEditSelectedExtrato = () => {
+        if (selectedExtratos.length !== 1) return;
+        const id = selectedExtratos[0];
+        const record = dbReports.find(r => String(r.id) === String(id));
+        if (!record) return;
+
+        let plainParceiro = record.parceiro || '';
+        plainParceiro = plainParceiro.replace(/^\[.*?\]\s*/, ''); // remove prefix
+        if (record.notaFiscal) {
+            plainParceiro = plainParceiro.replace(new RegExp(`\\s*\\(NF: ${record.notaFiscal}\\)$`), '');
+        }
+
+        let isOuter = false;
+        let outerValue = '';
+        if (record.codigoOperadora && !['AMIL', 'ASSIM', 'HAPVIDA', 'KLINI', 'LEVE SAUDE', 'NOTRE DAME', 'PREVENT', 'QUALICORP', 'SUPERMED', 'MED SENIOR', 'ALLIANZ', 'ASSIST CARD', 'AZUL', 'BRADESCO', 'HDI', 'ICATU', 'MONGERAL', 'PORTO SEGURO', 'SOMPO', 'SUDAMERICA', 'SULAMERICA', 'TOKIO MARINE', 'UNIMED', 'OUTRA'].includes(record.codigoOperadora)) {
+            isOuter = true;
+            outerValue = record.codigoOperadora;
+        }
+
+        setEditarExtratoForm({
+            id: record.id,
+            parceiro: plainParceiro,
+            notaFiscal: record.notaFiscal || '',
+            codigoOperadora: isOuter ? 'OUTRA' : (record.codigoOperadora || ''),
+            codOperadora: record.codOperadora || '',
+            codigoOperadoraOutra: outerValue
+        });
+        setModalEditarExtratoOpen(true);
+    };
+
+    const saveEditarExtrato = async (e) => {
+        e.preventDefault();
+        setLoading(true); setLoadingMsg("Salvando...");
+
+        try {
+            const finalOperadora = editarExtratoForm.codigoOperadora === 'OUTRA' ? editarExtratoForm.codigoOperadoraOutra : editarExtratoForm.codigoOperadora;
+            const saveOperadora = (finalOperadora || '').trim();
+            const saveCodOperadora = (editarExtratoForm.codOperadora || '').trim();
+            const saveParceiro = `[${saveOperadora}|${saveCodOperadora}] ${editarExtratoForm.parceiro}${editarExtratoForm.notaFiscal ? ` (NF: ${editarExtratoForm.notaFiscal})` : ''}`;
+
+            const updateData = {
+                codigoOperadora: saveOperadora || null,
+                codOperadora: saveCodOperadora || null,
+                parceiro: saveParceiro,
+                notaFiscal: editarExtratoForm.notaFiscal || null,
+            };
+
+            await safeSupabaseUpdate('reports', updateData, 'id', editarExtratoForm.id);
+            
+            setSelectedExtratos([]);
+            setModalEditarExtratoOpen(false);
+            await loadFromDB();
+            showAlert("Extrato editado com sucesso!", "success");
+        } catch(error) {
+            showAlert("Erro ao editar: " + error.message);
         } finally {
             setLoading(false);
         }
@@ -5400,6 +5462,12 @@ export default function App() {
                                             <Download size={14} className="mr-1" />
                                             Exportar selecionados ({selectedExtratos.length})
                                         </button>
+                                        {selectedExtratos.length === 1 && (
+                                            <button onClick={handleEditSelectedExtrato} className="text-xs px-3 py-1.5 rounded flex items-center transition-colors shadow-sm bg-indigo-500 hover:bg-indigo-600 text-white">
+                                                <Edit2 size={14} className="mr-1" />
+                                                Editar selecionado (1)
+                                            </button>
+                                        )}
                                         <button onClick={() => setModalMoverExtratosOpen(true)} disabled={selectedExtratos.length === 0} className={`text-xs px-3 py-1.5 rounded flex items-center transition-colors shadow-sm ${selectedExtratos.length === 0 ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed border border-transparent' : 'bg-amber-500 hover:bg-amber-600 text-white'}`}>
                                             <FolderTree size={14} className="mr-1" />
                                             Mover selecionados ({selectedExtratos.length})
@@ -5602,6 +5670,84 @@ export default function App() {
                                 <button onClick={() => setModalMoverExtratosOpen(false)} className="px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded font-bold transition-colors">Cancelar</button>
                                 <button onClick={saveMoverExtratos} disabled={loading} className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-white rounded font-bold transition-colors disabled:opacity-50">Confirmar Movimentação</button>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {modalEditarExtratoOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-md relative mx-4 transition-colors">
+                            <button onClick={() => setModalEditarExtratoOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"><X size={20} /></button>
+                            <div className="mb-4 border-b border-slate-200 dark:border-slate-700 pb-4">
+                                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center"><Edit2 className="mr-2 text-indigo-500" /> Editar Extrato</h3>
+                                <p className="text-sm text-slate-500 mt-1">Altere as informações salvas do extrato selecionado.</p>
+                            </div>
+                            <form onSubmit={saveEditarExtrato} onInvalid={(e) => e.currentTarget.classList.add('show-errors')} className="space-y-4">
+                                <div className="space-y-2 md:col-span-1">
+                                    <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Op. | Seg.</label>
+                                    <select required className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={editarExtratoForm.codigoOperadora || ''} onChange={e => {setEditarExtratoForm({...editarExtratoForm, codigoOperadora: e.target.value}); setFormError('');}}>
+                                        <option value="">Selecione uma Op. | Seg.</option>
+                                        <optgroup label="Operadoras">
+                                            {LISTA_OPERADORAS.map(op => <option key={op} value={op}>{op}</option>)}
+                                        </optgroup>
+                                        <optgroup label="Seguradoras">
+                                            {LISTA_SEGURADORAS.map(seg => <option key={seg} value={seg}>{seg}</option>)}
+                                        </optgroup>
+                                        <option value="OUTRA" className="font-bold text-blue-600">Outra Op. | Seg.</option>
+                                    </select>
+                                    
+                                    {editarExtratoForm.codigoOperadora === 'OUTRA' && (
+                                        <div className="mt-2 text-sm text-slate-500">
+                                            Aviso: Extratos de outras serão salvos dentro da pasta genérica "OUTRA".
+                                            <input 
+                                                required
+                                                type="text" 
+                                                placeholder="Digite o nome da Op. | Seg." 
+                                                className="w-full mt-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" 
+                                                value={editarExtratoForm.codigoOperadoraOutra || ''} 
+                                                onChange={e => {setEditarExtratoForm({...editarExtratoForm, codigoOperadoraOutra: e.target.value}); setFormError('');}} 
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="space-y-2 md:col-span-1">
+                                    <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Cód. Operadora</label>
+                                    {editarExtratoForm.codigoOperadora === 'AMIL' ? (
+                                        <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={editarExtratoForm.codOperadora || ''} onChange={e => {setEditarExtratoForm({...editarExtratoForm, codOperadora: e.target.value}); setFormError('');}}>
+                                            <option value="">Selecione a Pasta</option>
+                                            <option value="139491">139491</option>
+                                            <option value="162191">162191</option>
+                                        </select>
+                                    ) : (
+                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Módulo opcional" value={editarExtratoForm.codOperadora || ''} onChange={e => {setEditarExtratoForm({...editarExtratoForm, codOperadora: e.target.value}); setFormError('');}} />
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Nota Fiscal</label>
+                                    <input 
+                                        type="text" 
+                                        list="historico-notas-list"
+                                        value={editarExtratoForm.notaFiscal || ''} 
+                                        onChange={(e) => {setEditarExtratoForm({...editarExtratoForm, notaFiscal: e.target.value}); setFormError('');}} 
+                                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500" 
+                                        placeholder="Selecione ou digite a NF..." 
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-1">Nome do Arquivo</label>
+                                    <input 
+                                        required
+                                        type="text" 
+                                        value={editarExtratoForm.parceiro} 
+                                        onChange={(e) => {setEditarExtratoForm({...editarExtratoForm, parceiro: e.target.value}); setFormError('');}} 
+                                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500" placeholder="Ex: Extrato Amil Mensal..." 
+                                    />
+                                </div>
+                                <div className="flex justify-end mt-6 gap-3 pt-2">
+                                    <button type="button" onClick={() => setModalEditarExtratoOpen(false)} className="px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded font-bold transition-colors">Cancelar</button>
+                                    <button type="submit" disabled={loading} className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded font-bold transition-colors disabled:opacity-50">Guardar Alterações</button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 )}

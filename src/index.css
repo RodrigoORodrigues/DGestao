@@ -113,13 +113,13 @@ input[type="date"] {
 .show-errors select:invalid, 
 .show-errors textarea:invalid {
   border-color: #f43f5e !important;
-  color: #e11d48 !important;
+  color: #000000 !important;
   background-color: #fff1f2 !important;
   box-shadow: 0 0 0 1px #f43f5e !important;
 }
 
 .show-errors select:invalid option {
-  color: #0f172a !important;
+  color: #000000 !important;
   background-color: #ffffff !important;
 }
 
@@ -127,7 +127,7 @@ input[type="date"] {
 .dark .show-errors select:invalid, 
 .dark .show-errors textarea:invalid {
   border-color: #f43f5e !important;
-  color: #fda4af !important;
+  color: #ffffff !important;
   background-color: rgba(159, 18, 57, 0.2) !important;
   box-shadow: 0 0 0 1px #f43f5e !important;
 }
