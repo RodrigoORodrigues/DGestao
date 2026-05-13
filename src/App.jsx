@@ -478,7 +478,8 @@ export default function App() {
                             changed = true;
                         } else {
                             let existing = map.get(dbEmp.nome.toUpperCase());
-                            if (!existing.cnpj && dbEmp.cnpj) {
+                            // Sync changes from DB back to local state (DB wins)
+                            if (existing.cnpj !== dbEmp.cnpj || existing.logo !== dbEmp.logo || existing.isDefault !== dbEmp.isDefault || existing.nome !== dbEmp.nome) {
                                 map.set(dbEmp.nome.toUpperCase(), { ...existing, ...dbEmp });
                                 changed = true;
                             }
@@ -489,33 +490,57 @@ export default function App() {
                 // Add from SysConfig
                 if (sysConfig.empresas && Array.isArray(sysConfig.empresas)) {
                     sysConfig.empresas.forEach(dbEmp => {
-                        if (!map.has(dbEmp.nome.toUpperCase())) { map.set(dbEmp.nome.toUpperCase(), dbEmp); changed = true; }
-                        else {
+                        if (!map.has(dbEmp.nome.toUpperCase())) { 
+                            map.set(dbEmp.nome.toUpperCase(), dbEmp); 
+                            changed = true; 
+                        } else {
                             let existing = map.get(dbEmp.nome.toUpperCase());
-                            if (!existing.cnpj && dbEmp.cnpj) { map.set(dbEmp.nome.toUpperCase(), { ...existing, ...dbEmp }); changed = true; }
+                            // Only update from sysConfig if it introduces new CNPJ and there's no DB table info overriding
+                            if (!existing.cnpj && dbEmp.cnpj) { 
+                                map.set(dbEmp.nome.toUpperCase(), { ...existing, cnpj: dbEmp.cnpj }); 
+                                changed = true; 
+                            }
                         }
                     });
                 }
                 
                 // Extract from related data
-                let extractedEmpresas = new Set();
-                resUsers?.data?.forEach(u => { if (u.empresa && u.empresa !== 'Todas') extractedEmpresas.add(u.empresa.toUpperCase()); });
-                resCli?.data?.forEach(c => { if (c.empresa) extractedEmpresas.add(c.empresa.toUpperCase()); });
+                let extractedEmpresas = new Map();
+                resUsers?.data?.forEach(u => { if (u.empresa && u.empresa !== 'Todas') extractedEmpresas.set(u.empresa.toUpperCase(), u.empresa); });
+                resCli?.data?.forEach(c => { if (c.empresa) extractedEmpresas.set(c.empresa.toUpperCase(), c.empresa); });
                 resVendas?.data?.forEach(v => { 
-                    if (v.loja) extractedEmpresas.add(v.loja.toUpperCase().replace(' SEGUROS', '').trim());
-                    if (v.empresa) extractedEmpresas.add(v.empresa.toUpperCase());
+                    if (v.loja) {
+                        const origNome = v.loja.replace(/ SEGUROS$/i, '').trim();
+                        extractedEmpresas.set(origNome.toUpperCase(), origNome);
+                    }
+                    if (v.empresa) extractedEmpresas.set(v.empresa.toUpperCase(), v.empresa);
                 });
                 
-                extractedEmpresas.forEach(empName => {
-                    if (empName && !map.has(empName)) {
+                extractedEmpresas.forEach((originalName, empUpper) => {
+                    if (originalName && !map.has(empUpper)) {
                         let newId = map.size > 0 ? Math.max(...Array.from(map.values()).map(e => e.id || 0)) + 1 : 1;
-                        map.set(empName, { id: newId, nome: empName, cnpj: '', logo: '', isDefault: map.size === 0 });
+                        map.set(empUpper, { id: newId, nome: originalName, cnpj: '', logo: '', isDefault: map.size === 0 });
                         changed = true;
                     }
                 });
                 
+                let newList = Array.from(map.values());
+                let defaultsCount = newList.filter(e => e.isDefault).length;
+                
+                if (defaultsCount !== 1 && newList.length > 0) {
+                    let foundFirstDefault = false;
+                    newList = newList.map((e, idx) => {
+                        if (defaultsCount === 0 && idx === 0) return { ...e, isDefault: true };
+                        if (e.isDefault) {
+                            if (!foundFirstDefault) { foundFirstDefault = true; return e; }
+                            return { ...e, isDefault: false };
+                        }
+                        return e;
+                    });
+                    changed = true;
+                }
+
                 if (changed) {
-                    const newList = Array.from(map.values());
                     localStorage.setItem('protetta_empresas', JSON.stringify(newList));
                     // Try to save to Supabase
                     supabase.from('empresas').upsert(newList, { onConflict: 'id' }).then(() => {}, () => {});
