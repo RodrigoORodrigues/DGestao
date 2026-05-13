@@ -83,6 +83,32 @@ body {
   @apply bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-200 selection:bg-blue-500 selection:text-white;
 }
 
+tbody tr:hover {
+  @apply bg-white dark:bg-slate-800 transition-colors;
+}
+
+html:not(.dark) tbody tr:hover td {
+  color: #000000 !important;
+}
+
+html:not(.dark) tbody tr:hover td span:not([class*="bg-"]),
+html:not(.dark) tbody tr:hover td div:not([class*="bg-"]) {
+  color: #000000 !important;
+}
+
+input[type="date"] {
+  color-scheme: light;
+}
+
+.dark input[type="date"] {
+  color-scheme: dark;
+}
+
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  /* color-scheme: dark already makes it light in webkit, so filter: invert(1) might make it black again. We use brightness(100) or just let color-scheme do its job. We can also force it white using a reliable standard filter: */
+  filter: invert(1) brightness(200%) grayscale(100%);
+}
+
 .show-errors input:invalid, 
 .show-errors select:invalid, 
 .show-errors textarea:invalid {

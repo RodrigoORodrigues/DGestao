@@ -228,6 +228,8 @@ export default function App() {
 
     const [cols, setCols] = useState({ codigo: false, nome: true, tipo: true, documento: true, operadora: true, servico: true, telefone: true, celular: true, email: true, situacao: true, cadastrado_em: true, acoes: true });
     const [modalClienteOpen, setModalClienteOpen] = useState(false);
+    const [modalViewClienteOpen, setModalViewClienteOpen] = useState(false);
+    const [clienteToView, setClienteToView] = useState(null);
     const [modalBuscaOpen, setModalBuscaOpen] = useState(false);
     const [clienteEditIndex, setClienteEditIndex] = useState(-1);
     const [clienteForm, setClienteForm] = useState({ id: null, nome: '', tipo: 'Pessoa jurídica', documento: '', telefone: '', celular: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '', email: '', situacao: true, operadora: '', servico: 'Plano de Saúde' });
@@ -256,6 +258,14 @@ export default function App() {
 
     const [savedReportsList, setSavedReportsList] = useState([]);
     const [savedReportsSearchTerm, setSavedReportsSearchTerm] = useState('');
+    const [savedReportsDateStart, setSavedReportsDateStart] = useState('');
+    const [savedReportsDateEnd, setSavedReportsDateEnd] = useState('');
+    const [showSavedReportsPeriodMenu, setShowSavedReportsPeriodMenu] = useState(false);
+    const [savedReportsPeriodLabel, setSavedReportsPeriodLabel] = useState('Todo o período');
+    const [gestorReportsDateStart, setGestorReportsDateStart] = useState('');
+    const [gestorReportsDateEnd, setGestorReportsDateEnd] = useState('');
+    const [showGestorPeriodMenu, setShowGestorPeriodMenu] = useState(false);
+    const [gestorPeriodLabel, setGestorPeriodLabel] = useState('Todo o período');
     const [currentReportId, setCurrentReportId] = useState(null);
     const [currentReportEmpresa, setCurrentReportEmpresa] = useState('');
     const [currentReportOperadora, setCurrentReportOperadora] = useState('');
@@ -924,6 +934,42 @@ export default function App() {
         else { const updatedFilters = { ...vendasFilterForm, dataInicio: start, dataFim: end }; setVendasFilterForm(updatedFilters); setAppliedVendasFilters(updatedFilters); }
     };
 
+    const applyGestorDatePreset = (preset) => {
+        let start = ''; let end = ''; const today = new Date();
+        const formatDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        switch(preset) {
+            case 'Hoje': start = formatDate(today); end = formatDate(today); break;
+            case 'Esta semana': const first = today.getDate() - today.getDay(); start = formatDate(new Date(today.getFullYear(), today.getMonth(), first)); end = formatDate(new Date(today.getFullYear(), today.getMonth(), first + 6)); break;
+            case 'Mês passado': start = formatDate(new Date(today.getFullYear(), today.getMonth() - 1, 1)); end = formatDate(new Date(today.getFullYear(), today.getMonth(), 0)); break;
+            case 'Este mês': start = formatDate(new Date(today.getFullYear(), today.getMonth(), 1)); end = formatDate(new Date(today.getFullYear(), today.getMonth() + 1, 0)); break;
+            case 'Próximo mês': start = formatDate(new Date(today.getFullYear(), today.getMonth() + 1, 1)); end = formatDate(new Date(today.getFullYear(), today.getMonth() + 2, 0)); break;
+            case 'Todo o período': default: start = ''; end = ''; break;
+        }
+        setGestorPeriodLabel(preset); setShowGestorPeriodMenu(false);
+        if (preset !== 'Escolha o período') {
+            setGestorReportsDateStart(start);
+            setGestorReportsDateEnd(end);
+        }
+    };
+
+    const applySavedReportsDatePreset = (preset) => {
+        let start = ''; let end = ''; const today = new Date();
+        const formatDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        switch(preset) {
+            case 'Hoje': start = formatDate(today); end = formatDate(today); break;
+            case 'Esta semana': const first = today.getDate() - today.getDay(); start = formatDate(new Date(today.getFullYear(), today.getMonth(), first)); end = formatDate(new Date(today.getFullYear(), today.getMonth(), first + 6)); break;
+            case 'Mês passado': start = formatDate(new Date(today.getFullYear(), today.getMonth() - 1, 1)); end = formatDate(new Date(today.getFullYear(), today.getMonth(), 0)); break;
+            case 'Este mês': start = formatDate(new Date(today.getFullYear(), today.getMonth(), 1)); end = formatDate(new Date(today.getFullYear(), today.getMonth() + 1, 0)); break;
+            case 'Próximo mês': start = formatDate(new Date(today.getFullYear(), today.getMonth() + 1, 1)); end = formatDate(new Date(today.getFullYear(), today.getMonth() + 2, 0)); break;
+            case 'Todo o período': default: start = ''; end = ''; break;
+        }
+        setSavedReportsPeriodLabel(preset); setShowSavedReportsPeriodMenu(false);
+        if (preset !== 'Escolha o período') {
+            setSavedReportsDateStart(start);
+            setSavedReportsDateEnd(end);
+        }
+    };
+
     const handleBuscarVendas = () => { setAppliedVendasFilters({ ...vendasFilterForm }); };
     const handleLimparVendas = () => { setVendasFilterForm(defaultVendasFilters); setAppliedVendasFilters(null); setVendasPeriodLabel('Todo o período'); };
 
@@ -1268,7 +1314,11 @@ export default function App() {
     };
 
     const abrirModalVenda = (venda = null) => {
-        if (venda) setVendaForm({ ...venda });
+        if (venda) {
+            const safeVenda = {...venda};
+            Object.keys(safeVenda).forEach(k => { if(safeVenda[k] === null) safeVenda[k] = ''; });
+            setVendaForm(safeVenda);
+        }
         else setVendaForm({ 
             id: null, numero: getNextSequenceNumber(getAllVendas(), v => v.numero), cliente: '', dataVenda: dataDeHojeInterna(), situacao: `FATURADO ${nomeEmpresaUpper} NF`, 
             loja: `${nomeEmpresaUpper} SEGUROS`, valor: 0, contrato: '', codOperadora: '', codigoOperadora: '', vidas: '', parcela: '', inicioVigencia: '', notaFiscal: '', 
@@ -1314,6 +1364,7 @@ export default function App() {
             setLoading(true); setLoadingMsg("Guardando venda...");
             try {
                 let dataToSave = { ...vendaForm, valor: parseFloat(vendaForm.valor) || 0 };
+                dataToSave.cliente = (dataToSave.cliente || '').trim().toUpperCase();
                 dataToSave.vidas = dataToSave.vidas === '' || dataToSave.vidas === undefined ? null : parseInt(dataToSave.vidas, 10);
                 dataToSave.comissao = dataToSave.comissao === '' || dataToSave.comissao === undefined ? null : parseFloat(dataToSave.comissao);
                 dataToSave.desconto = dataToSave.desconto === '' || dataToSave.desconto === undefined ? null : parseFloat(dataToSave.desconto);
@@ -1563,7 +1614,31 @@ export default function App() {
     };
 
     const getItemsAtCurrentPath = () => {
-        if (searchTerm.trim() !== '') { const term = searchTerm.toLowerCase(); return dbReports.filter(r => r.parceiro.toLowerCase().includes(term) || (r.fileName || '').toLowerCase().includes(term) || r.empresa.toLowerCase().includes(term)).map(f => ({ ...f, type: 'file', name: (f.parceiro && f.parceiro.replace(/^\[.*?\]\s*/, '')) || f.fileName, pathInfo: `${f.ano} / ${f.mes} / ${f.empresa}` })); }
+        const hasSearch = searchTerm.trim() !== '';
+        const hasDateFilter = gestorReportsDateStart || gestorReportsDateEnd;
+        
+        if (hasSearch || hasDateFilter) {
+            return dbReports.filter(r => {
+                let textMatch = true;
+                if (hasSearch) {
+                    const term = searchTerm.toLowerCase();
+                    textMatch = (r.parceiro && r.parceiro.toLowerCase().includes(term)) || 
+                                (r.fileName || '').toLowerCase().includes(term) || 
+                                (r.empresa && r.empresa.toLowerCase().includes(term));
+                }
+                let startMatch = true;
+                let endMatch = true;
+                const rDate = r.date || r.created_at || r.dataCriacao;
+                if (gestorReportsDateStart && rDate) startMatch = new Date(rDate) >= new Date(gestorReportsDateStart + "T00:00:00");
+                if (gestorReportsDateEnd && rDate) endMatch = new Date(rDate) <= new Date(gestorReportsDateEnd + "T23:59:59");
+                return textMatch && startMatch && endMatch;
+            }).map(f => {
+                const fDate = f.date || f.created_at || f.dataCriacao;
+                const dateStr = fDate ? ` - ${new Date(fDate).toLocaleDateString('pt-BR')}` : '';
+                return { ...f, type: 'file', name: (f.parceiro && f.parceiro.replace(/^\[.*?\]\s*/, '')) || f.fileName, pathInfo: `${f.ano} / ${f.mes} / ${f.empresa}${dateStr}` };
+            });
+        }
+
         if (currentPath.length === 0) return [...new Set([String(new Date().getFullYear()), ...dbReports.map(r => String(r.ano))])].sort().map(y => ({ id: y, name: y, type: 'folder' }));
         if (currentPath.length === 1) return MESES.map(m => ({ id: m, name: m, type: 'folder' }));
         if (currentPath.length === 2) return CATEGORIAS.map(c => ({ id: c, name: c, type: 'folder' }));
@@ -1852,9 +1927,19 @@ export default function App() {
 
     const isAllClientesSelected = currentClientes.length > 0 && currentClientes.every(c => selectedClientes.includes(c.id));
     const abrirModalAddEdit = (cliente = null) => {
-        if (cliente) { setClienteForm({...cliente}); setClienteEditIndex(cliente.id); } 
+        if (cliente) { 
+            const safeCliente = {...cliente};
+            Object.keys(safeCliente).forEach(k => { if(safeCliente[k] === null) safeCliente[k] = ''; });
+            setClienteForm(safeCliente); 
+            setClienteEditIndex(cliente.id); 
+        } 
         else { setClienteForm({ id: null, nome: '', tipo: 'Pessoa jurídica', documento: '', telefone: '', celular: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '', email: '', situacao: true, operadora: '', servico: 'Plano de Saúde' }); setClienteEditIndex(-1); }
         setModalClienteOpen(true);
+    };
+
+    const abrirModalViewCliente = (cliente) => {
+        setClienteToView(cliente);
+        setModalViewClienteOpen(true);
     };
 
     const salvarCliente = async (e) => {
@@ -1879,7 +1964,7 @@ export default function App() {
         setLoading(true); setLoadingMsg("Guardando cliente...");
         try {
             const finalEmpresa = (!currentUser?.empresa || currentUser.empresa === 'Todas') ? (clienteForm.empresa || nomeEmpresa) : nomeEmpresa;
-            const clienteParaSalvar = { ...clienteForm }; clienteParaSalvar.nome = clienteParaSalvar.nome.trim();
+            const clienteParaSalvar = { ...clienteForm }; clienteParaSalvar.nome = clienteParaSalvar.nome.trim().toUpperCase();
             Object.keys(clienteParaSalvar).forEach(k => {
                 if(clienteParaSalvar[k] === '') clienteParaSalvar[k] = null;
             });
@@ -1992,7 +2077,7 @@ export default function App() {
                     if (matchNome) { 
                         codCliente = matchNome[1].trim(); 
                         nomeCliente = matchNome[2].trim(); 
-                        nomeCliente = nomeCliente.replace(/(?:\s+[\d\/\.\-,]+)+$/, '').trim(); 
+                        nomeCliente = nomeCliente.replace(/(?:\s+[\d\/\.\-,]+)+$/, '').trim().toUpperCase(); 
                     }
                     if(!nomeCliente) continue;
 
@@ -2128,7 +2213,7 @@ export default function App() {
                     let contratoDetectado = "";
 
                     const matchNome = bloco.match(/^(.*?)\s+Ap[oó]lice\/T[ií]tulo/i) || bloco.match(/^(.*?)\s+Tipo de documento/i) ||  bloco.match(/^(.*?)\s+Contrato/i);
-                    if(matchNome) nomeCliente = matchNome[1].trim();
+                    if(matchNome) nomeCliente = matchNome[1].trim().toUpperCase();
                     if(!nomeCliente) continue;
 
                     const matchContrato = bloco.match(/Contrato\/Empresa\s*:\s*(.*?)\s+(?:Item\/Plano|Valor)/i);
@@ -3152,19 +3237,21 @@ export default function App() {
                                                 <th className="py-3 px-4 rounded-tl-lg">Data</th>
                                                 <th className="py-3 px-4">Cliente</th>
                                                 <th className="py-3 px-4">Operadora</th>
-                                                <th className="py-3 px-4 text-emerald-600 dark:text-emerald-400">Valor</th>
+                                                <th className="py-3 px-4 text-emerald-600 dark:text-emerald-400">Valor Total</th>
+                                                <th className="py-3 px-4 text-emerald-600 dark:text-emerald-400">Comissão</th>
                                                 <th className="py-3 px-4 rounded-tr-lg">Situação</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {getAllVendas().reverse().slice(0, 5).map((venda, idx) => (
-                                                <tr key={idx} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                                                    <td className="py-3 px-4">
+                                                <tr key={idx} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors group">
+                                                    <td className="py-3 px-4 group-hover:text-slate-900 dark:group-hover:text-white">
                                                         {venda.dataVenda ? new Date(venda.dataVenda + "T12:00:00").toLocaleDateString('pt-BR') : '-'}
                                                     </td>
                                                     <td className="py-3 px-4 font-medium text-slate-900 dark:text-white">{venda.cliente}</td>
-                                                    <td className="py-3 px-4">{venda.operadora}</td>
-                                                    <td className="py-3 px-4 font-medium">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(venda.valor || 0)}</td>
+                                                    <td className="py-3 px-4 group-hover:text-slate-900 dark:group-hover:text-white">{venda.operadora || venda.codigoOperadora || venda.codOperadora || '-'}</td>
+                                                    <td className="py-3 px-4 font-medium group-hover:text-slate-900 dark:group-hover:text-white">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(venda.valor || 0)}</td>
+                                                    <td className="py-3 px-4 font-medium text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(venda.comissao || 0)}</td>
                                                     <td className="py-3 px-4">
                                                         <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded text-xs font-semibold whitespace-nowrap">
                                                             {venda.situacao}
@@ -3614,7 +3701,7 @@ export default function App() {
                                             </th>
                                         )}
                                         {vendasTableCols.servico && (
-                                            <th onClick={() => handleSortVendas('servico')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">
+                                            <th onClick={() => handleSortVendas('servico')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-white border-r border-slate-200 dark:border-slate-700 bg-slate-400 dark:bg-slate-600">
                                                 Serviço {getSortIcon('servico')}
                                             </th>
                                         )}
@@ -3703,7 +3790,7 @@ export default function App() {
                                                 {vendasTableCols.cliente && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 border-r border-slate-200 dark:border-slate-700"><div className="font-bold text-slate-900 dark:text-slate-100">{venda.cliente}</div></td>}
                                                 {vendasTableCols.dataVenda && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">{formatarDataVisivel(venda.dataVenda)}</td>}
                                                 {vendasTableCols.loja && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.loja || '-'}</td>}
-                                                {vendasTableCols.servico && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.servico || '-'}</td>}
+                                                {vendasTableCols.servico && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-white border-r border-slate-200 dark:border-slate-700">{venda.servico || '-'}</td>}
                                                 {vendasTableCols.corretor && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.corretor || '-'}</td>}
                                                 {vendasTableCols.situacao && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-center border-r border-slate-200 dark:border-slate-700"><span className={`${getSituacaoColor(venda.situacao)} px-3 py-1 rounded text-xs font-bold uppercase`}>{venda.situacao}</span></td>}
                                                 {vendasTableCols.valor && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-emerald-800 dark:text-emerald-200 font-medium text-right border-r border-slate-200 dark:border-slate-700">{formatarMoeda(venda.valor)}</td>}
@@ -3836,8 +3923,9 @@ export default function App() {
                                                 {cols.situacao && <td className="py-3 px-4 text-center">{cli.situacao ? <CheckCircle size={18} className="text-emerald-500 mx-auto"/> : <XCircle size={18} className="text-rose-500 mx-auto"/>}</td>}
                                                 {cols.acoes && <td className="py-3 px-4">
                                                     <div className="flex gap-2 justify-center">
-                                                        <button onClick={()=>abrirModalAddEdit(cli)} className="text-amber-500 dark:text-amber-400 hover:text-amber-600 bg-amber-100 dark:bg-amber-400/10 p-1.5 rounded transition-colors"><Edit size={16}/></button>
-                                                        <button onClick={()=>apagarCliente(cli.id)} className="text-rose-500 dark:text-rose-400 hover:text-rose-600 bg-rose-100 dark:bg-rose-400/10 p-1.5 rounded transition-colors"><Trash2 size={16}/></button>
+                                                        <button onClick={()=>abrirModalViewCliente(cli)} className="text-blue-500 dark:text-blue-400 hover:text-blue-600 bg-blue-100 dark:bg-blue-400/10 p-1.5 rounded transition-colors" title="Visualizar Cliente"><Eye size={16}/></button>
+                                                        <button onClick={()=>abrirModalAddEdit(cli)} className="text-amber-500 dark:text-amber-400 hover:text-amber-600 bg-amber-100 dark:bg-amber-400/10 p-1.5 rounded transition-colors" title="Editar Cliente"><Edit size={16}/></button>
+                                                        <button onClick={()=>apagarCliente(cli.id)} className="text-rose-500 dark:text-rose-400 hover:text-rose-600 bg-rose-100 dark:bg-rose-400/10 p-1.5 rounded transition-colors" title="Apagar Cliente"><Trash2 size={16}/></button>
                                                     </div>
                                                 </td>}
                                             </tr>
@@ -4014,7 +4102,7 @@ export default function App() {
                                             </div>
                                         </th>}
                                         {reportTableCols.loja && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center">Loja</th>}
-                                        {reportTableCols.servico && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-amber-600 dark:text-amber-400">Serviço</th>}
+                                        {reportTableCols.servico && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center">Serviço</th>}
                                         {reportTableCols.desconto && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-rose-600 dark:text-rose-400">Desc.</th>}
                                         {reportTableCols.corretor && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-indigo-600 dark:text-indigo-400">Corretor</th>}
                                         {reportTableCols.parc && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-indigo-600 dark:text-indigo-400">Parc.</th>}
@@ -4132,7 +4220,7 @@ export default function App() {
                                                     {reportTableCols.cliente && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs truncate max-w-[150px]" title={linha.cliente}>{linha.cliente}</td>}
                                                     {reportTableCols.data && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center text-slate-500 dark:text-slate-400 text-[11px]">{linha.data ? formatarDataVisivel(linha.data) : ''}</td>}
                                                     {reportTableCols.loja && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center text-slate-500 dark:text-slate-400 text-xs">{linha.loja}</td>}
-                                                    {reportTableCols.servico && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[11px]">{linha.servico || '-'}</td>}
+                                                    {reportTableCols.servico && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-white text-[11px]">{linha.servico || '-'}</td>}
                                                     {reportTableCols.desconto && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-rose-500 dark:text-rose-400 text-[11px]">{linha.desconto || '-'}</td>}
                                                     {reportTableCols.corretor && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-indigo-600 dark:text-indigo-400 text-xs">{linha.vendedor || '-'}</td>}
                                                     {reportTableCols.parc && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-slate-700 dark:text-slate-300 text-xs">{linha.parcela || '-'}</td>}
@@ -4159,7 +4247,7 @@ export default function App() {
                                     <tfoot>
                                         <tr className="bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-white border-t-2 border-slate-300 dark:border-slate-600 transition-colors duration-200">
                                             <td colSpan={['cod', 'contrato', 'op', 'vidas', 'cliente', 'data', 'loja', 'servico', 'desconto', 'corretor', 'parc', 'inicioVig', 'nfe', 'vitalicio', 'assessoria', 'pagamento'].filter(k => reportTableCols[k]).length + 1} className="py-3 px-4 font-bold text-right">TOTAIS APURADOS (Selecionados)</td>
-                                            {reportTableCols.valorTotal && <td className="py-3 px-2 text-right font-bold text-emerald-600 dark:text-emerald-400">{formatarMoeda(pdfData.filter(r => r.selected).reduce((acc, l)=>acc+(Number(l.valorTotal)||0), 0))}</td>}
+                                            {reportTableCols.valorTotal && <td className="py-3 px-2 text-right font-bold text-emerald-600 dark:text-emerald-400 text-lg">{formatarMoeda(pdfData.filter(r => r.selected).reduce((acc, l)=>acc+(Number(l.valorTotal)||0), 0))}</td>}
                                             {reportTableCols.comissao && <td className="py-3 px-2 text-right font-bold text-sky-600 dark:text-sky-400 text-lg">{formatarMoeda(pdfData.filter(r => r.selected).reduce((acc, l)=>acc+(Number(l.comissao)||0), 0))}</td>}
                                             <td></td>
                                         </tr>
@@ -4465,15 +4553,51 @@ export default function App() {
                                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center"><Archive className="mr-3 text-indigo-500"/> Relatórios Salvos</h2>
                                 <p className="text-slate-500 dark:text-slate-400 mt-1">Consulte e audite os relatórios gerados.</p>
                             </div>
-                            <div className="w-full md:w-auto relative">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-                                <input 
-                                    type="text" 
-                                    placeholder="Pesquisar relatórios, NF, Op..." 
-                                    value={savedReportsSearchTerm}
-                                    onChange={e => setSavedReportsSearchTerm(e.target.value)}
-                                    className="w-full md:w-72 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500 transition-colors"
-                                />
+                            <div className="w-full md:w-auto flex flex-col md:flex-row gap-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="relative z-20">
+                                        <button onClick={() => setShowSavedReportsPeriodMenu(!showSavedReportsPeriodMenu)} className="flex items-center justify-between w-[160px] bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-xs md:text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:border-indigo-500 transition-colors h-[38px]">
+                                            {savedReportsPeriodLabel} <ChevronDown size={14} className="ml-2"/>
+                                        </button>
+                                        {showSavedReportsPeriodMenu && (
+                                            <div className="absolute left-0 mt-2 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg overflow-hidden text-sm animate-in fade-in slide-in-from-top-2">
+                                                <ul className="flex flex-col py-1">
+                                                    {['Hoje', 'Esta semana', 'Mês passado', 'Este mês', 'Próximo mês', 'Todo o período', 'Escolha o período'].map(preset => (
+                                                        <li key={preset}><button onClick={() => applySavedReportsDatePreset(preset)} className="w-full text-left px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors font-medium">{preset}</button></li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {savedReportsPeriodLabel === 'Escolha o período' && (
+                                        <>
+                                            <input 
+                                                type="date" 
+                                                value={savedReportsDateStart} 
+                                                onChange={e => setSavedReportsDateStart(e.target.value)} 
+                                                className="w-full md:w-auto bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-xs md:text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500 h-[38px]" 
+                                            />
+                                            <span className="text-slate-500 text-xs md:text-sm">até</span>
+                                            <input 
+                                                type="date" 
+                                                value={savedReportsDateEnd} 
+                                                onChange={e => setSavedReportsDateEnd(e.target.value)} 
+                                                className="w-full md:w-auto bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-xs md:text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500 h-[38px]" 
+                                            />
+                                        </>
+                                    )}
+                                </div>
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
+                                    <input 
+                                        type="text" 
+                                        placeholder="Pesquisar relatórios, NF, Op..." 
+                                        value={savedReportsSearchTerm}
+                                        onChange={e => setSavedReportsSearchTerm(e.target.value)}
+                                        className="w-full md:w-64 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500 transition-colors"
+                                    />
+                                </div>
                             </div>
                         </header>
                         
@@ -4494,17 +4618,24 @@ export default function App() {
                                 <tbody>
                                     {(() => {
                                         const filteredReports = savedReportsList.filter(rep => {
-                                            if (!savedReportsSearchTerm) return true;
-                                            const term = savedReportsSearchTerm.toLowerCase();
-                                            const nfs = Array.from(new Set((rep.dados || []).map(d => d.notaFiscal).filter(Boolean))).join(' ').toLowerCase();
-                                            const ops = Array.from(new Set((rep.dados || []).map(d => d.codigoOperadora).filter(Boolean))).join(' ').toLowerCase();
-                                            return (
-                                                (rep.nome || '').toLowerCase().includes(term) ||
-                                                (rep.periodo || '').toLowerCase().includes(term) ||
-                                                (rep.criadoPor || '').toLowerCase().includes(term) ||
-                                                nfs.includes(term) ||
-                                                ops.includes(term)
-                                            );
+                                            let textMatch = true;
+                                            if (savedReportsSearchTerm) {
+                                                const term = savedReportsSearchTerm.toLowerCase();
+                                                const nfs = Array.from(new Set((rep.dados || []).map(d => d.notaFiscal).filter(Boolean))).join(' ').toLowerCase();
+                                                const ops = Array.from(new Set((rep.dados || []).map(d => d.codigoOperadora).filter(Boolean))).join(' ').toLowerCase();
+                                                textMatch = (
+                                                    (rep.nome || '').toLowerCase().includes(term) ||
+                                                    (rep.periodo || '').toLowerCase().includes(term) ||
+                                                    (rep.criadoPor || '').toLowerCase().includes(term) ||
+                                                    nfs.includes(term) ||
+                                                    ops.includes(term)
+                                                );
+                                            }
+                                            let startMatch = true;
+                                            let endMatch = true;
+                                            if (savedReportsDateStart) startMatch = new Date(rep.dataCriacao) >= new Date(savedReportsDateStart + "T00:00:00");
+                                            if (savedReportsDateEnd) endMatch = new Date(rep.dataCriacao) <= new Date(savedReportsDateEnd + "T23:59:59");
+                                            return textMatch && startMatch && endMatch;
                                         });
 
                                         if (filteredReports.length === 0) {
@@ -4934,13 +5065,12 @@ export default function App() {
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Ano</label><input type="number" value={formData.ano} onChange={(e) => setFormData({...formData, ano: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500" /></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mês</label><select value={formData.mes} onChange={(e) => setFormData({...formData, mes: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{MESES.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
                                 <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Categoria</label><select value={formData.categoria} onChange={(e) => setFormData({...formData, categoria: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label><select value={formData.empresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">
-                                    {(!currentUser?.empresa || currentUser.empresa === 'Todas') ? (
-                                        empresasList.map(e => <option key={e.nome} value={e.nome}>{e.nome}</option>)
-                                    ) : (
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label>
+                                    <select disabled value={formData.empresa || nomeEmpresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-500 dark:text-slate-400 focus:outline-none cursor-not-allowed">
                                         <option value={nomeEmpresa}>{nomeEmpresa}</option>
-                                    )}
-                                </select></div>
+                                    </select>
+                                </div>
                                 <div className="space-y-2 md:col-span-1">
                                     <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Cód. Operadora</label>
                                     {formData.codigoOperadora === 'AMIL' ? (
@@ -5029,13 +5159,47 @@ export default function App() {
                                     <button onClick={() => setFileViewMode('list')} className={`p-2 rounded-md transition-colors ${fileViewMode === 'list' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}><List size={18} /></button>
                                 </div>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 flex-col md:flex-row z-10 w-full relative">
+                                <div className="flex items-center gap-2">
+                                    <div className="relative z-20">
+                                        <button onClick={() => setShowGestorPeriodMenu(!showGestorPeriodMenu)} className="flex items-center justify-between w-[160px] bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-xs md:text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:border-blue-500 transition-colors h-[38px]">
+                                            {gestorPeriodLabel} <ChevronDown size={14} className="ml-2"/>
+                                        </button>
+                                        {showGestorPeriodMenu && (
+                                            <div className="absolute left-0 mt-2 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg overflow-hidden text-sm animate-in fade-in slide-in-from-top-2">
+                                                <ul className="flex flex-col py-1">
+                                                    {['Hoje', 'Esta semana', 'Mês passado', 'Este mês', 'Próximo mês', 'Todo o período', 'Escolha o período'].map(preset => (
+                                                        <li key={preset}><button onClick={() => applyGestorDatePreset(preset)} className="w-full text-left px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors font-medium">{preset}</button></li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {gestorPeriodLabel === 'Escolha o período' && (
+                                        <>
+                                            <input 
+                                                type="date" 
+                                                value={gestorReportsDateStart} 
+                                                onChange={e => setGestorReportsDateStart(e.target.value)} 
+                                                className="w-full md:w-auto bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 dark:border-slate-700 rounded-lg px-3 py-2 text-xs md:text-sm text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 h-[38px]" 
+                                            />
+                                            <span className="text-slate-500 text-xs md:text-sm">até</span>
+                                            <input 
+                                                type="date" 
+                                                value={gestorReportsDateEnd} 
+                                                onChange={e => setGestorReportsDateEnd(e.target.value)} 
+                                                className="w-full md:w-auto bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 dark:border-slate-700 rounded-lg px-3 py-2 text-xs md:text-sm text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 h-[38px]" 
+                                            />
+                                        </>
+                                    )}
+                                </div>
                                 <div className="relative flex-1">
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><Search size={18} /></div>
-                                    <input type="text" placeholder="Pesquisar extrato por nome ou parceiro..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-200 rounded-lg pl-10 pr-4 py-2 outline-none focus:border-blue-500 transition-colors" />
+                                    <input type="text" placeholder="Pesquisar extrato por nome ou parceiro..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-200 text-sm rounded-lg pl-10 pr-4 py-2 outline-none focus:border-blue-500 transition-colors" />
                                     {searchTerm && <button onClick={() => setSearchTerm('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-white"><X size={16} /></button>}
                                 </div>
-                                {currentPath.length > 0 && !searchTerm && <button onClick={() => setCurrentPath(currentPath.slice(0, -1))} className="bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-white px-4 rounded-lg transition-colors"><ArrowLeft size={18} /></button>}
+                                {currentPath.length > 0 && !(searchTerm || gestorReportsDateStart || gestorReportsDateEnd) && <button onClick={() => setCurrentPath(currentPath.slice(0, -1))} className="bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-white px-4 rounded-lg transition-colors py-2"><ArrowLeft size={18} /></button>}
                             </div>
                             {getItemsAtCurrentPath().some(item => item.type === 'file') && (
                                 <div className="flex bg-slate-100 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700 items-center justify-between gap-2 flex-wrap mt-4">
@@ -5063,7 +5227,7 @@ export default function App() {
                                 </div>
                             )}
                         </header>
-                        {!searchTerm && (
+                        {!(searchTerm || gestorReportsDateStart || gestorReportsDateEnd) && (
                             <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 p-3 rounded-lg mb-6 border border-slate-200 dark:border-slate-700 overflow-x-auto whitespace-nowrap transition-colors">
                                 <button onClick={() => setCurrentPath([])} className="hover:text-blue-600 dark:hover:text-blue-400 flex items-center"><Home size={14} className="mr-1"/> Raiz</button>
                                 {currentPath.map((folder, index) => <React.Fragment key={index}><ChevronRight size={14} /><button onClick={() => { setCurrentPath(currentPath.slice(0, index + 1)); setSearchTerm(''); }} className="hover:text-blue-600 dark:hover:text-blue-400 font-medium">{folder}</button></React.Fragment>)}
@@ -5071,7 +5235,7 @@ export default function App() {
                         )}
                         <div className={fileViewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4" : "flex flex-col gap-2"}>
                             {getItemsAtCurrentPath().map((item, idx) => (
-                                <div key={idx} onClick={() => handleNavigate(item)} className={fileViewMode === 'grid' ? `relative p-4 rounded-xl border cursor-pointer flex flex-col items-center text-center space-y-3 transition-colors ${item.type === 'folder' ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-emerald-500/50 hover:bg-white dark:hover:bg-slate-800'}` : `relative p-3 rounded-lg border cursor-pointer flex flex-row items-center space-x-4 transition-colors ${item.type === 'folder' ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-emerald-500/50 hover:bg-white dark:hover:bg-slate-800'}`}>
+                                <div key={idx} onClick={() => handleNavigate(item)} className={fileViewMode === 'grid' ? `relative p-4 rounded-xl border cursor-pointer flex flex-col items-center text-center space-y-3 transition-colors group ${item.type === 'folder' ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-white' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-emerald-500/50 hover:bg-white dark:hover:bg-white'}` : `relative p-3 rounded-lg border cursor-pointer flex flex-row items-center space-x-4 transition-colors group ${item.type === 'folder' ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-white' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-emerald-500/50 hover:bg-white dark:hover:bg-white'}`}>
                                     {item.type === 'file' && (
                                         <div className={`absolute z-10 ${fileViewMode === 'grid' ? 'top-3 left-3' : 'top-1/2 -translate-y-1/2 left-3'}`} onClick={(e) => e.stopPropagation()}>
                                             <input 
@@ -5082,12 +5246,12 @@ export default function App() {
                                             />
                                         </div>
                                     )}
-                                    <div className={`p-2 rounded-full ${fileViewMode !== 'grid' && item.type === 'file' ? 'ml-6' : ''} ${item.type === 'folder' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-slate-100 dark:bg-slate-700 ' + getFileColorClass(item.fileName)}`}>
-                                        {item.type === 'folder' ? <Folder size={24} /> : ((item.fileName || '').toLowerCase().endsWith('pdf') ? <FileText size={24} /> : <FileSpreadsheet size={24} />)}
+                                    <div className={`p-2 rounded-full ${fileViewMode !== 'grid' && item.type === 'file' ? 'ml-6' : ''} ${item.type === 'folder' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 group-hover:bg-blue-100 group-hover:text-blue-600 dark:group-hover:bg-blue-100 dark:group-hover:text-blue-600' : 'bg-slate-100 dark:bg-slate-700 ' + getFileColorClass(item.fileName) + ' group-hover:bg-slate-100 dark:group-hover:bg-slate-100'}`}>
+                                        {item.type === 'folder' ? <Folder size={24} /> : ((item.fileName || '').toLowerCase().endsWith('pdf') ? <FileText size={24} className="group-hover:text-slate-600 dark:group-hover:text-slate-600" /> : <FileSpreadsheet size={24} className="group-hover:text-slate-600 dark:group-hover:text-slate-600" />)}
                                     </div>
                                     <div className={fileViewMode === 'grid' ? "w-full" : "flex-1 min-w-0"}>
-                                        <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{item.name}</p>
-                                        {item.pathInfo && <p className="text-[10px] text-slate-400 truncate mt-1">{item.pathInfo}</p>}
+                                        <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate group-hover:text-slate-900 dark:group-hover:text-slate-900">{item.name}</p>
+                                        {item.pathInfo && <p className="text-[10px] text-slate-400 truncate mt-1 group-hover:text-slate-500 dark:group-hover:text-slate-500">{item.pathInfo}</p>}
                                     </div>
                                 </div>
                             ))}
@@ -5319,6 +5483,158 @@ export default function App() {
                     </div>
                 )}
 
+                {modalViewClienteOpen && clienteToView && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto relative mx-4">
+                            <button type="button" onClick={() => { setModalViewClienteOpen(false); setClienteToView(null); }} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+                                <X size={20} />
+                            </button>
+                            <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-4">
+                                <div>
+                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-1">
+                                        <User size={24} className="text-blue-500" />
+                                        Cliente #{clienteToView.codigo || clienteToView.id}
+                                        {clienteToView.situacao ? 
+                                            <span className="text-[10px] uppercase font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded ml-2">Ativo</span> : 
+                                            <span className="text-[10px] uppercase font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded ml-2">Inativo</span>
+                                        }
+                                    </h3>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        Criado em {formatarDataVisivel(clienteToView.dataCriacao)}
+                                    </p>
+                                </div>
+                                <div className="mt-4 md:mt-0">
+                                    <button onClick={() => {
+                                        setModalViewClienteOpen(false);
+                                        abrirModalAddEdit(clienteToView);
+                                    }} className="bg-amber-500 hover:bg-amber-400 text-white px-4 py-2 rounded-lg font-bold flex items-center shadow-md transition-colors text-sm">
+                                        <Edit size={16} className="mr-2"/> Editar Cadastro
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                {/* Left Column: General Data */}
+                                <div className="md:col-span-1 space-y-6 flex flex-col">
+                                    <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-5 border border-slate-200 dark:border-slate-700 h-full">
+                                        <h4 className="font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 pb-2 mb-4 flex items-center"><Edit size={16} className="mr-2"/> Dados gerais</h4>
+                                        <div className="flex flex-col items-center mb-6">
+                                            <div className="w-24 h-24 bg-slate-200 dark:bg-slate-700 rounded-lg flex items-center justify-center text-slate-400 mb-3 shadow-inner">
+                                                <User size={48} />
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="font-bold text-slate-900 dark:text-white text-lg">{clienteToView.nome}</p>
+                                                <p className="text-sm text-slate-500">{clienteToView.tipo}</p>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-3 text-sm">
+                                            <div className="flex flex-col"><span className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase">Nome/Razão Social:</span> <span className="font-medium text-slate-900 dark:text-white">{clienteToView.nome || '-'}</span></div>
+                                            <div className="flex flex-col"><span className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase">Documento:</span> <span className="font-medium text-slate-900 dark:text-white">{clienteToView.documento || '-'}</span></div>
+                                            <div className="flex flex-col"><span className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase">Operadora/Seguradora:</span> <span className="font-medium text-slate-900 dark:text-white">{clienteToView.operadora || '-'}</span></div>
+                                            {clienteToView.codOperadora && <div className="flex flex-col"><span className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase">Cód. Operadora:</span> <span className="font-medium text-slate-900 dark:text-white">{clienteToView.codOperadora || '-'}</span></div>}
+                                            <div className="flex flex-col"><span className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase">Serviço:</span> <span className="font-medium text-slate-900 dark:text-white">{clienteToView.servico || '-'}</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Right Column: Contacts, Address, Sales */}
+                                <div className="md:col-span-2 space-y-6">
+                                    {/* Contacts */}
+                                    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                        <div className="bg-slate-50 dark:bg-slate-900 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+                                            <h4 className="font-bold text-slate-700 dark:text-slate-300 flex items-center"><Phone size={16} className="mr-2 text-slate-500"/> Contatos</h4>
+                                        </div>
+                                        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div className="flex items-start gap-3">
+                                                <div className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg"><Phone size={18} /></div>
+                                                <div><p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase mb-0.5">Telefone</p><p className="text-sm font-medium text-slate-900 dark:text-white">{clienteToView.telefone || '-'}</p></div>
+                                            </div>
+                                            <div className="flex items-start gap-3">
+                                                <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-lg"><Phone size={18} /></div>
+                                                <div><p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase mb-0.5">Celular</p><p className="text-sm font-medium text-slate-900 dark:text-white">{clienteToView.celular || '-'}</p></div>
+                                            </div>
+                                            <div className="flex items-start gap-3 sm:col-span-2">
+                                                <div className="p-2 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded-lg"><Mail size={18} /></div>
+                                                <div><p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase mb-0.5">E-mail</p><p className="text-sm font-medium break-all text-slate-900 dark:text-white">{clienteToView.email || '-'}</p></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Address */}
+                                    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                        <div className="bg-slate-50 dark:bg-slate-900 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+                                            <h4 className="font-bold text-slate-700 dark:text-slate-300 flex items-center"><Folder size={16} className="mr-2 text-slate-500"/> Endereço</h4>
+                                        </div>
+                                        <div className="p-4">
+                                            {(clienteToView.logradouro || clienteToView.cidade || clienteToView.uf || clienteToView.cep) ? (
+                                                <div className="flex items-start gap-3 bg-slate-50 dark:bg-slate-900/50 p-3 rounded border border-slate-100 dark:border-slate-750">
+                                                    <div className="mt-0.5 text-emerald-500"><CheckCircle size={16} /></div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center">
+                                                            Endereço <span className="ml-2 text-[9px] uppercase bg-emerald-500 text-white px-1.5 py-0.5 rounded">Principal</span>
+                                                        </p>
+                                                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                                                            {clienteToView.logradouro && `${clienteToView.logradouro}`}
+                                                            {clienteToView.numero && `, ${clienteToView.numero}`}
+                                                            {clienteToView.bairro && ` - ${clienteToView.bairro}`}
+                                                            {clienteToView.cidade && `, ${clienteToView.cidade}`}
+                                                            {clienteToView.uf && ` - ${clienteToView.uf}`}
+                                                            {clienteToView.cep && ` | CEP: ${clienteToView.cep}`}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-2">Nenhum endereço cadastrado.</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Sales */}
+                                    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                        <div className="bg-slate-50 dark:bg-slate-900 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+                                            <h4 className="font-bold text-slate-700 dark:text-slate-300 flex items-center"><ShoppingCart size={16} className="mr-2 text-slate-500"/> Vendas</h4>
+                                        </div>
+                                        <div className="p-0">
+                                            {(() => {
+                                                const vendasDoCliente = getAllVendas().filter(v => v.cliente && v.cliente.toLowerCase() === clienteToView.nome.toLowerCase());
+                                                if (vendasDoCliente.length === 0) {
+                                                    return <p className="text-center py-6 text-slate-500 dark:text-slate-400">Nenhuma venda foi encontrada!</p>;
+                                                }
+                                                return (
+                                                    <div className="max-h-64 overflow-y-auto">
+                                                        <table className="w-full text-left border-collapse">
+                                                            <thead className="bg-slate-100 dark:bg-slate-900 sticky top-0">
+                                                                <tr>
+                                                                    <th className="py-2 px-4 text-xs font-bold text-slate-600 dark:text-slate-400">Data</th>
+                                                                    <th className="py-2 px-4 text-xs font-bold text-slate-600 dark:text-slate-400">Contrato</th>
+                                                                    <th className="py-2 px-4 text-xs font-bold text-slate-600 dark:text-slate-400">Op.|Seg.</th>
+                                                                    <th className="py-2 px-4 text-xs font-bold text-emerald-600 dark:text-emerald-400 text-right">Comissão</th>
+                                                                    <th className="py-2 px-4 text-xs font-bold text-slate-600 dark:text-slate-400 text-right">Valor</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {vendasDoCliente.map((v, i) => (
+                                                                    <tr key={i} className="border-b border-slate-100 dark:border-slate-750 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                                                        <td className="py-2 px-4 text-sm text-slate-700 dark:text-slate-300">{formatarDataVisivel(v.dataVenda)}</td>
+                                                                        <td className="py-2 px-4 text-sm font-medium text-slate-800 dark:text-slate-200">{v.contrato || '-'}</td>
+                                                                        <td className="py-2 px-4 text-sm text-slate-700 dark:text-slate-300">{v.codigoOperadora || 'AMIL'}</td>
+                                                                        <td className="py-2 px-4 text-sm font-bold text-emerald-600 dark:text-emerald-400 text-right">R$ {(Number(v.comissao) || 0).toFixed(2)}</td>
+                                                                        <td className="py-2 px-4 text-sm font-bold text-slate-700 dark:text-slate-300 text-right">R$ {(Number(v.valor) || 0).toFixed(2)}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {modalClienteOpen && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
                         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-2xl relative mx-4">
@@ -5348,16 +5664,12 @@ export default function App() {
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">{clienteForm.tipo === 'Pessoa jurídica' ? 'CNPJ' : 'CPF'}</label>
                                         <input type="text" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.documento} onChange={e => setClienteForm({...clienteForm, documento: e.target.value})} placeholder={clienteForm.tipo === 'Pessoa jurídica' ? '00.000.000/0000-00' : '000.000.000-00'} />
                                     </div>
-                                    {(!currentUser?.empresa || currentUser.empresa === 'Todas') && (
-                                        <div>
-                                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Empresa</label>
-                                            <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.empresa || nomeEmpresa} onChange={e => setClienteForm({...clienteForm, empresa: e.target.value})}>
-                                                {rawEmpresasList.map(emp => (
-                                                    <option key={emp.nome} value={emp.nome}>{emp.nome}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    )}
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Empresa</label>
+                                        <select disabled className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-500 dark:text-slate-400 focus:outline-none cursor-not-allowed" value={clienteForm.empresa || nomeEmpresa} onChange={e => setClienteForm({...clienteForm, empresa: e.target.value})}>
+                                            <option value={nomeEmpresa}>{nomeEmpresa}</option>
+                                        </select>
+                                    </div>
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Op. | Seg.</label>
                                         <select className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={clienteForm.operadora || ''} onChange={e => setClienteForm({...clienteForm, operadora: e.target.value})}>
