@@ -204,7 +204,7 @@ export default function App() {
         localStorage.setItem('protetta_empresas', JSON.stringify(newList));
         
         // Save to global DB fallback
-        syncGlobalSysConfigToDB(newList, null);
+        await syncGlobalSysConfigToDB(newList, null);
         
         if (supabase) {
             try {
@@ -478,9 +478,10 @@ export default function App() {
                             changed = true;
                         } else {
                             let existing = map.get(dbEmp.nome.toUpperCase());
+                            let dbIsDefault = dbEmp.isDefault !== undefined ? dbEmp.isDefault : existing.isDefault;
                             // Sync changes from DB back to local state (DB wins)
-                            if (existing.cnpj !== dbEmp.cnpj || existing.logo !== dbEmp.logo || existing.isDefault !== dbEmp.isDefault || existing.nome !== dbEmp.nome) {
-                                map.set(dbEmp.nome.toUpperCase(), { ...existing, ...dbEmp });
+                            if (existing.cnpj !== dbEmp.cnpj || existing.logo !== dbEmp.logo || existing.isDefault !== dbIsDefault || existing.nome !== dbEmp.nome) {
+                                map.set(dbEmp.nome.toUpperCase(), { ...existing, ...dbEmp, isDefault: dbIsDefault });
                                 changed = true;
                             }
                         }
@@ -495,9 +496,10 @@ export default function App() {
                             changed = true; 
                         } else {
                             let existing = map.get(dbEmp.nome.toUpperCase());
+                            let dbIsDefault = dbEmp.isDefault !== undefined ? dbEmp.isDefault : existing.isDefault;
                             // Always sync from SysConfig (DB) to local state to guarantee DB is the source of truth
-                            if (existing.cnpj !== dbEmp.cnpj || existing.logo !== dbEmp.logo || existing.isDefault !== dbEmp.isDefault || existing.nome !== dbEmp.nome) { 
-                                map.set(dbEmp.nome.toUpperCase(), { ...existing, ...dbEmp }); 
+                            if (existing.cnpj !== dbEmp.cnpj || existing.logo !== dbEmp.logo || existing.isDefault !== dbIsDefault || existing.nome !== dbEmp.nome) { 
+                                map.set(dbEmp.nome.toUpperCase(), { ...existing, ...dbEmp, isDefault: dbIsDefault }); 
                                 changed = true; 
                             }
                         }
@@ -2360,12 +2362,173 @@ export default function App() {
             
             parseBlocosExtrato(blocosContrato);
         } else {
-            // Lógica Padrão / AMIL
-            let textoSemFalsoContrato = textoNormalizado.replace(/Total\s+contrato\s*:/gi, 'Total_Apurado:');
-            const blocosContrato = textoSemFalsoContrato.split(/Contrato\s*:/i); 
-            if (blocosContrato.length > 0) blocosContrato.shift();
+            const processGenericRegex = (regex, texto, mapMatchToData) => {
+                let match;
+                let foundAny = false;
+                while ((match = regex.exec(texto)) !== null) {
+                    try {
+                        const data = mapMatchToData(match);
+                        if (!data || !data.cliente) continue;
+                        foundAny = true;
+                        
+                        currentMaxVendaCodigo++;
+                        let codRegistro = String(currentMaxVendaCodigo).padStart(5, '0');
+                        let nomeCliente = data.cliente.trim().toUpperCase();
+
+                        if(!nomesClientesExistem.has(nomeCliente.toLowerCase())) {
+                            nomesClientesExistem.add(nomeCliente.toLowerCase());
+                            currentMaxCodigo++;
+                            let newCodigo = String(currentMaxCodigo).padStart(5, '0');
+                            clientesParaInserir.push({ 
+                                codigo: data.contrato || newCodigo, 
+                                nome: nomeCliente, 
+                                tipo: 'Pessoa jurídica', 
+                                documento: '', 
+                                telefone: '', 
+                                celular: '', 
+                                email: '', 
+                                situacao: true,
+                                operadora: extratoOperadora,
+                                empresa: empresaContexto
+                            });
+                        } else {
+                            let existingCli = clientes.find(c => c.nome.toLowerCase() === nomeCliente.toLowerCase());
+                            if (existingCli && (!existingCli.operadora || existingCli.operadora.trim() === '' || existingCli.operadora === '-')) {
+                                if (!clientesParaAtualizar.has(existingCli.id)) {
+                                    clientesParaAtualizar.set(existingCli.id, { operadora: extratoOperadora });
+                                }
+                            }
+                        }
+
+                        let vendedorDetectado = nomeEmpresa; 
+                        let inicioVigenciaDetectada = data.inicioVigencia || "";
+                        const historicoVendasCliente = vendasList.filter(v => 
+                            (v.cliente && v.cliente.toLowerCase() === nomeCliente.toLowerCase()) || 
+                            (data.contrato && v.contrato === data.contrato)
+                        );
+
+                        if (historicoVendasCliente.length > 0) {
+                            const ultimaVenda = historicoVendasCliente.sort((a,b) => new Date(b.dataVenda) - new Date(a.dataVenda))[0];
+                            if (ultimaVenda.corretor && ultimaVenda.corretor !== "Todos") vendedorDetectado = ultimaVenda.corretor;
+                            if (!inicioVigenciaDetectada && ultimaVenda.inicioVigencia) inicioVigenciaDetectada = ultimaVenda.inicioVigencia;
+                        }
+
+                        let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataDeHojeInterna());
+                        let parcelaDetectada = data.parcela || calcParcela || "1";
+
+                        novosRegistos.push({ 
+                            cod: extratoCodOperadora || codRegistro, 
+                            contrato: data.contrato || "", 
+                            codOperadora: extratoCodOperadora || null,
+                            codigoOperadora: extratoOperadora, 
+                            vidas: data.vidas || "1",
+                            cliente: nomeCliente, 
+                            data: dataDeHojeInterna(), 
+                            situacao: `FATURADO ${empresaContextoUpper} NF`, 
+                            loja: empresaContextoUpper, 
+                            valorTotal: data.valorTotal || 0, 
+                            comissao: data.comissao || 0, 
+                            vendedor: vendedorDetectado, 
+                            parcela: parcelaDetectada,
+                            inicioVigencia: inicioVigenciaDetectada, 
+                            notaFiscal: reportDoc?.notaFiscal || '', 
+                            vitalicio: 'Sim', 
+                            assessoria: empresaContexto, 
+                            formaPagamento: 'Crédito em conta',
+                            servico: 'Saúde', 
+                            desconto: '', 
+                            selected: true
+                        });
+                    } catch(e) { console.warn("Erro regex parser:", e); }
+                }
+                return foundAny;
+            };
+
+            let isMatched = false;
             
-            parseBlocosExtrato(blocosContrato);
+            // Bradesco
+            if (!isMatched && (textoNormalizado.includes('Bradesco Saude') || textoNormalizado.includes('bradesco seguros'))) {
+                const bradescoRegex = /(\d+)\s+(\d+)\s+([0-9/]+)\s+(\d+)\s+(\d+)\s+([\d,]+)\s+([A-ZÀ-ÿ ]+?)\s+(\d{2})\s+(\d{1,3})\s+R\$\s+([\d.,]+)\s+R\$\s+([\d.,]+)/g;
+                isMatched = processGenericRegex(bradescoRegex, textoNormalizado, match => ({
+                    contrato: match[3], cliente: match[7], parcela: match[9], valorTotal: parseFloat(match[10].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[11].replace(/\./g, '').replace(',', '.'))
+                }));
+            }
+            // Hapvida
+            if (!isMatched && textoNormalizado.includes('HAPVIDA')) {
+                const hapvidaRegex = /(\d{8,})\s+([A-Z0-9]+)\s+(.+?)\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+([\d.,]+)\s+([\d.,]+)\s+(\d+)\s+([\d.,]+)\s+([A-Z0-9]+)\s+(.+?)\s+(\d+)\s+[A-Z]/g;
+                isMatched = processGenericRegex(hapvidaRegex, textoNormalizado, match => ({
+                    contrato: match[2], cliente: match[3], parcela: match[8], valorTotal: parseFloat(match[7].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[9].replace(/\./g, '').replace(',', '.'))
+                }));
+            }
+            // Klini
+            if (!isMatched && textoNormalizado.includes('KLINI')) {
+                const kliniRegex = /(PESSOA FÍSICA|PME.*?)\s+(.*?)\s+(\d+)\s+(.*?)\s+(\d+)\s+Preço Pré-Estabelecido\s+([\d.,]+)%\s+R\$\s*([\d.,]+)\s+R\$\s*([\d.,]+)/g;
+                isMatched = processGenericRegex(kliniRegex, textoNormalizado, match => ({
+                    contrato: match[3], cliente: match[2], parcela: match[5], valorTotal: parseFloat(match[7].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[8].replace(/\./g, '').replace(',', '.'))
+                }));
+            }
+            // Leve Saúde
+            if (!isMatched && textoNormalizado.includes('LEVE SAUDE')) {
+                const leveRegex = /(OD\d+)\s+(.*?)\s+(\d{14})\s+(.*?)\s+(\d{2}\/\d{2}\/\d{2,4})\s+(\d{2}\/\d{2}\/\d{2,4})\s+([\d.,]+)\s*%\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+([\d.,]+)\s+([\d.,]+)/g;
+                isMatched = processGenericRegex(leveRegex, textoNormalizado, match => ({
+                    contrato: match[3], cliente: match[4], parcela: match[8], valorTotal: parseFloat(match[12].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[13].replace(/\./g, '').replace(',', '.'))
+                }));
+            }
+            // Omint
+            if (!isMatched && textoNormalizado.includes('OMINT')) {
+                const omintRegex = /(\d{8})\s+(.*?)\s+([A-Z0-9]+)\s+(\d+)\s+VITALICIO.*?(\d{1,2}\/\d{4})\s+(\d{1,2}\/\d{4})\s+([\d.,]+)\s+(\d+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/g;
+                isMatched = processGenericRegex(omintRegex, textoNormalizado, match => ({
+                    contrato: match[1], cliente: match[2], parcela: match[8], valorTotal: parseFloat(match[7].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[11].replace(/\./g, '').replace(',', '.'))
+                }));
+            }
+            // Porto Seguro
+            if (!isMatched && textoNormalizado.includes('PORTO SEGURO')) {
+                const portoRegex = /(.*?)\s+Porto\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d{4}-\d{2}-\d{2})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+(\d+)-(.*)/g;
+                isMatched = processGenericRegex(portoRegex, textoNormalizado, match => ({
+                    contrato: match[4], cliente: match[1], parcela: match[6], valorTotal: parseFloat(match[9].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[11].replace(/\./g, '').replace(',', '.'))
+                }));
+            }
+            // SulAmérica Tabular
+            if (!isMatched && textoNormalizado.includes('SulAmérica Saúde Seguradora')) {
+                const sulameTabsRegex = /(\d{2}\/\d{2}\/\d{4})\s+(\d+)\s+.*?SulAmérica Saúde\s+Seguradora\s+([A-ZÀ-ÿ\s]+)\s+(TITULAR|FILHO|CÔNJUGE|DEPENDENTE.*?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d+)\s+([\d.,]+)\s+([\d.,]+)%\s+([\d.,]+)\s+([\d.,]+)%\s+([\d.,]+)/g;
+                isMatched = processGenericRegex(sulameTabsRegex, textoNormalizado, match => ({
+                    contrato: match[2], cliente: match[3], parcela: match[6], valorTotal: parseFloat(match[7].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[9].replace(/\./g, '').replace(',', '.'))
+                }));
+            }
+            // Supermed (Amil)
+            if (!isMatched && textoNormalizado.includes('SUPERMED')) {
+                const supermedRegex = /SUPERMED\s*\(AMIL\)\s+(\d+)\s+([A-ZÀ-ÿ\s]+?)\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+Comissão[\s\S]*?R\$\s*([\d.,]+)[^(]*\([^)]+\)\s*([\d.,]+)\s*C/g;
+                isMatched = processGenericRegex(supermedRegex, textoNormalizado, match => ({
+                    contrato: match[1], cliente: match[2], parcela: match[3], valorTotal: parseFloat(match[5].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[6].replace(/\./g, '').replace(',', '.'))
+                }));
+            }
+            // Tokio Marine
+            if (!isMatched && textoNormalizado.includes('TOKIO MARINE')) {
+                const tokioRegex = /([A-ZÀ-ÿ\s]+?)\s+(\d+)\s+([A-Z]+)\s+(\d+)\s+(\d+)\s+([A-Z ]+)\s+(\d+)\/(\d+)\s+R\$\s*([\d.,]+)\s+([\d.,]+)%\s+R\$\s*([\d.,]+)/g;
+                isMatched = processGenericRegex(tokioRegex, textoNormalizado, match => ({
+                    contrato: match[4], cliente: match[1], parcela: match[7], valorTotal: parseFloat(match[9].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[11].replace(/\./g, '').replace(',', '.'))
+                }));
+            }
+            // Itaú Lançamento
+            if (!isMatched && (textoNormalizado.includes('ESSENCIAL-CANAL CORRETOR') || textoNormalizado.includes('Pagamento de Comissão'))) {
+                const itauRegex = /(Pagamento.*?|ESSENCIAL.*?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s*R\$([\d.,]+)\s+(\d+(?:,\d+)?)\s*R\$([\d.,]+)/g;
+                let currentItauCliente = "Cliente Desconhecido";
+                const clienteMatch = textoNormalizado.match(/([A-ZÀ-ÿ][a-zà-ÿ]+(?: [A-ZÀ-ÿ][a-zà-ÿ]+)+)\s+(\d{11})/);
+                if (clienteMatch) currentItauCliente = clienteMatch[1];
+                
+                isMatched = processGenericRegex(itauRegex, textoNormalizado, match => ({
+                    contrato: match[4], cliente: currentItauCliente, parcela: match[6], valorTotal: parseFloat(match[8].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[10].replace(/\./g, '').replace(',', '.'))
+                }));
+            }
+
+            // Fallback para Lógica Padrão / AMIL
+            if (!isMatched) {
+                let textoSemFalsoContrato = textoNormalizado.replace(/Total\s+contrato\s*:/gi, 'Total_Apurado:');
+                const blocosContrato = textoSemFalsoContrato.split(/Contrato\s*:/i); 
+                if (blocosContrato.length > 0) blocosContrato.shift();
+                
+                parseBlocosExtrato(blocosContrato);
+            }
         }
         
         if(clientesParaInserir.length > 0) { 

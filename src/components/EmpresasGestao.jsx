@@ -44,9 +44,16 @@ export default function EmpresasGestao({ empresasList, setEmpresasList, showAler
         }
     };
 
-    const saveToLocal = (newLista) => {
-        setEmpresasList(newLista);
-        localStorage.setItem('protetta_empresas', JSON.stringify(newLista));
+    const setAsDefault = (id) => {
+        setEmpresasList((prevRaw) => {
+            const novaLista = prevRaw.map(e => ({
+                ...e,
+                isDefault: e.id === id
+            }));
+            localStorage.setItem('protetta_empresas', JSON.stringify(novaLista));
+            return novaLista;
+        });
+        showAlert('Empresa padrão alterada com sucesso!');
     };
 
     const handleEdit = (emp) => {
@@ -60,12 +67,14 @@ export default function EmpresasGestao({ empresasList, setEmpresasList, showAler
             return;
         }
         showConfirm('Deseja realmente remover esta empresa?', () => {
-            let novaLista = empresasList.filter(e => e.id !== id);
-            // If the deleted one was default, set the first one as default
-            if (empresasList.find(e => e.id === id)?.isDefault) {
-                novaLista = novaLista.map((e, index) => index === 0 ? { ...e, isDefault: true } : e);
-            }
-            saveToLocal(novaLista);
+            setEmpresasList((prevRaw) => {
+                let novaLista = prevRaw.filter(e => e.id !== id);
+                if (prevRaw.find(e => e.id === id)?.isDefault) {
+                    novaLista = novaLista.map((e, index) => index === 0 ? { ...e, isDefault: true } : e);
+                }
+                localStorage.setItem('protetta_empresas', JSON.stringify(novaLista));
+                return novaLista;
+            });
             showAlert('Empresa removida com sucesso!');
         });
     };
@@ -77,50 +86,41 @@ export default function EmpresasGestao({ empresasList, setEmpresasList, showAler
             return;
         }
 
-        let novaLista = [...empresasList];
+        setEmpresasList((prevRaw) => {
+            let novaLista = [...prevRaw];
 
-        // Se marcou como padrão, desmarca as outras
-        if (editForm.isDefault) {
-            novaLista = novaLista.map(emp => ({ ...emp, isDefault: false }));
-        }
+            if (editForm.isDefault) {
+                novaLista = novaLista.map(emp => ({ ...emp, isDefault: false }));
+            }
 
-        if (editForm.id) {
-            // Edit
-            const index = novaLista.findIndex(emp => emp.id === editForm.id);
-            if (index !== -1) novaLista[index] = { ...editForm, nome: editForm.nome.trim(), cnpj: editForm.cnpj.trim(), logo: editForm.logo };
-        } else {
-            // New
-            const newId = empresasList.length > 0 ? Math.max(...empresasList.map(emp => emp.id)) + 1 : 1;
-            // Se é a primeira, já fica como padrão
-            const isFirst = empresasList.length === 0;
-            novaLista.push({ 
-                id: newId, 
-                nome: editForm.nome.trim(), 
-                cnpj: editForm.cnpj.trim(),
-                logo: editForm.logo,
-                isDefault: isFirst ? true : editForm.isDefault
-            });
-        }
+            if (editForm.id) {
+                const index = novaLista.findIndex(emp => emp.id === editForm.id);
+                if (index !== -1) novaLista[index] = { ...editForm, nome: editForm.nome.trim(), cnpj: editForm.cnpj.trim(), logo: editForm.logo };
+            } else {
+                const newId = novaLista.length > 0 ? Math.max(...novaLista.map(emp => emp.id)) + 1 : 1;
+                const isFirst = novaLista.length === 0;
+                novaLista.push({ 
+                    id: newId, 
+                    nome: editForm.nome.trim(), 
+                    cnpj: editForm.cnpj.trim(),
+                    logo: editForm.logo,
+                    isDefault: isFirst ? true : editForm.isDefault
+                });
+            }
 
-        // Garante que exista pelo menos uma default
-        if (!novaLista.find(emp => emp.isDefault) && novaLista.length > 0) {
-            novaLista[0].isDefault = true;
-        }
+            if (!novaLista.find(emp => emp.isDefault) && novaLista.length > 0) {
+                novaLista[0].isDefault = true;
+            }
 
-        saveToLocal(novaLista);
+            localStorage.setItem('protetta_empresas', JSON.stringify(novaLista));
+            return novaLista;
+        });
+
         setIsEditing(false);
         setEditForm({ id: null, nome: '', cnpj: '', logo: '', isDefault: false });
         showAlert('Informações da empresa salvas com sucesso!');
     };
 
-    const setAsDefault = (id) => {
-        const novaLista = empresasList.map(e => ({
-            ...e,
-            isDefault: e.id === id
-        }));
-        saveToLocal(novaLista);
-        showAlert('Empresa padrão alterada com sucesso!');
-    };
 
     return (
         <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 pb-20">
