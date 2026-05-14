@@ -2695,17 +2695,22 @@ export default function App() {
             }
             // Leve Saúde
             if (!isMatched && textoNormalizado.includes('LEVE SAUDE')) {
-                const leveRegex = /(?:\s|^)([A-Z]*\d{4,10})\s+([^0-9]+?)\s+(\d{10,20})\s+([^0-9]+?)\s+(\d{2}\/\d{2}\/\d{2,4})\s+(\d{2}\/\d{2}\/\d{2,4})\s+([\d.,]+)\s*%\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+([\d.,]+)\s+([\d.,]+)/g;
-                isMatched = processGenericRegex(leveRegex, textoNormalizado, match => ({
-                    contrato: match[1], 
-                    cliente: match[4].trim(), 
-                    parcela: match[8], 
-                    valorTotal: parseFloat(match[12].replace(/\./g, '').replace(',', '.')), 
-                    comissao: parseFloat(match[13].replace(/\./g, '').replace(',', '.')),
-                    inicioVigencia: match[6],
-                    vitalicio: 'Não',
-                    servico: match[1] && match[1].toUpperCase().startsWith('OD') ? 'Plano Dental' : 'Plano de Saúde'
-                }));
+                const leveRegex = /(?:\s|^)([A-Z]*\d{4,20})\s+([^0-9]+?)\s+(\d{10,20})\s+([^0-9]+?)\s+(\d{2}\/\d{2}\/\d{2,4})\s+(\d{2}\/\d{2}\/\d{2,4})\s+([\d.,]+)\s*%\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+([\d.,]+)\s+([\d.,]+)/g;
+                isMatched = processGenericRegex(leveRegex, textoNormalizado, match => {
+                    const vigencia = match[5];
+                    const dataExtrato = match[6];
+                    let calcParc = calcularParcelaDaVigencia(vigencia, dataExtrato);
+                    return {
+                        contrato: match[1], 
+                        cliente: match[4].trim(), 
+                        parcela: calcParc || "1", 
+                        valorTotal: parseFloat(match[12].replace(/\./g, '').replace(',', '.')), 
+                        comissao: parseFloat(match[13].replace(/\./g, '').replace(',', '.')),
+                        inicioVigencia: vigencia,
+                        vitalicio: 'Não',
+                        servico: match[1] && match[1].toUpperCase().startsWith('OD') ? 'Plano Dental' : 'Plano de Saúde'
+                    };
+                });
             }
             // Omint
             if (!isMatched && textoNormalizado.includes('OMINT')) {
@@ -2764,19 +2769,6 @@ export default function App() {
             }
         }
         
-        if(clientesParaInserir.length > 0) { 
-            await safeSupabaseInsert('clientes', clientesParaInserir); 
-        }
-
-        if(clientesParaAtualizar.size > 0) {
-            for (let [id, changes] of clientesParaAtualizar.entries()) {
-                await safeSupabaseUpdate('clientes', changes, 'id', id);
-            }
-        }
-        
-        if(clientesParaInserir.length > 0 || clientesParaAtualizar.size > 0) { 
-            await loadFromDB(); 
-        }
         setPdfData(novosRegistos); 
         showAlert("Extrato processado com sucesso! Nomes limpos e parcelas calculadas.");
     };

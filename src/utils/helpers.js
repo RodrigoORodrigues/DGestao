@@ -58,17 +58,17 @@ export const calcularParcelaDaVigencia = (inicioVigencia, dataRecibo) => {
                 if (year && year.length <= 2) {
                     year = "20" + year;
                 }
-                return new Date(year, parts[1] - 1, parts[0]);
+                return new Date(parseInt(year, 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
             }
             if(d.includes('-')) {
                 const parts = d.split('-');
                 if(parts.length === 2) {
                      if (parts[0].length === 4) {
-                         return new Date(parts[0], parts[1] - 1, 1); // YYYY-MM
+                         return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1); // YYYY-MM
                      }
-                     return new Date(new Date().getFullYear(), parts[1] - 1, parts[0]); // MM-DD or something
+                     return new Date(new Date().getFullYear(), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10)); // MM-DD or something
                 }
-                return new Date(parts[0], parts[1] - 1, parts[2]); // YYYY-MM-DD
+                return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)); // YYYY-MM-DD
             }
             return new Date(d);
         };
