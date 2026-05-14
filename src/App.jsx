@@ -2683,7 +2683,7 @@ export default function App() {
             if (!isMatched && textoNormalizado.includes('HAPVIDA')) {
                 const hapvidaRegex = /(\d{8,})\s+([A-Z0-9]+)\s+(.+?)\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+([\d.,]+)\s+([\d.,]+)\s+(\d+)\s+([\d.,]+)\s+([A-Z0-9]+)\s+(.+?)\s+(\d+)\s+[A-Z]/g;
                 isMatched = processGenericRegex(hapvidaRegex, textoNormalizado, match => ({
-                    contrato: match[2], cliente: match[3], parcela: match[8], valorTotal: parseFloat(match[7].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[9].replace(/\./g, '').replace(',', '.'))
+                    contrato: match[2], cliente: match[3], parcela: match[8], valorTotal: parseFloat(match[7].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[9].replace(/\./g, '').replace(',', '.')), vitalicio: 'Não'
                 }));
             }
             // Klini
