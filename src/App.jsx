@@ -2658,7 +2658,7 @@ export default function App() {
                             parcela: parcelaDetectada,
                             inicioVigencia: inicioVigenciaDetectada, 
                             notaFiscal: reportDoc?.notaFiscal || '', 
-                            vitalicio: 'Sim', 
+                            vitalicio: data.vitalicio !== undefined ? data.vitalicio : 'Sim', 
                             assessoria: empresaContexto, 
                             formaPagamento: 'Crédito em conta',
                             servico: 'Saúde', 
@@ -2695,9 +2695,15 @@ export default function App() {
             }
             // Leve Saúde
             if (!isMatched && textoNormalizado.includes('LEVE SAUDE')) {
-                const leveRegex = /(OD\d+)\s+(.*?)\s+(\d{14})\s+(.*?)\s+(\d{2}\/\d{2}\/\d{2,4})\s+(\d{2}\/\d{2}\/\d{2,4})\s+([\d.,]+)\s*%\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+([\d.,]+)\s+([\d.,]+)/g;
+                const leveRegex = /([A-Z]*\d+)\s+(.*?)\s+(\d{14})\s+(.*?)\s+(\d{2}\/\d{2}\/\d{2,4})\s+(\d{2}\/\d{2}\/\d{2,4})\s+([\d.,]+)\s*%\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+([\d.,]+)\s+([\d.,]+)/g;
                 isMatched = processGenericRegex(leveRegex, textoNormalizado, match => ({
-                    contrato: match[3], cliente: match[4], parcela: match[8], valorTotal: parseFloat(match[12].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[13].replace(/\./g, '').replace(',', '.'))
+                    contrato: match[1], 
+                    cliente: match[4], 
+                    parcela: match[8], 
+                    valorTotal: parseFloat(match[12].replace(/\./g, '').replace(',', '.')), 
+                    comissao: parseFloat(match[13].replace(/\./g, '').replace(',', '.')),
+                    inicioVigencia: match[11],
+                    vitalicio: 'Não'
                 }));
             }
             // Omint
