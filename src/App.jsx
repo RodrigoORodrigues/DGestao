@@ -2898,123 +2898,125 @@ export default function App() {
             empresa: targetEmpresa
         };
 
-        let alertasSequencia = [];
-        for (let r of dadosParaSalvar) {
-            const historicoVendasCliente = vendasList.filter(v => 
-                (v.cliente && v.cliente.toLowerCase() === r.cliente.toLowerCase()) || 
-                (r.contrato && v.contrato === r.contrato)
-            );
-            
-            let numeroEsperado = null;
-            if (historicoVendasCliente.length > 0) {
-                const ultimaVenda = historicoVendasCliente.sort((a,b) => new Date(b.dataVenda) - new Date(a.dataVenda))[0];
-                if (ultimaVenda.parcela) { 
-                    let numeroAtual = parseInt(ultimaVenda.parcela.toString().replace(/\D/g, '')); 
-                    if (!isNaN(numeroAtual)) {
-                        numeroEsperado = numeroAtual + 1;
-                    }
+        setLoading(true); setLoadingMsg("Guardando relatório na cloud...");
+        try {
+            let savedId = currentReportId;
+            if (currentReportId) {
+                const { error } = await safeSupabaseUpdate('savedReports', dataToSave, 'id', currentReportId);
+                if (error) throw error;
+            } else { 
+                const { data, error } = await safeSupabaseInsert('savedReports', [dataToSave]); 
+                if (error) throw error;
+                if(data && data.length > 0) {
+                    savedId = data[0].id;
+                    setCurrentReportId(savedId); 
                 }
             }
-            let numCalculado = parseInt(r.parcela);
-            if (numeroEsperado !== null && !isNaN(numCalculado) && numCalculado > numeroEsperado) {
-                alertasSequencia.push(`Cliente ${r.cliente}: Pulo detectado! Esperava parcela ${numeroEsperado}, inserida/calculada ${r.parcela}.`);
-            }
-        }
 
-        let msgConfir = "Deseja extrair as informações deste extrato e gerar as Vendas para alimentar o Dashboard automaticamente?";
-        if (alertasSequencia.length > 0) {
-            msgConfir = `AVISO: Ocorreram os seguintes pulos de sequência ao salvar:\n\n${alertasSequencia.join('\n')}\n\n` + msgConfir;
-        }
-
-        showConfirm(msgConfir, async () => {
-            setLoading(true); setLoadingMsg("Guardando relatório na cloud...");
-            try {
-                let savedId = currentReportId;
-                if (currentReportId) {
-                    const { error } = await safeSupabaseUpdate('savedReports', dataToSave, 'id', currentReportId);
-                    if (error) throw error;
-                } else { 
-                    const { data, error } = await safeSupabaseInsert('savedReports', [dataToSave]); 
-                    if (error) throw error;
-                    if(data && data.length > 0) {
-                        savedId = data[0].id;
-                        setCurrentReportId(savedId); 
-                    }
-                }
-
-                // Generates Clients & Sales
-                setLoadingMsg("A atualizar clientes e recarregar dashboard...");
-                const clientesArrayTemp = [...clientes];
-                const clientesParaInserir = [];
-                const clientesParaAtualizar = new Map();
+            let alertasSequencia = [];
+            for (let r of dadosParaSalvar) {
+                const historicoVendasCliente = vendasList.filter(v => 
+                    (v.cliente && v.cliente.toLowerCase() === r.cliente.toLowerCase()) || 
+                    (r.contrato && v.contrato === r.contrato)
+                );
                 
-                let currentMaxCodigo = clientesArrayTemp.reduce((max, c) => {
-                    let v = parseInt(c.codigo, 10);
-                    return !isNaN(v) && v > max ? v : max;
-                }, 0);
+                let numeroEsperado = null;
+                if (historicoVendasCliente.length > 0) {
+                    const ultimaVenda = historicoVendasCliente.sort((a,b) => new Date(b.dataVenda) - new Date(a.dataVenda))[0];
+                    if (ultimaVenda.parcela) { 
+                        let numeroAtual = parseInt(ultimaVenda.parcela.toString().replace(/\D/g, '')); 
+                        if (!isNaN(numeroAtual)) {
+                            numeroEsperado = numeroAtual + 1;
+                        }
+                    }
+                }
+                let numCalculado = parseInt(r.parcela);
+                if (numeroEsperado !== null && !isNaN(numCalculado) && numCalculado > numeroEsperado) {
+                    alertasSequencia.push(`Cliente ${r.cliente}: Pulo detectado! Esperava parcela ${numeroEsperado}, inserida/calculada ${r.parcela}.`);
+                }
+            }
 
-                let currentMaxNumeroVendas = vendasList.reduce((max, v) => {
-                    let num = parseInt(v.numero, 10);
-                    return !isNaN(num) && num > max ? num : max;
-                }, 0);
+            await loadFromDB();
+            setLoading(false);
 
-                for (let i = 0; i < dadosParaSalvar.length; i++) {
-                    const r = dadosParaSalvar[i];
+            let msgConfir = "Relatório salvo com sucesso! Deseja registar os novos clientes na base de dados do sistema?";
+            if (alertasSequencia.length > 0) {
+                msgConfir = `AVISO: Relatório salvo, mas ocorreram os seguintes pulos de sequência:\n\n${alertasSequencia.join('\n')}\n\nDeseja registar os clientes assim mesmo?`;
+            }
+
+            showConfirm(msgConfir, async () => {
+                setLoading(true); setLoadingMsg("A atualizar clientes...");
+                try {
+                    const clientesArrayTemp = [...clientes];
+                    const clientesParaInserir = [];
+                    const clientesParaAtualizar = new Map();
                     
-                    const existingCli = clientesArrayTemp.find(c => c.nome.toLowerCase() === r.cliente.toLowerCase());
-                    if(!existingCli && !clientesParaInserir.some(c => c.nome.toLowerCase() === r.cliente.toLowerCase())) {
-                        currentMaxCodigo++;
-                        let newCodigo = String(currentMaxCodigo).padStart(5, '0');
-                        const newClient = {
-                            codigo: newCodigo,
-                            nome: r.cliente || null,
-                            tipo: 'Pessoa física',
-                            documento: null, telefone: null, celular: null, cep: null, logradouro: null, numero: null, bairro: null, cidade: null, uf: null, email: null, situacao: true,
-                            // Op. | Seg. na Gestão de Clientes
-                            operadora: r.codigoOperadora || currentReportOperadora || null,
-                            codigoOperadora: r.codigoOperadora || currentReportOperadora || null,
-                            codOperadora: r.codOperadora || null,
-                            servico: r.servico || 'Plano de Saúde',
-                            empresa: targetEmpresa
-                        };
-                        clientesParaInserir.push(newClient);
-                        clientesArrayTemp.push(newClient);
-                    } else if (existingCli) {
-                        const opToSet = r.codigoOperadora || currentReportOperadora || null;
-                        const codOpToSet = r.codOperadora || null;
-                        const changes = {};
+                    let currentMaxCodigo = clientesArrayTemp.reduce((max, c) => {
+                        let v = parseInt(c.codigo, 10);
+                        return !isNaN(v) && v > max ? v : max;
+                    }, 0);
 
-                        if (opToSet && (!existingCli.operadora || existingCli.operadora.trim() === '' || existingCli.operadora === '-')) {
-                            changes.operadora = opToSet;
-                        }
-                        if (opToSet && (!existingCli.codigoOperadora || String(existingCli.codigoOperadora).trim() === '' || existingCli.codigoOperadora === '-')) {
-                            changes.codigoOperadora = opToSet;
-                        }
-                        if (codOpToSet && (!existingCli.codOperadora || String(existingCli.codOperadora).trim() === '' || existingCli.codOperadora === '-')) {
-                            changes.codOperadora = codOpToSet;
-                        }
+                    for (let i = 0; i < dadosParaSalvar.length; i++) {
+                        const r = dadosParaSalvar[i];
+                        
+                        const existingCli = clientesArrayTemp.find(c => c.nome.toLowerCase() === r.cliente.toLowerCase());
+                        if(!existingCli && !clientesParaInserir.some(c => c.nome.toLowerCase() === r.cliente.toLowerCase())) {
+                            currentMaxCodigo++;
+                            let newCodigo = String(currentMaxCodigo).padStart(5, '0');
+                            const newClient = {
+                                codigo: newCodigo,
+                                nome: r.cliente || null,
+                                tipo: 'Pessoa física',
+                                documento: null, telefone: null, celular: null, cep: null, logradouro: null, numero: null, bairro: null, cidade: null, uf: null, email: null, situacao: true,
+                                operadora: r.codigoOperadora || currentReportOperadora || null,
+                                codigoOperadora: r.codigoOperadora || currentReportOperadora || null,
+                                codOperadora: r.codOperadora || null,
+                                servico: r.servico || 'Plano de Saúde',
+                                empresa: targetEmpresa
+                            };
+                            clientesParaInserir.push(newClient);
+                            clientesArrayTemp.push(newClient);
+                        } else if (existingCli) {
+                            const opToSet = r.codigoOperadora || currentReportOperadora || null;
+                            const codOpToSet = r.codOperadora || null;
+                            const changes = {};
 
-                        if (Object.keys(changes).length > 0 && existingCli.id && !clientesParaAtualizar.has(existingCli.id)) {
-                            clientesParaAtualizar.set(existingCli.id, changes);
+                            if (opToSet && (!existingCli.operadora || existingCli.operadora.trim() === '' || existingCli.operadora === '-')) {
+                                changes.operadora = opToSet;
+                            }
+                            if (opToSet && (!existingCli.codigoOperadora || String(existingCli.codigoOperadora).trim() === '' || existingCli.codigoOperadora === '-')) {
+                                changes.codigoOperadora = opToSet;
+                            }
+                            if (codOpToSet && (!existingCli.codOperadora || String(existingCli.codOperadora).trim() === '' || existingCli.codOperadora === '-')) {
+                                changes.codOperadora = codOpToSet;
+                            }
+
+                            if (Object.keys(changes).length > 0 && existingCli.id && !clientesParaAtualizar.has(existingCli.id)) {
+                                clientesParaAtualizar.set(existingCli.id, changes);
+                            }
                         }
                     }
-                }
 
-                if(clientesParaInserir.length > 0) {
-                    await safeSupabaseInsert('clientes', clientesParaInserir);
-                }
-                if(clientesParaAtualizar.size > 0) {
-                    for (let [id, changes] of clientesParaAtualizar.entries()) {
-                        await safeSupabaseUpdate('clientes', changes, 'id', id);
+                    if(clientesParaInserir.length > 0) {
+                        await safeSupabaseInsert('clientes', clientesParaInserir);
                     }
-                }
+                    if(clientesParaAtualizar.size > 0) {
+                        for (let [id, changes] of clientesParaAtualizar.entries()) {
+                            await safeSupabaseUpdate('clientes', changes, 'id', id);
+                        }
+                    }
 
-                await loadFromDB(); setSuccessMsg("Relatório e Vendas salvos com sucesso!"); setTimeout(() => setSuccessMsg(''), 4000);
-            } catch(e) { 
-                console.error("ERRO NO SALVAMENTO DO RELATORIO:", e, "Tabela:", e.table);
-                showAlert(`Erro ao salvar (Tabela: ${e.table || '?'}) relatório: ` + (e.message || JSON.stringify(e))); 
-            } finally { setLoading(false); }
-        });
+                    await loadFromDB(); setSuccessMsg("Clientes registrados com sucesso!"); setTimeout(() => setSuccessMsg(''), 4000);
+                } catch(e) { 
+                    console.error("ERRO NO SALVAMENTO DE CLIENTES:", e, "Tabela:", e.table);
+                    showAlert(`Erro ao salvar (Tabela: ${e.table || '?'}) clientes: ` + (e.message || JSON.stringify(e))); 
+                } finally { setLoading(false); }
+            });
+
+        } catch (errorReport) {
+            setLoading(false);
+            showAlert('Erro ao salvar relatório na nuvem: ' + (errorReport.message || JSON.stringify(errorReport)));
+        }
     };
 
     const carregarRelatorioSalvo = (report) => { 
