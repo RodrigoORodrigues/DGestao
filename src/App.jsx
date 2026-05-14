@@ -2661,7 +2661,7 @@ export default function App() {
                             vitalicio: data.vitalicio !== undefined ? data.vitalicio : 'Sim', 
                             assessoria: empresaContexto, 
                             formaPagamento: 'Crédito em conta',
-                            servico: 'Saúde', 
+                            servico: data.servico || 'Saúde', 
                             desconto: '', 
                             selected: true
                         });
@@ -2702,8 +2702,9 @@ export default function App() {
                     parcela: match[8], 
                     valorTotal: parseFloat(match[12].replace(/\./g, '').replace(',', '.')), 
                     comissao: parseFloat(match[13].replace(/\./g, '').replace(',', '.')),
-                    inicioVigencia: match[11],
-                    vitalicio: 'Não'
+                    inicioVigencia: match[6],
+                    vitalicio: 'Não',
+                    servico: match[1] && match[1].toUpperCase().startsWith('OD') ? 'Plano Dental' : 'Saúde'
                 }));
             }
             // Omint
