@@ -124,7 +124,7 @@ import {
     Layers, Settings, Database, RefreshCw, Trash2, HardDrive, Users, FileCheck, 
     CheckCircle, XCircle, Edit, Edit2, ListFilter, Upload, Sun, Moon, Printer, Archive, 
     History, AlertCircle, Lock, User, Key, LogOut, Shield, ShoppingCart, Receipt, 
-    Send, Percent, DollarSign, FileOutput, Copy, Info, Tag, AlertTriangle, LayoutGrid, List, Phone, Mail
+    Send, Percent, DollarSign, FileOutput, Copy, Info, Tag, AlertTriangle, LayoutGrid, List, Phone, Mail, Maximize, Minimize
 } from 'lucide-react';
 
 import * as XLSX from 'xlsx';
@@ -278,7 +278,15 @@ export default function App() {
     const [clientesPerPage, setClientesPerPage] = useState(20);
     
     const [modalArquivosOpen, setModalArquivosOpen] = useState(false);
-    const [extratosModalViewMode, setExtratosModalViewMode] = useState('cards'); // 'cards' ou 'lines'
+    const [isModalArquivosFullscreen, setIsModalArquivosFullscreen] = useState(false);
+    const [modalArquivosSearch, setModalArquivosSearch] = useState('');
+    const [extratosModalViewMode, setExtratosModalViewMode] = useState('grid');
+    const [modalArquivosDateStart, setModalArquivosDateStart] = useState('');
+    const [modalArquivosDateEnd, setModalArquivosDateEnd] = useState('');
+    const [showModalArquivosPeriodMenu, setShowModalArquivosPeriodMenu] = useState(false);
+    const [modalArquivosPeriodLabel, setModalArquivosPeriodLabel] = useState('Todo o período');
+    const [modalArquivosPath, setModalArquivosPath] = useState([]);
+
     const [modalMoverExtratosOpen, setModalMoverExtratosOpen] = useState(false);
     const [moverExtratosForm, setMoverExtratosForm] = useState({ ano: new Date().getFullYear().toString(), mes: MESES[0], categoria: CATEGORIAS[0], empresa: 'PROTETTA' });
     const [modalEditarExtratoOpen, setModalEditarExtratoOpen] = useState(false);
@@ -1046,6 +1054,25 @@ export default function App() {
         }
     };
 
+    const applyModalArquivosDatePreset = (preset) => {
+        let start = ''; let end = ''; const today = new Date();
+        const formatDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        switch(preset) {
+            case 'Hoje': start = formatDate(today); end = formatDate(today); break;
+            case 'Esta semana': const first = today.getDate() - today.getDay(); start = formatDate(new Date(today.getFullYear(), today.getMonth(), first)); end = formatDate(new Date(today.getFullYear(), today.getMonth(), first + 6)); break;
+            case 'Mês passado': start = formatDate(new Date(today.getFullYear(), today.getMonth() - 1, 1)); end = formatDate(new Date(today.getFullYear(), today.getMonth(), 0)); break;
+            case 'Este mês': start = formatDate(new Date(today.getFullYear(), today.getMonth(), 1)); end = formatDate(new Date(today.getFullYear(), today.getMonth() + 1, 0)); break;
+            case 'Próximo mês': start = formatDate(new Date(today.getFullYear(), today.getMonth() + 1, 1)); end = formatDate(new Date(today.getFullYear(), today.getMonth() + 2, 0)); break;
+            case 'Todo o período': default: start = ''; end = ''; break;
+        }
+        setModalArquivosPeriodLabel(preset); setShowModalArquivosPeriodMenu(false);
+        if (preset !== 'Escolha o período') {
+            setModalArquivosDateStart(start);
+            setModalArquivosDateEnd(end);
+            setModalArquivosPath([]);
+        }
+    };
+
     const handleBuscarVendas = () => { setAppliedVendasFilters({ ...vendasFilterForm }); };
     const handleLimparVendas = () => { setVendasFilterForm(defaultVendasFilters); setAppliedVendasFilters(null); setVendasPeriodLabel('Todo o período'); };
 
@@ -1687,6 +1714,69 @@ export default function App() {
         if (!fileName) return "text-slate-400"; const ext = fileName.split('.').pop().toLowerCase();
         if (['csv', 'xlsx', 'xls'].includes(ext)) return "text-emerald-600 dark:text-emerald-400";
         if (['pdf'].includes(ext)) return "text-rose-600 dark:text-rose-400"; return "text-slate-400";
+    };
+
+    const getModalItemsAtCurrentPath = () => {
+        const hasSearch = modalArquivosSearch.trim() !== '';
+        const hasDateFilter = modalArquivosDateStart || modalArquivosDateEnd;
+        
+        if (hasSearch || hasDateFilter) {
+            return dbReports.filter(r => {
+                let textMatch = true;
+                if (hasSearch) {
+                    const term = modalArquivosSearch.toLowerCase();
+                    textMatch = (r.parceiro && r.parceiro.toLowerCase().includes(term)) || 
+                                (r.fileName || '').toLowerCase().includes(term) || 
+                                (r.empresa && r.empresa.toLowerCase().includes(term));
+                }
+                let startMatch = true;
+                let endMatch = true;
+                const rDate = r.date || r.created_at || r.dataCriacao;
+                if (modalArquivosDateStart && rDate) startMatch = new Date(rDate) >= new Date(modalArquivosDateStart + "T00:00:00");
+                if (modalArquivosDateEnd && rDate) endMatch = new Date(rDate) <= new Date(modalArquivosDateEnd + "T23:59:59");
+                return textMatch && startMatch && endMatch;
+            }).map(f => {
+                const fDate = f.date || f.created_at || f.dataCriacao;
+                const dateStr = fDate ? ` - ${new Date(fDate).toLocaleDateString('pt-BR')}` : '';
+                return { ...f, type: 'file', name: (f.parceiro && f.parceiro.replace(/^\[.*?\]\s*/, '')) || f.fileName, pathInfo: `${f.ano} / ${f.mes} / ${f.empresa}${dateStr}` };
+            });
+        }
+
+        if (modalArquivosPath.length === 0) return [...new Set([String(new Date().getFullYear()), ...dbReports.map(r => String(r.ano))])].sort().map(y => ({ id: y, name: y, type: 'folder' }));
+        if (modalArquivosPath.length === 1) return MESES.map(m => ({ id: m, name: m, type: 'folder' }));
+        if (modalArquivosPath.length === 2) return CATEGORIAS.map(c => ({ id: c, name: c, type: 'folder' }));
+        if (modalArquivosPath.length === 3) return empresasList.map(e => ({ id: e.nome, name: e.nome, type: 'folder' }));
+        if (modalArquivosPath.length === 4) {
+            const existingOps = dbReports.filter(r => String(r.ano) === String(modalArquivosPath[0]) && String(r.mes) === String(modalArquivosPath[1]) && String(r.categoria) === String(modalArquivosPath[2]) && String(r.empresa) === String(modalArquivosPath[3])).map(r => (r.codigoOperadora || '').trim());
+            let allOps = [...new Set(existingOps)].filter(Boolean).sort();
+            return allOps.map(op => ({ id: op, name: op, type: 'folder' }));
+        }
+        if (modalArquivosPath.length === 5) {
+            const list = [];
+            const reports = dbReports.filter(r => String(r.ano) === String(modalArquivosPath[0]) && String(r.mes) === String(modalArquivosPath[1]) && String(r.categoria) === String(modalArquivosPath[2]) && String(r.empresa) === String(modalArquivosPath[3]) && (r.codigoOperadora || '').trim().toLowerCase() === String(modalArquivosPath[4]).toLowerCase());
+            
+            const codOps = [...new Set(reports.map(r => r.codOperadora).filter(c => c && c.trim() !== ''))].sort();
+            
+            codOps.forEach(c => list.push({ id: c, name: c, type: 'folder' }));
+            
+            const filesNoCod = reports.filter(r => !r.codOperadora || r.codOperadora.trim() === '');
+            filesNoCod.forEach(f => list.push({ ...f, type: 'file', name: (f.parceiro && f.parceiro.replace(/^\[.*?\]\s*/, '')) || f.fileName }));
+            
+            return list;
+        }
+        if (modalArquivosPath.length === 6) {
+            return dbReports.filter(r => String(r.ano) === String(modalArquivosPath[0]) && String(r.mes) === String(modalArquivosPath[1]) && String(r.categoria) === String(modalArquivosPath[2]) && String(r.empresa) === String(modalArquivosPath[3]) && (r.codigoOperadora || '').trim().toLowerCase() === String(modalArquivosPath[4]).toLowerCase() && String(r.codOperadora || '').trim() === String(modalArquivosPath[5])).map(f => ({ ...f, type: 'file', name: (f.parceiro && f.parceiro.replace(/^\[.*?\]\s*/, '')) || f.fileName }));
+        }
+        
+        return [];
+    };
+
+    const handleModalArquivosNavigate = (item) => {
+        if (item.type === 'folder') {
+            setModalArquivosPath([...modalArquivosPath, item.name]);
+        } else {
+            processarArquivoDoBanco(item);
+        }
     };
 
     const getItemsAtCurrentPath = () => {
@@ -4802,33 +4892,92 @@ export default function App() {
                 {/* Modal de Buscar Arquivos no Sistema */}
 {modalArquivosOpen && (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-2xl relative mx-4 transition-colors max-h-[80vh] flex flex-col">
-            <button onClick={() => setModalArquivosOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
-                <X size={20} />
-            </button>
-            <div className="mb-4 border-b border-slate-200 dark:border-slate-700 pb-4 flex justify-between items-end pr-8">
-                <div>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center">
-                        <Database className="mr-2 text-indigo-500" /> Buscar Extratos no Sistema
-                    </h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">Selecione um extrato para processar</p>
+        <div className={`bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl p-6 relative transition-all flex flex-col overflow-hidden min-h-[50vh] ${isModalArquivosFullscreen ? "fixed inset-0 sm:inset-4 rounded-none sm:rounded-xl w-auto max-w-none max-h-none" : "rounded-xl w-full max-w-4xl max-h-[90vh] mx-4 resize"}`}>
+            <div className="absolute top-4 right-4 flex items-center space-x-2">
+                <button onClick={() => setIsModalArquivosFullscreen(!isModalArquivosFullscreen)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors" title={isModalArquivosFullscreen ? "Restaurar" : "Expandir"}>
+                    {isModalArquivosFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+                </button>
+                <button onClick={() => setModalArquivosOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+                    <X size={20} />
+                </button>
+            </div>
+            <div className="mb-4 border-b border-slate-200 dark:border-slate-700 pb-4 flex flex-col gap-4 pr-16">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center">
+                            <Database className="mr-2 text-indigo-500" /> Buscar Extratos no Sistema
+                        </h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Selecione um extrato para processar</p>
+                    </div>
+                    <div className="flex bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
+                        <button 
+                            onClick={() => setExtratosModalViewMode('cards')} 
+                            className={`p-1.5 rounded-md transition-colors ${extratosModalViewMode === 'cards' ? 'bg-white dark:bg-slate-600 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+                            title="Visualização em Cards"
+                        >
+                            <LayoutGrid size={16} />
+                        </button>
+                        <button 
+                            onClick={() => setExtratosModalViewMode('lines')} 
+                            className={`p-1.5 rounded-md transition-colors ${extratosModalViewMode === 'lines' ? 'bg-white dark:bg-slate-600 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+                            title="Visualização em Linhas"
+                        >
+                            <List size={16} />
+                        </button>
+                    </div>
                 </div>
-                <div className="flex bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
-                    <button 
-                        onClick={() => setExtratosModalViewMode('cards')} 
-                        className={`p-1.5 rounded-md transition-colors ${extratosModalViewMode === 'cards' ? 'bg-white dark:bg-slate-600 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
-                        title="Visualização em Cards"
-                    >
-                        <LayoutGrid size={16} />
-                    </button>
-                    <button 
-                        onClick={() => setExtratosModalViewMode('lines')} 
-                        className={`p-1.5 rounded-md transition-colors ${extratosModalViewMode === 'lines' ? 'bg-white dark:bg-slate-600 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
-                        title="Visualização em Linhas"
-                    >
-                        <List size={16} />
-                    </button>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <div className="relative">
+                        <button 
+                            onClick={() => setShowModalArquivosPeriodMenu(!showModalArquivosPeriodMenu)}
+                            className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-white px-4 py-2 rounded-lg text-sm transition-colors flex items-center justify-between w-full sm:w-48 outline-none hover:border-blue-500"
+                        >
+                            {modalArquivosPeriodLabel} <ChevronDown size={14} className="ml-2"/>
+                        </button>
+                        {showModalArquivosPeriodMenu && (
+                            <div className="absolute left-0 mt-2 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg overflow-hidden text-sm z-50 animate-in fade-in slide-in-from-top-2">
+                                <ul className="flex flex-col py-1">
+                                    {['Hoje', 'Esta semana', 'Mês passado', 'Este mês', 'Próximo mês', 'Todo o período', 'Escolha o período'].map(preset => (
+                                        <li key={preset}><button onClick={() => applyModalArquivosDatePreset(preset)} className="w-full text-left px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors font-medium">{preset}</button></li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div className="relative flex-1">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Search className="h-5 w-5 text-slate-400" />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Pesquisar extrato por nome ou parceiro..."
+                            value={modalArquivosSearch}
+                            onChange={(e) => setModalArquivosSearch(e.target.value)}
+                            className="pl-10 w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500"
+                        />
+                        {modalArquivosSearch && <button onClick={() => setModalArquivosSearch('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-white"><X size={16} /></button>}
+                    </div>
+                    
+                    {modalArquivosPath.length > 0 && !(modalArquivosSearch || modalArquivosDateStart || modalArquivosDateEnd) && (
+                        <button onClick={() => setModalArquivosPath(modalArquivosPath.slice(0, -1))} className="bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-white px-4 rounded-lg transition-colors py-2">
+                            <ArrowLeft size={18} />
+                        </button>
+                    )}
                 </div>
+
+                {!(modalArquivosSearch || modalArquivosDateStart || modalArquivosDateEnd) && (
+                    <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 overflow-x-auto whitespace-nowrap transition-colors">
+                        <button onClick={() => setModalArquivosPath([])} className="hover:text-blue-600 dark:hover:text-blue-400 flex items-center"><Home size={14} className="mr-1"/> Raiz</button>
+                        {modalArquivosPath.map((folder, index) => (
+                            <React.Fragment key={index}>
+                                <ChevronRight size={14} />
+                                <button onClick={() => { setModalArquivosPath(modalArquivosPath.slice(0, index + 1)); setModalArquivosSearch(''); }} className="hover:text-blue-600 dark:hover:text-blue-400 font-medium">{folder}</button>
+                            </React.Fragment>
+                        ))}
+                    </div>
+                )}
             </div>
             
             <div className="flex-1 overflow-y-auto">
@@ -4838,24 +4987,27 @@ export default function App() {
                         Vá em "Gestor de Extratos" &gt; "Incluir Extrato" para adicionar.
                     </div>
                 ) : (
-                    <div className={extratosModalViewMode === 'cards' ? "grid grid-cols-1 md:grid-cols-2 gap-3" : "space-y-2"}>
-                        {dbReports.map((report, idx) => (
+                    <div className={extratosModalViewMode === 'cards' ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4" : "flex flex-col gap-2"}>
+                        {getModalItemsAtCurrentPath().map((item, idx) => (
                             <div 
                                 key={idx}
-                                onClick={() => processarArquivoDoBanco(report)}
-                                className={`group border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors ${extratosModalViewMode === 'cards' ? 'p-4' : 'flex items-center justify-between p-3'}`}
+                                onClick={() => handleModalArquivosNavigate(item)}
+                                className={extratosModalViewMode === 'cards' ? `relative p-4 rounded-xl border cursor-pointer flex flex-col items-center text-center space-y-3 transition-colors group ${item.type === 'folder' ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-white' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-emerald-500/50 hover:bg-white dark:hover:bg-white'}` : `relative p-3 rounded-lg border cursor-pointer flex flex-row items-center space-x-4 transition-colors group ${item.type === 'folder' ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-white' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-emerald-500/50 hover:bg-white dark:hover:bg-white'}`}
                             >
-                                <div className={`flex items-center gap-3 ${extratosModalViewMode === 'cards' ? '' : 'flex-1 overflow-hidden'}`}>
-                                    <FileText size={extratosModalViewMode === 'cards' ? 24 : 18} className="text-blue-500 shrink-0" />
-                                    <div className={`flex-1 ${extratosModalViewMode === 'lines' ? 'flex items-center gap-4 min-w-0' : ''}`}>
-                                        <p className="font-medium text-slate-900 dark:text-white truncate min-w-[120px]">{report.parceiro}</p>
-                                        <p className={`text-slate-500 ${extratosModalViewMode === 'cards' ? 'text-xs' : 'text-sm whitespace-nowrap'}`}>{report.ano} / {report.mes} / {report.empresa}</p>
-                                        {extratosModalViewMode === 'lines' && <p className="text-sm text-slate-400 truncate flex-1 md:block hidden">{report.fileName}</p>}
-                                    </div>
+                                <div className={`${extratosModalViewMode === 'cards' ? 'p-3 bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-100 dark:border-slate-700 group-hover:scale-110' : 'p-2 bg-white dark:bg-slate-900 rounded-md shadow-sm border border-slate-100 dark:border-slate-700 group-hover:scale-105'} transition-transform`}>
+                                    {item.type === 'folder' ? <Folder className="text-blue-500" size={extratosModalViewMode === 'cards' ? 24 : 18} /> : <FileText className={getFileColorClass(item.name || '')} size={extratosModalViewMode === 'cards' ? 24 : 18} />}
                                 </div>
-                                {extratosModalViewMode === 'cards' && <p className="text-xs text-slate-400 mt-2 truncate max-w-full block">{report.fileName}</p>}
+                                <div className={extratosModalViewMode === 'cards' ? "" : "flex-1 min-w-0"}>
+                                    <p className={`text-sm font-medium text-slate-800 dark:text-slate-200 truncate group-hover:text-slate-900 dark:group-hover:text-slate-900 ${extratosModalViewMode === 'cards' ? "w-full" : ""}`}>{item.name}</p>
+                                    {item.pathInfo && <p className="text-[10px] text-slate-400 truncate mt-1 group-hover:text-slate-500 dark:group-hover:text-slate-500">{item.pathInfo}</p>}
+                                </div>
                             </div>
                         ))}
+                        {getModalItemsAtCurrentPath().length === 0 && (
+                            <div className={extratosModalViewMode === 'cards' ? "col-span-full py-12 text-center text-slate-500 font-medium" : "py-12 w-full text-center text-slate-500 font-medium"}>
+                                Pasta Vazia ou Sem Resultados.
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
