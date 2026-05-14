@@ -2695,16 +2695,16 @@ export default function App() {
             }
             // Leve Saúde
             if (!isMatched && textoNormalizado.includes('LEVE SAUDE')) {
-                const leveRegex = /([A-Z]*\d+)\s+(.*?)\s+(\d{14})\s+(.*?)\s+(\d{2}\/\d{2}\/\d{2,4})\s+(\d{2}\/\d{2}\/\d{2,4})\s+([\d.,]+)\s*%\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+([\d.,]+)\s+([\d.,]+)/g;
+                const leveRegex = /(?:\s|^)([A-Z]*\d{4,10})\s+([^0-9]+?)\s+(\d{10,20})\s+([^0-9]+?)\s+(\d{2}\/\d{2}\/\d{2,4})\s+(\d{2}\/\d{2}\/\d{2,4})\s+([\d.,]+)\s*%\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+([\d.,]+)\s+([\d.,]+)/g;
                 isMatched = processGenericRegex(leveRegex, textoNormalizado, match => ({
                     contrato: match[1], 
-                    cliente: match[4], 
+                    cliente: match[4].trim(), 
                     parcela: match[8], 
                     valorTotal: parseFloat(match[12].replace(/\./g, '').replace(',', '.')), 
                     comissao: parseFloat(match[13].replace(/\./g, '').replace(',', '.')),
                     inicioVigencia: match[6],
                     vitalicio: 'Não',
-                    servico: match[1] && match[1].toUpperCase().startsWith('OD') ? 'Plano Dental' : 'Saúde'
+                    servico: match[1] && match[1].toUpperCase().startsWith('OD') ? 'Plano Dental' : 'Plano de Saúde'
                 }));
             }
             // Omint

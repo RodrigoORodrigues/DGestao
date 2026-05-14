@@ -54,7 +54,11 @@ export const calcularParcelaDaVigencia = (inicioVigencia, dataRecibo) => {
                     }
                     return new Date(new Date().getFullYear(), parts[1] - 1, parts[0]); // DD/MM defaults to current year
                 }
-                return new Date(parts[2], parts[1] - 1, parts[0]);
+                let year = parts[2];
+                if (year && year.length <= 2) {
+                    year = "20" + year;
+                }
+                return new Date(year, parts[1] - 1, parts[0]);
             }
             if(d.includes('-')) {
                 const parts = d.split('-');
