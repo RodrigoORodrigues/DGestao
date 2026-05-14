@@ -67,7 +67,7 @@ export async function syncUserPrefsToDB(userId, prefs) {
     } catch(e) { console.error("User Prefs Sync Failed", e); }
 }
 
-export async function syncGlobalSysConfigToDB(empresas, printPresets) {
+export async function syncGlobalSysConfigToDB(empresas, printPresets, customOpSeg) {
     if (!supabase) return;
     try {
         const { data: existing } = await supabase.from('savedReports').select('*').eq('nome', '___LOCAL_SYS_CONFIG___').limit(1);
@@ -78,11 +78,17 @@ export async function syncGlobalSysConfigToDB(empresas, printPresets) {
             if (!existingDados) existingDados = {};
         }
 
+        let savedCustomOpSeg = customOpSeg;
+        if (!savedCustomOpSeg || savedCustomOpSeg.length === 0) {
+            try { savedCustomOpSeg = JSON.parse(localStorage.getItem('protetta_custom_op_seg') || '[]'); } catch { savedCustomOpSeg = []; }
+        }
+
         const payload = { 
             nome: '___LOCAL_SYS_CONFIG___', 
             dados: { 
                 empresas: (empresas && empresas.length > 0) ? empresas : (existingDados.empresas || JSON.parse(localStorage.getItem('protetta_empresas') || '[]')),
-                print_presets: (printPresets && printPresets.length > 0) ? printPresets : (existingDados.print_presets || JSON.parse(localStorage.getItem('protetta_print_presets') || '[]'))
+                print_presets: (printPresets && printPresets.length > 0) ? printPresets : (existingDados.print_presets || JSON.parse(localStorage.getItem('protetta_print_presets') || '[]')),
+                custom_op_seg: (savedCustomOpSeg && savedCustomOpSeg.length > 0) ? savedCustomOpSeg : (existingDados.custom_op_seg || [])
             },
             empresa: 'Todas'
         };
@@ -167,6 +173,19 @@ export default function App() {
     const [searchTerm, setSearchTerm] = useState('');
     const [fileViewMode, setFileViewMode] = useState('grid');
     const [selectedFile, setSelectedFile] = useState(null);
+
+    const [customOpSegList, setCustomOpSegList] = useState(() => {
+        try {
+            const saved = localStorage.getItem('protetta_custom_op_seg');
+            return saved ? JSON.parse(saved) : [];
+        } catch { return []; }
+    });
+
+    const setCustomOpSegAction = (newList) => {
+        setCustomOpSegList(newList);
+        localStorage.setItem('protetta_custom_op_seg', JSON.stringify(newList));
+        syncGlobalSysConfigToDB(rawEmpresasList, printPresets, newList);
+    };
 
     const [clientes, setClientes] = useState([]);
     const [selectedClientes, setSelectedClientes] = useState([]);
@@ -467,6 +486,11 @@ export default function App() {
             let sysConfig = sysConfigRow ? (Array.isArray(sysConfigRow.dados) ? sysConfigRow.dados[0] : sysConfigRow.dados) : {};
             if (!sysConfig) sysConfig = {};
             
+            if (sysConfig.custom_op_seg && Array.isArray(sysConfig.custom_op_seg) && sysConfig.custom_op_seg.length > 0) {
+                setCustomOpSegList(sysConfig.custom_op_seg);
+                localStorage.setItem('protetta_custom_op_seg', JSON.stringify(sysConfig.custom_op_seg));
+            }
+
             // Reconstruct and update companies list based on data
             setRawEmpresasList(prev => {
                 let map = new Map(prev.map(e => [e.nome.toUpperCase(), e]));
@@ -1705,8 +1729,15 @@ export default function App() {
         
         setLoading(true); setLoadingMsg("Fazendo upload para a nuvem...");
         try {
+            let finalOperadora = formData.codigoOperadora;
+            if (formData.codigoOperadora === 'OUTRA') {
+                finalOperadora = (formData.codigoOperadoraOutra || '').trim().toUpperCase();
+                if (finalOperadora && !LISTA_OPERADORAS.includes(finalOperadora) && !LISTA_SEGURADORAS.includes(finalOperadora) && !customOpSegList.includes(finalOperadora)) {
+                    setCustomOpSegAction([...customOpSegList, finalOperadora]);
+                }
+            }
+
             for (const file of formData.arquivos) {
-                const finalOperadora = formData.codigoOperadora === 'OUTRA' ? formData.codigoOperadoraOutra : formData.codigoOperadora;
                 const saveOperadora = (finalOperadora || '').trim();
                 const saveCodOperadora = (formData.codOperadora || '').trim();
                 const safeFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
@@ -1837,7 +1868,7 @@ export default function App() {
 
         let isOuter = false;
         let outerValue = '';
-        if (record.codigoOperadora && !['AMIL', 'ASSIM', 'HAPVIDA', 'KLINI', 'LEVE SAUDE', 'NOTRE DAME', 'PREVENT', 'QUALICORP', 'SUPERMED', 'MED SENIOR', 'ALLIANZ', 'ASSIST CARD', 'AZUL', 'BRADESCO', 'HDI', 'ICATU', 'MONGERAL', 'PORTO SEGURO', 'SOMPO', 'SUDAMERICA', 'SULAMERICA', 'TOKIO MARINE', 'UNIMED', 'OUTRA'].includes(record.codigoOperadora)) {
+        if (record.codigoOperadora && ![...LISTA_OPERADORAS, ...LISTA_SEGURADORAS, ...customOpSegList, 'OUTRA', 'UNIMED', 'SOMPO', 'OMINT'].includes(record.codigoOperadora)) {
             isOuter = true;
             outerValue = record.codigoOperadora;
         }
@@ -1858,7 +1889,14 @@ export default function App() {
         setLoading(true); setLoadingMsg("Salvando...");
 
         try {
-            const finalOperadora = editarExtratoForm.codigoOperadora === 'OUTRA' ? editarExtratoForm.codigoOperadoraOutra : editarExtratoForm.codigoOperadora;
+            let finalOperadora = editarExtratoForm.codigoOperadora;
+            if (editarExtratoForm.codigoOperadora === 'OUTRA') {
+                finalOperadora = (editarExtratoForm.codigoOperadoraOutra || '').trim().toUpperCase();
+                if (finalOperadora && !LISTA_OPERADORAS.includes(finalOperadora) && !LISTA_SEGURADORAS.includes(finalOperadora) && !customOpSegList.includes(finalOperadora)) {
+                    setCustomOpSegAction([...customOpSegList, finalOperadora]);
+                }
+            }
+
             const saveOperadora = (finalOperadora || '').trim();
             const saveCodOperadora = (editarExtratoForm.codOperadora || '').trim();
             const saveParceiro = `[${saveOperadora}|${saveCodOperadora}] ${editarExtratoForm.parceiro}${editarExtratoForm.notaFiscal ? ` (NF: ${editarExtratoForm.notaFiscal})` : ''}`;
@@ -3798,6 +3836,11 @@ export default function App() {
                                             <optgroup label="Seguradoras">
                                                 {LISTA_SEGURADORAS.map(seg => <option key={seg} value={seg}>{seg}</option>)}
                                             </optgroup>
+                                            {customOpSegList.length > 0 && (
+                                                <optgroup label="Outras">
+                                                    {customOpSegList.map(op => <option key={op} value={op}>{op}</option>)}
+                                                </optgroup>
+                                            )}
                                         </select>
                                     </div>
 
@@ -5344,16 +5387,23 @@ export default function App() {
                                         <optgroup label="Seguradoras">
                                             {LISTA_SEGURADORAS.map(seg => <option key={seg} value={seg}>{seg}</option>)}
                                         </optgroup>
-                                        <option value="OUTRA">OUTRA</option>
+                                        {customOpSegList.length > 0 && (
+                                            <optgroup label="Outras">
+                                                {customOpSegList.map(op => <option key={op} value={op}>{op}</option>)}
+                                            </optgroup>
+                                        )}
+                                        <option value="OUTRA" className="font-bold text-blue-600">Outra Op. | Seg.</option>
                                     </select>
                                     {formData.codigoOperadora === 'OUTRA' && (
-                                        <div className="mt-2">
+                                        <div className="mt-2 text-sm text-slate-500">
+                                            Aviso: Será salva automaticamente na lista para uso futuro.
                                             <input 
+                                                required
                                                 type="text" 
                                                 placeholder="Digite o nome da Op. | Seg." 
-                                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" 
+                                                className="uppercase w-full mt-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" 
                                                 value={formData.codigoOperadoraOutra || ''} 
-                                                onChange={e => {setFormData({...formData, codigoOperadoraOutra: e.target.value}); setFormError('');}} 
+                                                onChange={e => {setFormData({...formData, codigoOperadoraOutra: e.target.value.toUpperCase()}); setFormError('');}} 
                                             />
                                         </div>
                                     )}
@@ -5693,19 +5743,24 @@ export default function App() {
                                         <optgroup label="Seguradoras">
                                             {LISTA_SEGURADORAS.map(seg => <option key={seg} value={seg}>{seg}</option>)}
                                         </optgroup>
+                                        {customOpSegList.length > 0 && (
+                                            <optgroup label="Outras">
+                                                {customOpSegList.map(op => <option key={op} value={op}>{op}</option>)}
+                                            </optgroup>
+                                        )}
                                         <option value="OUTRA" className="font-bold text-blue-600">Outra Op. | Seg.</option>
                                     </select>
                                     
                                     {editarExtratoForm.codigoOperadora === 'OUTRA' && (
                                         <div className="mt-2 text-sm text-slate-500">
-                                            Aviso: Extratos de outras serão salvos dentro da pasta genérica "OUTRA".
+                                            Aviso: Será salva automaticamente na lista para uso futuro.
                                             <input 
                                                 required
                                                 type="text" 
                                                 placeholder="Digite o nome da Op. | Seg." 
-                                                className="w-full mt-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" 
+                                                className="uppercase w-full mt-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" 
                                                 value={editarExtratoForm.codigoOperadoraOutra || ''} 
-                                                onChange={e => {setEditarExtratoForm({...editarExtratoForm, codigoOperadoraOutra: e.target.value}); setFormError('');}} 
+                                                onChange={e => {setEditarExtratoForm({...editarExtratoForm, codigoOperadoraOutra: e.target.value.toUpperCase()}); setFormError('');}} 
                                             />
                                         </div>
                                     )}
@@ -6261,6 +6316,11 @@ export default function App() {
                                             <optgroup label="Seguradoras">
                                                 {LISTA_SEGURADORAS.map(seg => <option key={seg} value={seg}>{seg}</option>)}
                                             </optgroup>
+                                            {customOpSegList.length > 0 && (
+                                                <optgroup label="Outras">
+                                                    {customOpSegList.map(op => <option key={op} value={op}>{op}</option>)}
+                                                </optgroup>
+                                            )}
                                         </select>
                                     </div>
                                     <div>
