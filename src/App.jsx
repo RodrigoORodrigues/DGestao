@@ -198,8 +198,15 @@ export default function App() {
         syncGlobalSysConfigToDB(rawEmpresasList, printPresets, newList);
     };
 
-    const combinedOperadoras = Array.from(new Set([...LISTA_OPERADORAS, ...(customOpSeg?.operadoras || [])])).sort();
-    const combinedSeguradoras = Array.from(new Set([...LISTA_SEGURADORAS, ...(customOpSeg?.seguradoras || [])])).sort();
+    const combinedOperadoras = Array.from(new Set([
+        ...LISTA_OPERADORAS, 
+        ...(customOpSeg?.operadoras || []).filter(op => !LISTA_OPERADORAS.includes(op) && !LISTA_SEGURADORAS.includes(op))
+    ])).sort();
+    
+    const combinedSeguradoras = Array.from(new Set([
+        ...LISTA_SEGURADORAS, 
+        ...(customOpSeg?.seguradoras || []).filter(seg => !LISTA_OPERADORAS.includes(seg) && !LISTA_SEGURADORAS.includes(seg))
+    ])).sort();
 
     const [clientes, setClientes] = useState([]);
     const [selectedClientes, setSelectedClientes] = useState([]);
