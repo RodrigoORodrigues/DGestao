@@ -2673,10 +2673,10 @@ export default function App() {
             let isMatched = false;
             
             // Bradesco
-            if (!isMatched && (textoNormalizado.includes('Bradesco Saude') || textoNormalizado.includes('bradesco seguros'))) {
-                const bradescoRegex = /(\d+)\s+(\d+)\s+([0-9/]+)\s+(\d+)\s+(\d+)\s+([\d,]+)\s+([A-ZÀ-ÿ ]+?)\s+(\d{2})\s+(\d{1,3})\s+R\$\s+([\d.,]+)\s+R\$\s+([\d.,]+)/g;
+            if (!isMatched && textoNormalizado.toLowerCase().includes('bradesco')) {
+                const bradescoRegex = /(\d+)\s+(\d+)\s+([0-9/a-zA-Z-]+)\s+(\d+)\s+(\d+)\s+([\d,]+(?:%|))\s+([a-zA-ZÀ-ÿ0-9 .&'-]+?)\s+(\d{2})\s+(\d{1,3})\s*(?:R\$)?\s*([\d.,]+)\s*(?:R\$)?\s*([\d.,]+)/gi;
                 isMatched = processGenericRegex(bradescoRegex, textoNormalizado, match => ({
-                    contrato: match[3], cliente: match[7], parcela: match[9], valorTotal: parseFloat(match[10].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[11].replace(/\./g, '').replace(',', '.'))
+                    contrato: match[3], cliente: match[7], parcela: match[9], valorTotal: parseFloat(match[11].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[10].replace(/\./g, '').replace(',', '.'))
                 }));
             }
             // Hapvida
@@ -2688,7 +2688,7 @@ export default function App() {
             }
             // Klini
             if (!isMatched && textoNormalizado.includes('KLINI')) {
-                const kliniRegex = /(PESSOA FÍSICA|PME.*?)\s+(.*?)\s+(\d+)\s+(.*?)\s+(\d+)\s+Preço Pré-Estabelecido\s+([\d.,]+)%\s+R\$\s*([\d.,]+)\s+R\$\s*([\d.,]+)/g;
+                const kliniRegex = /((?:PESSOA FÍSICA|PME.*?VIDAS\)?))\s+(.*?)\s+(\d+)\s+(.*?)\s+(\d+)\s+Preço Pré-Estabelecido\s+([\d.,]+)%\s+R\$\s*([\d.,]+)\s+R\$\s*([\d.,]+)/g;
                 isMatched = processGenericRegex(kliniRegex, textoNormalizado, match => ({
                     contrato: match[3], cliente: match[2], parcela: match[5], valorTotal: parseFloat(match[7].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[8].replace(/\./g, '').replace(',', '.'))
                 }));
@@ -2713,11 +2713,20 @@ export default function App() {
                 });
             }
             // Omint
-            if (!isMatched && textoNormalizado.includes('OMINT')) {
-                const omintRegex = /(\d{8})\s+(.*?)\s+([A-Z0-9]+)\s+(\d+)\s+VITALICIO.*?(\d{1,2}\/\d{4})\s+(\d{1,2}\/\d{4})\s+([\d.,]+)\s+(\d+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/g;
-                isMatched = processGenericRegex(omintRegex, textoNormalizado, match => ({
-                    contrato: match[1], cliente: match[2], parcela: match[8], valorTotal: parseFloat(match[7].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[11].replace(/\./g, '').replace(',', '.'))
-                }));
+            if (!isMatched && textoNormalizado.toUpperCase().includes('OMINT')) {
+                const omintRegex = /(\d{5,15})\s+([A-ZÀ-ÿ][A-Z0-9À-ÿ .&'-]+?)(?:\s+[A-Z0-9-]{2,10}\s+\d{1,5})?\s+(VITALICIO|ADESÃO|VITALÍCIO|ADESAO|COLETIVO|PME)\b(.*?)\s*(\d{1,2}\/\d{4})\s+(\d{1,2}\/\d{4})\s+([\d.,]+)\s+(\d+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/gi;
+                isMatched = processGenericRegex(omintRegex, textoNormalizado, match => {
+                    const groupStr = (match[3] + ' ' + match[4]).toLowerCase();
+                    const isVitalicio = groupStr.includes('vitalicio') || groupStr.includes('vitalício') ? 'Sim' : 'Não';
+                    return {
+                        contrato: match[1], 
+                        cliente: match[2].trim(), 
+                        parcela: match[8], 
+                        valorTotal: parseFloat(match[7].replace(/\./g, '').replace(',', '.')), 
+                        comissao: parseFloat(match[11].replace(/\./g, '').replace(',', '.')),
+                        vitalicio: isVitalicio
+                    };
+                });
             }
             // Porto Seguro
             if (!isMatched && textoNormalizado.includes('PORTO SEGURO')) {
