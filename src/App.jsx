@@ -199,12 +199,22 @@ export default function App() {
     };
 
     const combinedOperadoras = Array.from(new Set([
-        ...LISTA_OPERADORAS, 
+        ...LISTA_OPERADORAS,
+        'ODONTOPREV',
+        'METLIFE',
+        'PET LOVE', 
         ...(customOpSeg?.operadoras || []).filter(op => !LISTA_OPERADORAS.includes(op) && !LISTA_SEGURADORAS.includes(op))
     ])).sort();
     
     const combinedSeguradoras = Array.from(new Set([
-        ...LISTA_SEGURADORAS, 
+        ...LISTA_SEGURADORAS,
+        'ALLIANZ',
+        'SUHAI',
+        'TOKIO',
+        'MONGERAL',
+        'MAPFRE',
+        'CASSI PASI',
+        'HDI',
         ...(customOpSeg?.seguradoras || []).filter(seg => !LISTA_OPERADORAS.includes(seg) && !LISTA_SEGURADORAS.includes(seg))
     ])).sort();
 
@@ -358,6 +368,7 @@ export default function App() {
     const [appliedVendasFilters, setAppliedVendasFilters] = useState(null);
     const [vendasSortConfig, setVendasSortConfig] = useState({ key: 'dataVenda', direction: 'desc' });
     const [selectedInconsistencias, setSelectedInconsistencias] = useState([]);
+    const [inconsistenciasList, setInconsistenciasList] = useState([]);
 
     const vendasColLabels = {
         numero: 'Registo', cliente: 'Cliente', dataVenda: 'Data', situacao: 'Situação', valor: 'Valor', comissao: 'Comissão',
@@ -1076,9 +1087,9 @@ export default function App() {
     const handleBuscarVendas = () => { setAppliedVendasFilters({ ...vendasFilterForm }); };
     const handleLimparVendas = () => { setVendasFilterForm(defaultVendasFilters); setAppliedVendasFilters(null); setVendasPeriodLabel('Todo o período'); };
 
-    const getAllVendas = () => {
-        let todasAsVendas = [...vendasList];
-        savedReportsList.forEach(report => {
+    const getAllVendas = (vendasBase = vendasList, reportsBase = savedReportsList) => {
+        let todasAsVendas = [...(vendasBase || [])];
+        (reportsBase || []).forEach(report => {
             if (report.dados && Array.isArray(report.dados)) {
                 report.dados.forEach((dado, idx) => {
                     todasAsVendas.push({
@@ -1160,13 +1171,14 @@ export default function App() {
         return <ChevronDown size={14} className={`inline ml-1 transition-transform ${vendasSortConfig.direction === 'asc' ? 'rotate-180' : ''}`} />;
     };
 
-    const inconsistenciasList = useMemo(() => {
+    const calcularInconsistencias = (vendasBase = vendasList, reportsBase = savedReportsList) => {
         const groups = {};
         const dataLimite = '2026-01-01';
+        const hoje = dataDeHojeInterna();
         
-        getAllVendas().filter(v => {
-            const dv = v.dataVenda || v.dataCadastro || '';
-            return dv <= dataDeHojeInterna();
+        getAllVendas(vendasBase, reportsBase).filter(v => {
+            const dv = v.dataVenda || v.dataCadastro || v.data || '';
+            return !dv || dv <= hoje;
         }).forEach(v => {
             const key = v.contrato || v.cliente;
             if (!key || !v.parcela) return;
@@ -1175,7 +1187,7 @@ export default function App() {
                 const num = parseInt(match[0], 10);
                 if (!groups[key]) groups[key] = { cliente: v.cliente, contrato: v.contrato, parcelasUnicas: new Set(), parcelasData: {}, inicioVigencia: v.inicioVigencia };
                 groups[key].parcelasUnicas.add(num);
-                const dv = v.dataVenda || v.dataCadastro || '';
+                const dv = v.dataVenda || v.dataCadastro || v.data || '';
                 if (!groups[key].parcelasData[num] || dv < groups[key].parcelasData[num]) {
                     groups[key].parcelasData[num] = dv;
                 }
@@ -1221,7 +1233,14 @@ export default function App() {
             }
         });
         return inconsistencias;
-    }, [vendasList, savedReportsList]);
+    };
+
+    const rodarVarreduraInconsistencias = (vendasBase = vendasList, reportsBase = savedReportsList) => {
+        const resultado = calcularInconsistencias(vendasBase, reportsBase);
+        setInconsistenciasList(resultado);
+        setSelectedInconsistencias([]);
+        return resultado;
+    };
 
     const handleSelectAllInconsistencias = () => {
         if (selectedInconsistencias.length === inconsistenciasList.length && inconsistenciasList.length > 0) {
@@ -1467,6 +1486,8 @@ export default function App() {
             setLoading(true); setLoadingMsg("Guardando venda...");
             try {
                 let dataToSave = { ...vendaForm, valor: parseFloat(vendaForm.valor) || 0 };
+                let vendasAposSalvarLocal = vendasList;
+                let savedReportsAposSalvarLocal = savedReportsList;
                 dataToSave.cliente = (dataToSave.cliente || '').trim().toUpperCase();
                 dataToSave.vidas = dataToSave.vidas === '' || dataToSave.vidas === undefined ? null : parseInt(dataToSave.vidas, 10);
                 dataToSave.comissao = dataToSave.comissao === '' || dataToSave.comissao === undefined ? null : parseFloat(dataToSave.comissao);
@@ -1507,54 +1528,38 @@ export default function App() {
                             servico: dataToSave.servico, desconto: dataToSave.desconto, notas: dataToSave.notas, comissao: dataToSave.comissao
                         };
                         await safeSupabaseUpdate('savedReports', { dados: dadosAtualizados }, 'id', rep.data.id);
+                        savedReportsAposSalvarLocal = savedReportsList.map(report => report.id === rep.data.id ? { ...report, dados: dadosAtualizados } : report);
                     }
                 } else {
                     if (vendaForm.id) {
                         const { error } = await safeSupabaseUpdate('vendas', dataToSave, 'id', vendaForm.id);
                         if (error) throw error;
+                        vendasAposSalvarLocal = vendasList.map(v => v.id === vendaForm.id ? { ...v, ...dataToSave, id: vendaForm.id } : v);
                     } else { 
                         delete dataToSave.id; 
-                        const { error } = await safeSupabaseInsert('vendas', [dataToSave]); 
+                        const { data, error } = await safeSupabaseInsert('vendas', [dataToSave]); 
                         if (error) throw error;
+                        const vendaInserida = (data && data.length > 0) ? data[0] : { ...dataToSave, id: `temp_${Date.now()}` };
+                        vendasAposSalvarLocal = [...vendasList, vendaInserida];
                     }
                 }
-                await loadFromDB(); setModalVendaOpen(false); showAlert("Venda guardada com sucesso!");
+
+                // A varredura de inconsistências de vendas agora acontece somente depois do salvamento.
+                const inconsistenciasAposSalvar = rodarVarreduraInconsistencias(vendasAposSalvarLocal, savedReportsAposSalvarLocal);
+                const chaveVendaSalva = dataToSave.contrato || dataToSave.cliente;
+                const inconsistenciaDaVenda = inconsistenciasAposSalvar.find(inc => inc.id === chaveVendaSalva);
+
+                await loadFromDB(); setModalVendaOpen(false);
+                if (inconsistenciaDaVenda) {
+                    showAlert(`Venda guardada com sucesso! Atenção: foram detectadas parcelas faltantes para ${inconsistenciaDaVenda.cliente}: ${inconsistenciaDaVenda.faltantes.join(', ')}.`, 'warning_pulse');
+                } else {
+                    showAlert("Venda guardada com sucesso!");
+                }
             } catch (err) { showAlert("Erro ao guardar: " + err.message); } finally { setLoading(false); }
         };
 
-        // Verifica pulo de parcela apenas para novas vendas
-        if (!vendaForm.id && !vendaForm.isFromReport && vendaForm.parcela) {
-            const matchParcelaAtual = vendaForm.parcela.toString().match(/\d+/);
-            if (matchParcelaAtual) {
-                const numParcelaAtual = parseInt(matchParcelaAtual[0], 10);
-                
-                const vendasRelacionadas = vendasList.filter(v => 
-                    (vendaForm.contrato && v.contrato === vendaForm.contrato) || 
-                    (!vendaForm.contrato && vendaForm.cliente && v.cliente === vendaForm.cliente)
-                );
-                
-                let maxParcela = 0;
-                vendasRelacionadas.forEach(v => {
-                    if (v.parcela) {
-                        const m = v.parcela.toString().match(/\d+/);
-                        if (m) {
-                            const num = parseInt(m[0], 10);
-                            if (num > maxParcela) maxParcela = num;
-                        }
-                    }
-                });
-                
-                if (maxParcela > 0 && numParcelaAtual > maxParcela + 1) {
-                    showConfirm(`Atenção: A parcela inserida (${vendaForm.parcela}) parece pular a sequência. A última parcela registada foi a de número ${maxParcela}. Deseja guardar a venda mesmo assim?`, () => {
-                        const alertPrefix = `⚠️ ALERTA DE SISTEMA: Foi detectado um salto no número da parcela ao inserir esta venda (parcela atual é ${vendaForm.parcela}). A anterior registada foi a de número ${maxParcela}.\n\n`;
-                        vendaForm.notas = alertPrefix + (vendaForm.notas || '');
-                        executarSalvamento();
-                    });
-                    return;
-                }
-            }
-        }
-        
+        // A validação de inconsistências foi movida para depois do salvamento,
+        // para varrer a base já atualizada e evitar bloqueios antes de guardar.
         executarSalvamento();
     };
 
@@ -2267,20 +2272,57 @@ export default function App() {
     };
 
     const processarArquivoDoBanco = async (report) => {
-        setLoading(true); setLoadingMsg("A descarregar PDF da nuvem..."); setModalArquivosOpen(false); 
+        setLoading(true); setLoadingMsg("A descarregar ficheiro da nuvem..."); setModalArquivosOpen(false); 
         try {
             const pathTarget = report.filePath || report.fileName;
             if (!pathTarget) throw new Error("Caminho do ficheiro ausente.");
             const { data: fileBlob, error } = await supabase.storage.from('arquivos_extratos').download(pathTarget);
-            if (error || !fileBlob) throw new Error("Ficheiro PDF não encontrado no Storage.");
-            setLoadingMsg("A processar dados do PDF..."); const arrayBuffer = await fileBlob.arrayBuffer(); const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
-            let textoCompleto = "";
-            for (let i = 1; i <= pdf.numPages; i++) { const page = await pdf.getPage(i); const textContent = await page.getTextContent(); textoCompleto += textContent.items.map(item => item.str).join(" ") + " "; }
-            await extrairDadosDoTexto(textoCompleto, report);
-        } catch (error) { showAlert("Erro ao ler o PDF: " + error.message); } finally { setLoading(false); }
+            if (error || !fileBlob) throw new Error("Ficheiro não encontrado no Storage.");
+
+            const fileNameLower = String(report.fileName || pathTarget || '').toLowerCase();
+            const isExcel = /\.(xlsx|xls)$/i.test(fileNameLower);
+            const isCsv = /\.csv$/i.test(fileNameLower);
+            const isText = /\.(txt|ret|dat)$/i.test(fileNameLower);
+
+            if (isExcel) {
+                setLoadingMsg("A processar dados da planilha...");
+                const arrayBuffer = await fileBlob.arrayBuffer();
+                const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const linhasExcel = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+                const textoPlanilha = XLSX.utils.sheet_to_csv(firstSheet, { FS: '\t', RS: '\n', blankrows: false });
+                await extrairDadosDoTexto(textoPlanilha, report, linhasExcel);
+            } else if (isCsv) {
+                setLoadingMsg("A processar dados do CSV...");
+                const arrayBuffer = await fileBlob.arrayBuffer();
+                let textoCompleto = new TextDecoder('utf-8').decode(arrayBuffer);
+                if (textoCompleto.includes('�')) {
+                    textoCompleto = new TextDecoder('windows-1252').decode(arrayBuffer);
+                }
+                const workbook = XLSX.read(textoCompleto, { type: 'string' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const linhasExcel = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+                await extrairDadosDoTexto(textoCompleto, report, linhasExcel);
+            } else if (isText) {
+                setLoadingMsg("A processar dados do texto...");
+                const textoCompleto = await fileBlob.text();
+                await extrairDadosDoTexto(textoCompleto, report);
+            } else {
+                setLoadingMsg("A processar dados do PDF...");
+                const arrayBuffer = await fileBlob.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+                let textoCompleto = "";
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    textoCompleto += textContent.items.map(item => item.str).join(" ") + " ";
+                }
+                await extrairDadosDoTexto(textoCompleto, report);
+            }
+        } catch (error) { showAlert("Erro ao ler o ficheiro: " + error.message); } finally { setLoading(false); }
     };
 
-    const extrairDadosDoTexto = async (texto, reportDoc = null) => {
+    const extrairDadosDoTexto = async (texto, reportDoc = null, linhasPlanilha = null) => {
         const empresaContexto = reportDoc?.empresa || nomeEmpresa;
         const empresaContextoUpper = empresaContexto.toUpperCase();
 
@@ -2302,6 +2344,53 @@ export default function App() {
         setReportPeriod('');
 
         let textoNormalizado = texto.replace(/\s+/g, ' ').trim(); 
+        const textoUpper = textoNormalizado.toUpperCase();
+
+        if (!reportDoc?.codigoOperadora) {
+            if (textoUpper.includes('ODONTOPREV') || (textoUpper.includes('BENEFICIÁRIO') && textoUpper.includes('OSCILAÇÃO') && textoUpper.includes('CUSTO') && textoUpper.includes('COMISSÃO'))) extratoOperadora = 'ODONTOPREV';
+            else if (textoUpper.includes('BRADESCO')) extratoOperadora = 'BRADESCO';
+            else if (textoUpper.includes('ALLIANZ') || textoUpper.includes('EXTRATO DE COMISSÕES PAGAS POR SUSEP') || textoUpper.includes('EXTRATO DE COMISSOES PAGAS POR SUSEP')) extratoOperadora = 'ALLIANZ';
+            else if (textoUpper.includes('SUHAI') || (textoUpper.includes('DEMONSTRATIVO DE COMISSÃO') && textoUpper.includes('APÓLICE-ENDOSSO') && textoUpper.includes('TIPO DE PAGAMENTO'))) extratoOperadora = 'SUHAI';
+            else if (textoUpper.includes('KLINI')) extratoOperadora = 'KLINI';
+            else if (textoUpper.includes('OMINT')) extratoOperadora = 'OMINT';
+            else if (textoUpper.includes('SUPERMED')) extratoOperadora = 'SUPERMED';
+            else if (textoUpper.includes('TOKIO MARINE') || (textoUpper.includes('EXTRATO DO CORRETOR') && (textoUpper.includes('SEGURADO NEGÓCIO RAMO') || textoUpper.includes('SEGURADO NEGOCIO RAMO')) && (textoUpper.includes('APOLICE') || textoUpper.includes('APÓLICE')) && (textoUpper.includes('COMISSÃO (R$)') || textoUpper.includes('COMISSAO (R$)')))) extratoOperadora = 'TOKIO';
+            else if (textoUpper.includes('SUL AMERICA') || textoUpper.includes('SULAMERICA')) extratoOperadora = 'SULAMERICA';
+            else if (textoUpper.includes('EXTRATO ANALÍTICO INDIVIDUAL') || textoUpper.includes('ESSENCIAL-CANAL CORRETOR')) extratoOperadora = 'ICATU';
+            else if (textoUpper.includes('NOVO COMISSIONAMENTO PLANO EMPRESA') || textoUpper.includes('PAGAMENTOS REFERENTES')) extratoOperadora = 'ASSIM';
+            else if (textoUpper.includes('PREVENT') || (Array.isArray(linhasPlanilha) && linhasPlanilha.some(l => Object.keys(l || {}).some(k => String(k).toLowerCase().includes('beneficiario'))))) extratoOperadora = 'PREVENT';
+            else if (textoUpper.includes('MAPFRE') || textoUpper.includes('EXTRATO COMISSÃO - MSG')) extratoOperadora = 'MAPFRE';
+            else if (textoUpper.includes('METLIFE') || (textoUpper.includes('DEMONSTRATIVO DE COMISSÕES') && textoUpper.includes('PRODUTO ODONTOLÓGICO') && textoUpper.includes('VALOR BRUTO'))) extratoOperadora = 'METLIFE';
+            else if (textoUpper.includes('CASSI') || textoUpper.includes('PASI') || (textoUpper.includes('EXTRATO ANALÍTICO EMPRESARIAL') && textoUpper.includes('ESTIPULANTE') && textoUpper.includes('SUBESTIPULANTE'))) extratoOperadora = 'CASSI PASI';
+            else if (textoUpper.includes('TIPO CMS') && textoUpper.includes('PRÊMIO') && textoUpper.includes('MAIS NEGÓCIOS')) extratoOperadora = 'HDI';
+            else if (textoUpper.includes('PET LOVE') || textoUpper.includes('PETLOVE') || (textoUpper.includes('NOME DO TUTOR') && (textoUpper.includes('COMISSÃO PAGA') || textoUpper.includes('COMISSAO PAGA')))) extratoOperadora = 'PET LOVE';
+            else if (textoUpper.includes('MONGERAL') || (textoUpper.includes('CPF/CNPJ DO PRODUTOR') && textoUpper.includes('NOME/RAZÃO SOCIAL') && textoUpper.includes('VALOR BASE') && (textoUpper.includes('VALOR COMISSÃO') || textoUpper.includes('VALOR COMISSAO') || textoUpper.includes('VALOR ANGARIAÇÃO')))) extratoOperadora = 'MONGERAL';
+            setCurrentReportOperadora(extratoOperadora);
+        }
+
+        // Padrão SulAmérica: extrai o mesmo layout para PROPER e PROTETTA.
+        // O nome do produtor/corretora que aparece no PDF não define a loja do relatório.
+        // A loja, assessoria, vendedor padrão e situação seguem sempre a empresa logada.
+        const operadoraNormalizada = (extratoOperadora || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '');
+        const isSulAmericaExtrato = operadoraNormalizada.includes('SULAMERICA');
+        const isAmilExtrato = operadoraNormalizada.includes('AMIL');
+        const isMongeralExtrato = operadoraNormalizada.includes('MONGERAL') || (textoUpper.includes('CPF/CNPJ DO PRODUTOR') && textoUpper.includes('NOME/RAZÃO SOCIAL') && textoUpper.includes('VALOR BASE'));
+        const isMapfreExtrato = operadoraNormalizada.includes('MAPFRE') || textoUpper.includes('EXTRATO COMISSÃO - MSG') || (textoUpper.includes('RAMO PRODUTO APÓLICE') && textoUpper.includes('PRÊMIO LÍQUIDO') && textoUpper.includes('VALOR COMISSÃO'));
+        const isAllianzExtrato = operadoraNormalizada.includes('ALLIANZ') || textoUpper.includes('ALLIANZ SEGUROS') || textoUpper.includes('EXTRATO DE COMISSÕES PAGAS POR SUSEP') || textoUpper.includes('EXTRATO DE COMISSOES PAGAS POR SUSEP');
+        const isSuhaiExtrato = operadoraNormalizada.includes('SUHAI') || (textoUpper.includes('DEMONSTRATIVO DE COMISSÃO') && textoUpper.includes('APÓLICE-ENDOSSO') && textoUpper.includes('TIPO DE PAGAMENTO'));
+        const isOdontoprevExtrato = operadoraNormalizada.includes('ODONTOPREV') || (textoUpper.includes('ODONTOPREV') || (textoUpper.includes('BENEFICIÁRIO') && textoUpper.includes('OSCILAÇÃO') && textoUpper.includes('CUSTO') && textoUpper.includes('COMISSÃO')));
+        const isMetlifeExtrato = operadoraNormalizada.includes('METLIFE') || textoUpper.includes('METLIFE') || (textoUpper.includes('DEMONSTRATIVO DE COMISSÕES') && (textoUpper.includes('PRODUTO ODONTOLÓGICO') || textoUpper.includes('PRODUTO ODONTOLOGICO')) && textoUpper.includes('VALOR BRUTO'));
+        const isCassiPasiExtrato = operadoraNormalizada.includes('CASSIPASI') || textoUpper.includes('CASSI') || textoUpper.includes('PASI') || (textoUpper.includes('EXTRATO ANALÍTICO EMPRESARIAL') && textoUpper.includes('ESTIPULANTE') && textoUpper.includes('SUBESTIPULANTE'));
+        const isHdiExtrato = operadoraNormalizada.includes('HDI') || (textoUpper.includes('TIPO CMS') && (textoUpper.includes('PRÊMIO') || textoUpper.includes('PREMIO')) && textoUpper.includes('VALOR (R$)'));
+        const isPetLoveExtrato = operadoraNormalizada.includes('PETLOVE') || textoUpper.includes('PET LOVE') || textoUpper.includes('PETLOVE') || (textoUpper.includes('NOME DO TUTOR') && (textoUpper.includes('COMISSÃO PAGA') || textoUpper.includes('COMISSAO PAGA')));
+        const isTokioExtrato = operadoraNormalizada.includes('TOKIO') || textoUpper.includes('TOKIO MARINE') || (textoUpper.includes('EXTRATO DO CORRETOR') && (textoUpper.includes('SEGURADO NEGÓCIO RAMO') || textoUpper.includes('SEGURADO NEGOCIO RAMO')) && (textoUpper.includes('APOLICE') || textoUpper.includes('APÓLICE')) && (textoUpper.includes('COMISSÃO (R$)') || textoUpper.includes('COMISSAO (R$)')));
+        const empresaSulAmerica = nomeEmpresa;
+        const empresaSulAmericaUpper = nomeEmpresaUpper;
+        const empresaAmil = nomeEmpresa;
+        const empresaAmilUpper = nomeEmpresaUpper;
+        if (isSulAmericaExtrato || isAmilExtrato) {
+            setCurrentReportEmpresa(nomeEmpresa);
+        }
         
         const novosRegistos = []; 
         const clientesParaInserir = []; 
@@ -2318,7 +2407,805 @@ export default function App() {
             return !isNaN(v) && v > max ? v : max;
         }, 0);
 
+        const parseCurrencyValue = (value) => {
+            if (value === null || value === undefined || value === '') return 0;
+            if (typeof value === 'number') return value;
+            let str = String(value).replace(/R\$/gi, '').replace(/\s+/g, '').replace(/[^\d,.-]/g, '');
+            if (!str) return 0;
+            const negative = str.includes('-');
+            str = str.replace(/-/g, '');
+            if (str.includes(',')) {
+                str = str.replace(/\./g, '').replace(',', '.');
+            } else {
+                const partes = str.split('.');
+                if (partes.length > 2) str = partes.join('');
+            }
+            const parsed = parseFloat(str);
+            return isNaN(parsed) ? 0 : (negative ? -parsed : parsed);
+        };
+
+        const formatDateForInput = (value) => {
+            if (!value && value !== 0) return '';
+            if (value instanceof Date && !isNaN(value)) {
+                return value.toISOString().slice(0, 10);
+            }
+            if (typeof value === 'number' && !isNaN(value)) {
+                const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+                return date.toISOString().slice(0, 10);
+            }
+            const str = String(value).trim();
+            if (!str) return '';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+            const match = str.match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
+            if (match) {
+                let ano = match[3].length === 2 ? `20${match[3]}` : match[3];
+                return `${ano}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+            }
+            return '';
+        };
+
+        const formatDateBR = (value) => {
+            if (!value && value !== 0) return '';
+            const pad = (n) => String(n).padStart(2, '0');
+            if (value instanceof Date && !isNaN(value)) {
+                return `${pad(value.getDate())}/${pad(value.getMonth() + 1)}/${value.getFullYear()}`;
+            }
+            if (typeof value === 'number' && !isNaN(value)) {
+                const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+                return `${pad(date.getUTCDate())}/${pad(date.getUTCMonth() + 1)}/${date.getUTCFullYear()}`;
+            }
+            const str = String(value).trim();
+            if (!str) return '';
+            const isoMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+            if (isoMatch) return `${isoMatch[3].padStart(2, '0')}/${isoMatch[2].padStart(2, '0')}/${isoMatch[1]}`;
+            const brMatch = str.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
+            if (brMatch) {
+                const ano = brMatch[3].length === 2 ? `20${brMatch[3]}` : brMatch[3];
+                return `${brMatch[1].padStart(2, '0')}/${brMatch[2].padStart(2, '0')}/${ano}`;
+            }
+            const anyDate = str.match(/(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/);
+            if (anyDate) {
+                const ano = anyDate[3].length === 2 ? `20${anyDate[3]}` : anyDate[3];
+                return `${anyDate[1].padStart(2, '0')}/${anyDate[2].padStart(2, '0')}/${ano}`;
+            }
+            return '';
+        };
+
+        const extractDataDoExtrato = (origem) => {
+            const raw = String(origem || '').replace(/\s+/g, ' ').trim();
+            if (!raw) return '';
+            const padraoData = '(\\d{1,2}[\\/.-]\\d{1,2}[\\/.-]\\d{2,4})';
+            const patterns = [
+                new RegExp('Extrato\\s+de\\s+Pagamento\\s+de\\s*' + padraoData, 'i'),
+                new RegExp('Pagamento\\s+em\\s*:?\\s*' + padraoData, 'i'),
+                new RegExp('Data\\s+(?:de|do)?\\s*(?:Pagamento|Cr[eé]dito|Processamento|Recibo|Emiss[aã]o|Fatura|Lan[cç]amento)\\s*:?\\s*' + padraoData, 'i'),
+                new RegExp('Data\\s+Pag\\.?\\s*:?\\s*' + padraoData, 'i'),
+                new RegExp('Dt\\.?\\s*(?:Pagamento|Cr[eé]dito|Pag\\.)\\s*:?\\s*' + padraoData, 'i'),
+                new RegExp('(?:Pago|Paga|Creditado|Cr[eé]dito)\\s+(?:em|no\\s+dia)?\\s*:?\\s*' + padraoData, 'i')
+            ];
+            for (const rx of patterns) {
+                const match = raw.match(rx);
+                if (match) return formatDateForInput(match[1]);
+            }
+            return '';
+        };
+
+        const dataGlobalExtratoDetectada = extractDataDoExtrato(textoNormalizado);
+
+        const cleanExtractedName = (value) => String(value || '')
+            .replace(/\s+/g, ' ')
+            .replace(/^(?:CLIENTE|NOME|SEGURADO|BENEFICIARIO|BENEFICIÁRIO)\s*[:\-]?\s*/i, '')
+            .replace(/\s+(?:CPF|CNPJ|PARCELA|VALOR|COMISS[AÃ]O|PR[ÊE]MIO).*$/i, '')
+            .trim();
+
+        const extractInstallment = (value) => {
+            const str = String(value || '').trim();
+            if (!str) return '';
+            let match = str.match(/Parcela\s+(\d+)/i) || str.match(/(\d+)\s*(?:º|ª|o|a)?\s*Parcela/i) || str.match(/^(\d+)\b/);
+            return match ? match[1] : '';
+        };
+
+        const normalizeHeaderKey = (key) => String(key || '')
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+
+        const getRowValue = (row, possibleKeys) => {
+            if (!row) return '';
+            const normalMap = Object.keys(row).reduce((acc, key) => {
+                acc[normalizeHeaderKey(key)] = row[key];
+                return acc;
+            }, {});
+            for (const key of possibleKeys) {
+                const normalKey = normalizeHeaderKey(key);
+                if (Object.prototype.hasOwnProperty.call(normalMap, normalKey)) return normalMap[normalKey];
+            }
+            return '';
+        };
+
+
+        const getRowValueFuzzy = (row, possibleKeys) => {
+            if (!row) return '';
+            const normalizeLoose = (value) => normalizeHeaderKey(value).replace(/[^a-z0-9]+/g, '');
+            const keys = Object.keys(row);
+            for (const key of possibleKeys) {
+                const exact = getRowValue(row, [key]);
+                if (exact !== '' && exact !== undefined && exact !== null) return exact;
+            }
+            const normalizedTargets = possibleKeys.map(k => normalizeLoose(k)).filter(Boolean);
+            for (const rowKey of keys) {
+                const looseRowKey = normalizeLoose(rowKey);
+                if (!looseRowKey) continue;
+                if (normalizedTargets.some(target => looseRowKey.includes(target) || target.includes(looseRowKey))) return row[rowKey];
+            }
+            return '';
+        };
+
+        const formatCompetenciaToDate = (value) => {
+            const str = String(value || '').trim();
+            if (!str) return '';
+            const compact = str.replace(/\D/g, '');
+            if (/^\d{6}$/.test(compact)) {
+                const firstFour = Number(compact.slice(0, 4));
+                if (firstFour >= 1900) {
+                    const ano = compact.slice(0, 4);
+                    const mes = compact.slice(4, 6);
+                    return `${ano}-${mes}-01`;
+                }
+                const mes = compact.slice(0, 2);
+                const ano = compact.slice(2, 6);
+                return `${ano}-${mes}-01`;
+            }
+            const mesAno = str.match(/(\d{1,2})\s*[\/.-]\s*(\d{4})/);
+            if (mesAno) return `${mesAno[2]}-${mesAno[1].padStart(2, '0')}-01`;
+            return formatDateForInput(str);
+        };
+
+        const onlyDigitsAndSeparators = (value) => String(value || '').replace(/\s+/g, '').replace(/[^0-9,./-]/g, '');
+
+        const parseCsvLikeRows = (rawText, delimiter = ';') => {
+            const raw = String(rawText || '').replace(/^\uFEFF/, '');
+            if (!raw.trim()) return [];
+            const rows = [];
+            let current = '';
+            let row = [];
+            let inQuotes = false;
+            for (let i = 0; i < raw.length; i++) {
+                const char = raw[i];
+                const next = raw[i + 1];
+                if (char === '"') {
+                    if (inQuotes && next === '"') {
+                        current += '"';
+                        i++;
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === delimiter && !inQuotes) {
+                    row.push(current);
+                    current = '';
+                } else if ((char === '\n' || char === '\r') && !inQuotes) {
+                    if (char === '\r' && next === '\n') i++;
+                    row.push(current);
+                    if (row.some(cell => String(cell || '').trim() !== '')) rows.push(row);
+                    row = [];
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            row.push(current);
+            if (row.some(cell => String(cell || '').trim() !== '')) rows.push(row);
+            if (rows.length < 2) return [];
+            const headers = rows[0].map(h => String(h || '').replace(/^\uFEFF/, '').trim());
+            return rows.slice(1).map(cols => headers.reduce((acc, header, idx) => {
+                acc[header || `COL_${idx + 1}`] = String(cols[idx] || '').replace(/^\t+/, '').trim();
+                return acc;
+            }, {}));
+        };
+
+        const pushRegistroExtraido = (data) => {
+            if (!data) return false;
+            let nomeCliente = cleanExtractedName(data.cliente).toUpperCase();
+            if (!nomeCliente || nomeCliente.length < 3 || /^(TOTAL|SUBTOTAL|CLIENTE|NOME\/RAZ[ÃA]O SOCIAL)$/i.test(nomeCliente)) return false;
+
+            const valorTotal = parseCurrencyValue(data.valorTotal);
+            const comissao = parseCurrencyValue(data.comissao);
+            if (valorTotal === 0 && comissao === 0) return false;
+
+            currentMaxVendaCodigo++;
+            let codRegistro = String(currentMaxVendaCodigo).padStart(5, '0');
+            const contratoDetectado = String(data.contrato || '').trim();
+            const empresaRegistro = isAmilExtrato ? empresaAmil : empresaContexto;
+            const empresaRegistroUpper = isAmilExtrato ? empresaAmilUpper : empresaContextoUpper;
+            const dataMovimentoIso = formatDateForInput(data.data) || (isAmilExtrato ? (dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date)) : dataDeHojeInterna());
+            const dataMovimentoDetectada = data.formatoDataBR ? (formatDateBR(data.data) || dataMovimentoIso) : dataMovimentoIso;
+
+            if(!nomesClientesExistem.has(nomeCliente.toLowerCase())) {
+                nomesClientesExistem.add(nomeCliente.toLowerCase());
+                currentMaxCodigo++;
+                let newCodigo = String(currentMaxCodigo).padStart(5, '0');
+                clientesParaInserir.push({ 
+                    codigo: contratoDetectado || newCodigo, 
+                    nome: nomeCliente, 
+                    tipo: data.tipoCliente || 'Pessoa jurídica', 
+                    documento: data.documento || '', 
+                    telefone: '', 
+                    celular: '', 
+                    email: '', 
+                    situacao: true,
+                    operadora: extratoOperadora,
+                    empresa: empresaRegistro
+                });
+            } else {
+                let existingCli = clientes.find(c => c.nome.toLowerCase() === nomeCliente.toLowerCase());
+                if (existingCli && (!existingCli.operadora || existingCli.operadora.trim() === '' || existingCli.operadora === '-')) {
+                    if (!clientesParaAtualizar.has(existingCli.id)) {
+                        clientesParaAtualizar.set(existingCli.id, { operadora: extratoOperadora });
+                    }
+                }
+            }
+
+            let vendedorDetectado = nomeEmpresa;
+            let inicioVigenciaDetectada = formatDateForInput(data.inicioVigencia);
+            const historicoVendasCliente = vendasList.filter(v => 
+                (v.cliente && v.cliente.toLowerCase() === nomeCliente.toLowerCase()) || 
+                (contratoDetectado && v.contrato === contratoDetectado)
+            );
+
+            if (historicoVendasCliente.length > 0) {
+                const ultimaVenda = historicoVendasCliente.sort((a,b) => new Date(b.dataVenda) - new Date(a.dataVenda))[0];
+                if (ultimaVenda.corretor && ultimaVenda.corretor !== "Todos") vendedorDetectado = ultimaVenda.corretor;
+                if (!inicioVigenciaDetectada && ultimaVenda.inicioVigencia) inicioVigenciaDetectada = ultimaVenda.inicioVigencia;
+            }
+
+            let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataMovimentoIso || dataMovimentoDetectada);
+            let parcelaDetectada = data.parcela || calcParcela || "1";
+
+            novosRegistos.push({ 
+                cod: extratoCodOperadora || codRegistro, 
+                contrato: contratoDetectado, 
+                codOperadora: extratoCodOperadora || null,
+                codigoOperadora: data.codigoOperadora || extratoOperadora, 
+                vidas: data.vidas || "1",
+                cliente: nomeCliente, 
+                data: dataMovimentoDetectada, 
+                situacao: `FATURADO ${empresaRegistroUpper} NF`, 
+                loja: empresaRegistroUpper, 
+                valorTotal, 
+                comissao, 
+                vendedor: data.vendedor || vendedorDetectado, 
+                parcela: String(parcelaDetectada),
+                inicioVigencia: inicioVigenciaDetectada, 
+                notaFiscal: reportDoc?.notaFiscal || (reportDoc?.parceiro?.match(/\(NF:\s*([^)]+)\)/)?.[1] || ''), 
+                vitalicio: data.vitalicio !== undefined ? data.vitalicio : 'Sim', 
+                assessoria: empresaRegistro, 
+                formaPagamento: empresaRegistroUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
+                servico: data.servico || 'Saúde', 
+                desconto: data.desconto || '', 
+                selected: true
+            });
+            return true;
+        };
+
+        const processPreventRows = (rows) => {
+            if (!Array.isArray(rows) || rows.length === 0) return false;
+            let count = 0;
+            rows.forEach(row => {
+                const lowerKeys = Object.keys(row || {}).reduce((acc, key) => {
+                    acc[String(key).trim().toLowerCase()] = row[key];
+                    return acc;
+                }, {});
+                const beneficiario = lowerKeys['beneficiario'] || lowerKeys['beneficiário'] || lowerKeys['cliente'] || lowerKeys['nome'];
+                const matricula = lowerKeys['matricula'] || lowerKeys['matrícula'] || lowerKeys['contrato'];
+                const produto = lowerKeys['produto'] || '';
+                const tipoComissao = lowerKeys['tipo comissão'] || lowerKeys['tipo comissao'] || '';
+                const provento = parseCurrencyValue(lowerKeys['valor provento']);
+                const estorno = parseCurrencyValue(lowerKeys['valor estorno']);
+                const valorComissao = provento !== 0 ? provento : (estorno !== 0 ? -Math.abs(estorno) : 0);
+                if (!beneficiario || !matricula || valorComissao === 0) return;
+                const inserted = pushRegistroExtraido({
+                    contrato: matricula,
+                    cliente: beneficiario,
+                    parcela: extractInstallment(tipoComissao) || '1',
+                    inicioVigencia: lowerKeys['data assinatura'],
+                    data: lowerKeys['data envio'],
+                    formatoDataBR: true,
+                    valorTotal: Math.abs(valorComissao),
+                    comissao: valorComissao,
+                    vitalicio: /vital/i.test(String(tipoComissao)) ? 'Sim' : 'Não',
+                    servico: /odonto|dental/i.test(String(produto)) ? 'Plano Dental' : 'Plano de Saúde'
+                });
+                if (inserted) count++;
+            });
+            return count > 0;
+        };
+
+        const processMongeralRows = (rows) => {
+            let sourceRows = Array.isArray(rows) ? rows : [];
+            const hasExpectedHeaders = sourceRows.some(row => {
+                const keys = Object.keys(row || {}).map(normalizeHeaderKey);
+                return keys.includes('nome/razao social') && keys.includes('proposta') && keys.includes('valor base');
+            });
+            if (!hasExpectedHeaders && textoNormalizado.includes(';')) {
+                sourceRows = parseCsvLikeRows(texto, ';');
+            }
+            if (!Array.isArray(sourceRows) || sourceRows.length === 0) return false;
+
+            let count = 0;
+            sourceRows.forEach(row => {
+                const cliente = getRowValue(row, ['Nome/Razão social', 'Nome/Razao social', 'Cliente', 'Segurado']);
+                const proposta = getRowValue(row, ['Proposta', 'Contrato']);
+                const parcela = getRowValue(row, ['Parcela comissionada', 'Parcela faturada', 'Parcela']);
+                const dataEfetivacao = getRowValue(row, ['Data de efetivação do crédito/débito', 'Data de efetivacao do credito/debito', 'Data prevista']);
+                const tipoCliente = getRowValue(row, ['Tipo de cliente']);
+                const documento = getRowValue(row, ['CPF/CNPJ do cliente', 'Documento']);
+                const produto = getRowValue(row, ['Descrição Produto', 'Descricao Produto', 'Produto']);
+                const tipoLancamento = getRowValue(row, ['Tipo de lançamento', 'Tipo de lancamento']);
+                const tipoPagamento = String(getRowValue(row, ['Tipo de pagamento']) || '').toUpperCase();
+
+                const valorBase = parseCurrencyValue(getRowValue(row, ['Valor base', 'Valor Base']));
+                const valorComissao = parseCurrencyValue(getRowValue(row, ['Valor Comissão', 'Valor Comissao']));
+                const valorAngariacao = parseCurrencyValue(getRowValue(row, ['Valor Angariação', 'Valor Angariacao']));
+                const valorIncentivo = parseCurrencyValue(getRowValue(row, ['Valor incentivo', 'Valor Incentivo']));
+                const valorBonificacao = parseCurrencyValue(getRowValue(row, ['Valor bonificação', 'Valor bonificacao']));
+                const valorEstorno = parseCurrencyValue(getRowValue(row, ['Valor estorno', 'Valor Estorno']));
+
+                let comissao = valorComissao || valorAngariacao || valorIncentivo || valorBonificacao;
+                if (valorEstorno) comissao = -Math.abs(valorEstorno);
+                if (tipoPagamento.includes('DEBITO') || tipoPagamento.includes('DÉBITO')) comissao = -Math.abs(comissao);
+
+                if (!cliente || !proposta || (valorBase === 0 && comissao === 0)) return;
+                const inserted = pushRegistroExtraido({
+                    contrato: proposta,
+                    cliente,
+                    parcela: parcela || '1',
+                    data: dataEfetivacao,
+                    valorTotal: valorBase,
+                    comissao,
+                    tipoCliente: String(tipoCliente || '').toUpperCase().includes('INDIVIDUAL') ? 'Pessoa física' : 'Pessoa jurídica',
+                    documento: String(documento || '').replace(/[^0-9]/g, ''),
+                    codigoOperadora: 'MONGERAL',
+                    vitalicio: 'Não',
+                    servico: /vida|life|sucess[aã]o|morte|acidental|term/i.test(String(produto)) ? 'Seguro de Vida' : 'Seguro',
+                    desconto: tipoLancamento || ''
+                });
+                if (inserted) count++;
+            });
+            return count > 0;
+        };
+
+
+
+        const processHdiRows = (rows) => {
+            let sourceRows = Array.isArray(rows) ? rows : [];
+            const hasExpectedHeaders = sourceRows.some(row => {
+                const keys = Object.keys(row || {}).map(normalizeHeaderKey).join(' ');
+                return keys.includes('tipo cms') && keys.includes('cliente') && (keys.includes('premio') || keys.includes('prêmio')) && keys.includes('valor');
+            });
+            if (!hasExpectedHeaders && textoNormalizado.includes(';')) {
+                sourceRows = parseCsvLikeRows(texto, ';');
+            }
+            if (!Array.isArray(sourceRows) || sourceRows.length === 0) return false;
+
+            let count = 0;
+            sourceRows.forEach(row => {
+                const tipoCms = getRowValueFuzzy(row, ['Tipo Cms.', 'Tipo Cms', 'Tipo Comissão', 'Tipo Comissao']);
+                const data = getRowValueFuzzy(row, ['Data', 'Data Pagamento']);
+                const documento = getRowValueFuzzy(row, ['Documento', 'Apólice', 'Apolice', 'Contrato']);
+                const cliente = getRowValueFuzzy(row, ['Cliente', 'Segurado', 'Nome']);
+                const premio = parseCurrencyValue(getRowValueFuzzy(row, ['Prêmio (R$)', 'Premio (R$)', 'Prêmio', 'Premio']));
+                const percentual = getRowValueFuzzy(row, ['%', 'Percentual', 'Comissão %', 'Comissao %']);
+                const comissao = parseCurrencyValue(getRowValueFuzzy(row, ['Valor (R$)', 'Valor', 'Comissão', 'Comissao']));
+                if (!cliente || (premio === 0 && comissao === 0)) return;
+
+                const docStr = String(documento || '').replace(/\s+/g, ' ').trim();
+                const contrato = (docStr.split('-')[0] || docStr).trim();
+                const parcelaMatch = docStr.match(/-\s*(\d+)\s*\/\s*(\d+)\s*-/) || docStr.match(/\b(\d+)\s*\/\s*(\d+)\b/);
+                const parcela = parcelaMatch ? parcelaMatch[1] : '1';
+
+                const inserted = pushRegistroExtraido({
+                    contrato,
+                    cliente,
+                    parcela,
+                    data,
+                    valorTotal: premio,
+                    comissao,
+                    codigoOperadora: 'HDI',
+                    vitalicio: 'Não',
+                    servico: 'Seguro',
+                    desconto: `${String(tipoCms || '').trim()} ${percentual ? `/ Comissão ${percentual}%` : ''}`.trim()
+                });
+                if (inserted) count++;
+            });
+            return count > 0;
+        };
+
+        const processPetLoveRows = (rows) => {
+            if (!Array.isArray(rows) || rows.length === 0) return false;
+            let count = 0;
+            rows.forEach(row => {
+                const cliente = getRowValueFuzzy(row, ['Nome do Tutor', 'Tutor', 'Cliente', 'Nome']);
+                const proposta = getRowValueFuzzy(row, ['Proposta', 'Contrato', 'Número da Carteirinha (MV)', 'Numero da Carteirinha (MV)', 'Id do Pet']);
+                const parcela = getRowValueFuzzy(row, ['Número da Parcela', 'Numero da Parcela', 'Parcela']);
+                const dataPagamento = getRowValueFuzzy(row, ['Data de Pagamento', 'Data Pagamento', 'Data']);
+                const plano = getRowValueFuzzy(row, ['Nome do Plano', 'Plano']);
+                const pet = getRowValueFuzzy(row, ['Nome do Pet', 'Pet']);
+                const status = getRowValueFuzzy(row, ['Status']);
+                const documento = String(getRowValueFuzzy(row, ['CPF do Tutor', 'CPF', 'Documento']) || '').replace(/[^0-9]/g, '');
+                const valor = parseCurrencyValue(getRowValueFuzzy(row, ['Valor da Parcela', 'Valor', 'Prêmio', 'Premio']));
+                const aliquotaRaw = getRowValueFuzzy(row, ['Alíquota', 'Aliquota', '%']);
+                const aliquota = parseCurrencyValue(aliquotaRaw);
+                let comissao = parseCurrencyValue(getRowValueFuzzy(row, ['Comissão Paga', 'Comissao Paga', 'Comissão', 'Comissao']));
+                if (!comissao && valor && aliquota) comissao = valor * (aliquota / 100);
+                if (!cliente || (valor === 0 && comissao === 0)) return;
+
+                const inserted = pushRegistroExtraido({
+                    contrato: proposta,
+                    cliente,
+                    parcela: parcela || '1',
+                    data: dataPagamento,
+                    valorTotal: valor,
+                    comissao,
+                    codigoOperadora: 'PET LOVE',
+                    tipoCliente: 'Pessoa física',
+                    documento,
+                    vitalicio: 'Não',
+                    servico: 'Seguro Pet',
+                    desconto: `${plano || ''}${pet ? ` / Pet: ${pet}` : ''}${status ? ` / Status: ${status}` : ''}`.trim()
+                });
+                if (inserted) count++;
+            });
+            return count > 0;
+        };
+
+        const extractMetlifeDataPagamento = (origem) => {
+            const raw = String(origem || '').replace(/\s+/g, ' ').trim();
+            const match = raw.match(/Data\s+Pagamento\s*:?\s*(\d{1,2}\/\d{1,2}\/\d{4})/i);
+            return match ? formatDateForInput(match[1]) : '';
+        };
+
+        const processMetlifeExtrato = () => {
+            const dataPagamentoMetlife = extractMetlifeDataPagamento(textoNormalizado) || dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date);
+            const metlifeText = String(textoNormalizado || '').replace(/\s+/g, ' ');
+            const metlifeRegex = /(?:^|\s)(\d{4,})\s+([A-ZÀ-ÿ][A-ZÀ-ÿ0-9 .&'\/-]+?)\s+(\d{5,})\s+(\d+)\s+\(?[A-Z0-9]+\)?\s+(.+?)\s+(\d{1,2}\s*\/\s*\d{4})\s+([\d.,\s]+?)\s+([\d.,\s]+?)\s+([\d.,\s]+?)\s+([\d.,\s]+?)(?=\s+\d{4,}\s+[A-ZÀ-ÿ]|\s+Sub-?Tot|\s+IRRF|\s+TOTAL|\s*$)/gi;
+            let match;
+            let count = 0;
+            while ((match = metlifeRegex.exec(metlifeText)) !== null) {
+                const apolice = match[1].replace(/\s+/g, '');
+                const cliente = cleanExtractedName(match[2]);
+                const endosso = match[3].replace(/\s+/g, '');
+                const parcela = match[4];
+                const tipoComissao = String(match[5] || '').replace(/\s+/g, ' ').trim();
+                const vigencia = onlyDigitsAndSeparators(match[6]);
+                const baseCalculo = parseCurrencyValue(onlyDigitsAndSeparators(match[8]));
+                const premioLiquido = parseCurrencyValue(onlyDigitsAndSeparators(match[9]));
+                const valorComissao = parseCurrencyValue(onlyDigitsAndSeparators(match[10]));
+                const valorTotal = premioLiquido || baseCalculo;
+                if (!cliente || /PRODUTO|RAMO|SUBTOTAL|TOTAL/i.test(cliente) || (valorTotal === 0 && valorComissao === 0)) continue;
+                const inserted = pushRegistroExtraido({
+                    contrato: apolice,
+                    cliente,
+                    parcela,
+                    inicioVigencia: formatCompetenciaToDate(vigencia),
+                    data: dataPagamentoMetlife,
+                    valorTotal,
+                    comissao: valorComissao,
+                    codigoOperadora: 'METLIFE',
+                    vitalicio: 'Não',
+                    servico: 'Plano Dental',
+                    desconto: `${tipoComissao} / Endosso ${endosso}`
+                });
+                if (inserted) count++;
+            }
+
+            // Fallback para o PDF da MetLife quando o texto vem quebrado em muitas colunas pelo PDF.js.
+            if (count === 0) {
+                const metlifeAgdRegex = /(?:^|\s)(\d{4,})\s+([A-ZÀ-ÿ][A-ZÀ-ÿ .&'\/-]+?)\s+(\d{5,})\s+(\d+)\s+\(?[A-Z0-9]+\)?\s+Agenciamento\s+por\s+(\d\s*\d\s*\/\s*\d\s*\d\s*\d\s*\d|\d{1,2}\s*\/\s*\d{4})\s+([\d\s]+,\s*\d\s*\d?)\s+([\d\s]+,\s*\d\s*\d?)\s+([\d\s]+,\s*\d\s*\d?)\s+([\d\s]+,\s*\d\s*\d?)(?=\s+\d{4,}\s+\d{11}|\s+\d{4,}\s+[A-ZÀ-ÿ]|\s+Sub|\s+IRRF|\s+TOTAL|$)/gi;
+                let agdMatch;
+                while ((agdMatch = metlifeAgdRegex.exec(metlifeText)) !== null) {
+                    const valorPremio = parseCurrencyValue(onlyDigitsAndSeparators(agdMatch[8])) || parseCurrencyValue(onlyDigitsAndSeparators(agdMatch[9]));
+                    const valorComissao = parseCurrencyValue(onlyDigitsAndSeparators(agdMatch[9]));
+                    const inserted = pushRegistroExtraido({
+                        contrato: agdMatch[1].replace(/\s+/g, ''),
+                        cliente: agdMatch[2],
+                        parcela: agdMatch[4],
+                        inicioVigencia: formatCompetenciaToDate(onlyDigitsAndSeparators(agdMatch[5])),
+                        data: dataPagamentoMetlife,
+                        valorTotal: valorPremio,
+                        comissao: valorComissao,
+                        codigoOperadora: 'METLIFE',
+                        vitalicio: 'Não',
+                        servico: 'Plano Dental',
+                        desconto: `Agenciamento por Adesão / Endosso ${agdMatch[3].replace(/\s+/g, '')}`
+                    });
+                    if (inserted) count++;
+                }
+            }
+            return count > 0;
+        };
+
+        const processCassiPasiExtrato = () => {
+            const cassiRegex = /CLUBE\s+PASI\s+DE\s+SEGUROS\s+([A-ZÀ-ÿ0-9 .&'\/-]+?)\s+Pagamento\s+de\s+Comiss[aã]o\s+de\s+Corretagem\s+(\d+)\s+(\d+)\s+(\d{6})\s+R\$?\s*([\d.]+,\d{2})\s+R\$?\s*([\d.]+,\d{2})/gi;
+            let match;
+            let count = 0;
+            while ((match = cassiRegex.exec(textoNormalizado)) !== null) {
+                const estipulante = 'CLUBE PASI DE SEGUROS';
+                const subestipulante = cleanExtractedName(match[1]);
+                const apolice = match[2];
+                const fatura = match[3];
+                const competencia = match[4];
+                const premio = parseCurrencyValue(match[5]);
+                const comissao = parseCurrencyValue(match[6]);
+                const cliente = subestipulante || estipulante;
+                if (!cliente || (premio === 0 && comissao === 0)) continue;
+                const inserted = pushRegistroExtraido({
+                    contrato: apolice,
+                    cliente,
+                    parcela: competencia.slice(4, 6),
+                    data: formatCompetenciaToDate(competencia),
+                    valorTotal: premio,
+                    comissao,
+                    codigoOperadora: 'CASSI PASI',
+                    vitalicio: 'Não',
+                    servico: 'Seguro de Vida',
+                    desconto: `Estipulante ${estipulante} / Fatura ${fatura} / Competência ${competencia}`
+                });
+                if (inserted) count++;
+            }
+            return count > 0;
+        };
+
+        const extractOdontoprevDataExtrato = (origem) => {
+            const raw = String(origem || '').replace(/\s+/g, ' ').trim();
+            const patterns = [
+                /\bData\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+N[ºo]\s*Fatura/i,
+                /N[ºo]\s*Sucursal\s+\d+\s+C[oó]d\.?\s*Corretor\s+\d+\s+Corretor.*?CPF\/CNPJ\s+\d+/i,
+                /\bData\s+(\d{1,2}\/\d{1,2}\/\d{4})/i
+            ];
+            const direct = raw.match(patterns[0]) || raw.match(patterns[2]);
+            if (direct) return formatDateForInput(direct[1]);
+            const primeiraData = raw.match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
+            return primeiraData ? formatDateForInput(primeiraData[1]) : '';
+        };
+
+        const processOdontoprevExtrato = () => {
+            const dataPagamentoOdonto = extractOdontoprevDataExtrato(textoNormalizado) || dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date);
+            const odontoRegex = /(?:^|\s)(\d{1,6})\s+([A-ZÀ-ÿ][A-ZÀ-ÿ0-9 .&'\/-]+?)\s+(\d{2,5})\s+(\d{4,})\s+(\d{4,})\s+(\d{1,3})\s+(\d{1,4})\s+(-?[\d.,]+)\s+(-?[\d.]+,\d{2})\s+(-?[\d.]+,\d{2})(?=\s+\d{1,6}\s+[A-ZÀ-ÿ]|\s+Total\s+do\s+Ramo|\s+Total\s+da\s+Fatura|\s+Valores\s+acumulados|\s+Dados\s+de\s+Pagamento|\s+Segunda-feira|\s*$)/gi;
+            let match;
+            let count = 0;
+            while ((match = odontoRegex.exec(textoNormalizado)) !== null) {
+                const proposta = match[1];
+                const cliente = cleanExtractedName(match[2]);
+                const ramo = match[3];
+                const contratoOdonto = match[4];
+                const endosso = match[5];
+                const prestacao = match[6];
+                const item = match[7];
+                const percentual = parseCurrencyValue(match[8]);
+                const custo = parseCurrencyValue(match[9]);
+                const comissao = parseCurrencyValue(match[10]);
+                if (!cliente || /TOTAL|RAMO|FATURA|SUCURSAL|CORRETOR|BENEFICI[ÁA]RIO/i.test(cliente)) continue;
+                if (comissao === 0 || percentual === 0) continue;
+
+                // OdontoPrev não informa Valor Total/Valor Base no detalhe.
+                // Regra: Valor Total = Comissão ÷ (% Comissão / 100).
+                const valorTotalCalculado = Math.round((Math.abs(comissao) / (Math.abs(percentual) / 100)) * 100) / 100;
+                const inserted = pushRegistroExtraido({
+                    contrato: proposta, // Nº Proposta
+                    cliente,
+                    parcela: prestacao,
+                    data: dataPagamentoOdonto,
+                    valorTotal: valorTotalCalculado || custo,
+                    comissao,
+                    codigoOperadora: 'ODONTOPREV',
+                    vitalicio: 'Não',
+                    servico: 'Plano Dental',
+                    desconto: `Contrato ${contratoOdonto} / Ramo ${ramo} / Endosso ${endosso} / Item ${item} / Comissão ${match[8]}%`
+                });
+                if (inserted) count++;
+            }
+            return count > 0;
+        };
+
+        const extractSuhaiDataPagamento = (origem) => {
+            const raw = String(origem || '').replace(/\s+/g, ' ').trim();
+            const match = raw.match(/Data\s+Pagto\.?\s*:?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i)
+                || raw.match(/Data\s+(?:de\s+)?Pagamento\s*:?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
+            return match ? formatDateForInput(match[1]) : '';
+        };
+
+        const processSuhaiExtrato = () => {
+            const dataPagamentoSuhai = extractSuhaiDataPagamento(textoNormalizado) || dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date);
+            const partesSuhai = textoNormalizado.split(/Cliente\s+Ap[oó]lice-Endosso[\\\/]?Proposta\s+Parcela\s+%\s+Comiss[aã]o\s+Tipo\s+de\s+Pagamento\s+Valor\s+Parcela\s+Valor\s+Comiss[aã]o/i);
+            const textoSuhaiDetalhes = partesSuhai.length > 1 ? partesSuhai.slice(1).join(' ') : textoNormalizado;
+            const suhaiRegex = /(?:^|\s)([A-ZÀ-ÿ][A-ZÀ-ÿ0-9 .&'\/-]+?)\s+(\d{6,})\s+End\s*:\s*(\d+)\s+(\d{1,4})\s+([\d.,]+)\s+([A-ZÀ-ÿ ]+?)\s+(-?[\d.]+,\d{2})\s+(-?[\d.]+,\d{2})(?=\s+[A-ZÀ-ÿ]|\s+Valor\s+Total|\s+I\.R\.R\.F|\s*$)/gi;
+            let match;
+            let count = 0;
+            while ((match = suhaiRegex.exec(textoSuhaiDetalhes)) !== null) {
+                const cliente = cleanExtractedName(match[1]);
+                if (!cliente || /TOTAL|TRIBUT[ÁA]RIO|CORRETOR|CLIENTE/i.test(cliente)) continue;
+                const valorParcela = parseCurrencyValue(match[7]);
+                const valorComissao = parseCurrencyValue(match[8]);
+                if (valorParcela === 0 && valorComissao === 0) continue;
+
+                const inserted = pushRegistroExtraido({
+                    contrato: match[2], // Apólice/Proposta
+                    cliente,
+                    parcela: String(parseInt(match[4], 10) || match[4]),
+                    data: dataPagamentoSuhai,
+                    valorTotal: valorParcela, // Valor Parcela vira Valor Total
+                    comissao: valorComissao,
+                    codigoOperadora: 'SUHAI',
+                    vitalicio: 'Não',
+                    servico: 'Seguro',
+                    desconto: `Endosso ${match[3]} / ${String(match[6] || '').trim()} / Comissão ${match[5]}%`
+                });
+                if (inserted) count++;
+            }
+            return count > 0;
+        };
+
+
+        const processAllianzExtrato = () => {
+            const corretoraAllianzRegex = String.raw`(?:PROTETTA\s+CORRETORA\s+DE\s+SEGUROS\s+LTDA|PROPER(?:\s+BRASIL)?\s+CORRETORA\s+DE\s+SEGUROS\s+LTDA|[A-ZÀ-ÿ0-9 .&'\/-]+?\s+CORRETORA\s+DE\s+SEGUROS\s+LTDA)`;
+            const detalheAllianzRegex = new RegExp(
+                String.raw`(\d{2}\/\d{2}\/\d{4})\s+` +
+                String.raw`(\d+)\s+` +
+                String.raw`([A-Z0-9]+)\s+` +
+                String.raw`(\d+)\s+` +
+                String.raw`(\d+)\s+` +
+                String.raw`(\d+)\s+` +
+                corretoraAllianzRegex +
+                String.raw`\s+([A-ZÀ-ÿ0-9 .&'\/-]+?)\s+` +
+                String.raw`(\d{2,5})\s+` +
+                String.raw`([\d.,]+)\s+` +
+                String.raw`([\d.,]+)\s+` +
+                String.raw`([SN])\b`,
+                'gi'
+            );
+
+            const blocosPagamento = textoNormalizado.split(/Data\s+Pagto\.?\s+CNPJ\s+Filial\s+Bruto\s+IR\s+INSS\s+ISS\s+Desconto\s+Aba\s+Descontos\s+L[ií]quido/i);
+            const blocosParaLer = blocosPagamento.length > 1 ? blocosPagamento.slice(1) : [textoNormalizado];
+            let count = 0;
+
+            blocosParaLer.forEach((bloco) => {
+                const dataPagamentoBloco = bloco.match(/^\s*(\d{2}\/\d{2}\/\d{4})\s+\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\s+[\d.,]+/i)?.[1] || '';
+                let match;
+                detalheAllianzRegex.lastIndex = 0;
+                while ((match = detalheAllianzRegex.exec(bloco)) !== null) {
+                    const dataLinha = match[1];
+                    const apoliceSusep = match[3];
+                    const apolice = match[4];
+                    const endosso = match[5];
+                    const parcela = match[6];
+                    const cliente = match[7];
+                    const ramo = match[8];
+                    const premio = parseCurrencyValue(match[9]);
+                    const comissao = parseCurrencyValue(match[10]);
+                    const antecipada = match[11];
+                    if (!cliente || /TOTAL|SUBTOTAL/i.test(cliente) || (premio === 0 && comissao === 0)) continue;
+
+                    const inserted = pushRegistroExtraido({
+                        contrato: apoliceSusep || apolice,
+                        cliente,
+                        parcela,
+                        data: dataPagamentoBloco || dataLinha,
+                        valorTotal: premio,
+                        comissao,
+                        codigoOperadora: 'ALLIANZ',
+                        vitalicio: 'Não',
+                        servico: 'Seguro',
+                        desconto: `Ramo ${ramo} / Apólice ${apolice} / Endosso ${endosso} / Antecipada ${antecipada}`
+                    });
+                    if (inserted) count++;
+                }
+            });
+
+            return count > 0;
+        };
+
+
+        const extractMapfreDataPagamento = (origem) => {
+            const raw = String(origem || '').replace(/\s+/g, ' ').trim();
+            const mapfrePatterns = [
+                /DATA\s+DO\s+PAGAMENTO\b.*?(\d{1,2}\/\d{1,2}\/\d{4})/i,
+                /Data\s+Cr[eé]dito\b.*?(\d{1,2}\/\d{1,2}\/\d{4})/i,
+                /N[ºo]\s*Extrato\s+\d+\s+EXTRATO\s+DE\s+COMISS[ÕO]ES.*?DATA\s+DO\s+PAGAMENTO\s+(\d{1,2}\/\d{1,2}\/\d{4})/i
+            ];
+            for (const rx of mapfrePatterns) {
+                const match = raw.match(rx);
+                if (match) return match[1];
+            }
+            return '';
+        };
+
+        const processMapfreExtrato = () => {
+            const dataPagamentoMapfre = extractMapfreDataPagamento(textoNormalizado) || dataGlobalExtratoDetectada;
+            const mapfreRegex = /(?:^|\s)(\d{1,3})\s+(\d{1,5})\s+(\d{6,})\s+(\d+)\s+([A-ZÀ-ÿ][A-ZÀ-ÿ0-9 .&'\/-]+?)\s+(\d+)\s+(\d{2}\/\d{2}\/\d{2,4})\s+R\$\s*([\d.]+,\d{2})\s+([\d.,]+)%\s+R\$\s*([\d.]+,\d{2})/gi;
+            let match;
+            let count = 0;
+            while ((match = mapfreRegex.exec(textoNormalizado)) !== null) {
+                const cliente = match[5];
+                if (/SALDO|DEMONSTRATIVO|ANTERIOR|TOTAL/i.test(cliente)) continue;
+                const valorTotal = parseCurrencyValue(match[8]);
+                const comissao = parseCurrencyValue(match[10]);
+                if (valorTotal === 0 && comissao === 0) continue;
+                const inserted = pushRegistroExtraido({
+                    contrato: match[3], // Apólice
+                    cliente,
+                    parcela: match[6],
+                    data: dataPagamentoMapfre || match[7],
+                    valorTotal, // Prêmio Líquido vira Valor Total
+                    comissao,
+                    codigoOperadora: 'MAPFRE',
+                    vitalicio: 'Não',
+                    servico: 'Seguro',
+                    desconto: `Ramo ${match[1]} / Produto ${match[2]} / Endosso ${match[4]}`
+                });
+                if (inserted) count++;
+            }
+            return count > 0;
+        };
+
+
+        const extractTokioDataPagamento = (origem) => {
+            const raw = String(origem || '').replace(/\s+/g, ' ').trim();
+            const patterns = [
+                /Data\s+de\s+Cr[eé]dito\s*:?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+                /FORMA\s+DE\s+CR[ÉE]DITO.*?FORMA\s+DE\s+CR[ÉE]DITO\s+(\d{1,2}\/\d{1,2}\/\d{2,4})\s+DOC/i,
+                /Conta\s+Corrente\s*:? .*?(\d{1,2}\/\d{1,2}\/\d{2,4})\s+DOC/i,
+                /Data\s+de\s+Processamento\s*:?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i
+            ];
+            for (const rx of patterns) {
+                const match = raw.match(rx);
+                if (match) return formatDateForInput(match[1]);
+            }
+            return '';
+        };
+
+        const processTokioExtrato = () => {
+            const dataPagamentoTokio = extractTokioDataPagamento(textoNormalizado) || dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date);
+            const tokioRegex = /(?:^|\s)([A-ZÀ-ÿ][A-ZÀ-ÿ0-9 .&'\/\-]+?)\s+(\d+)\s+([A-ZÀ-ÿ]+(?:\s+[A-ZÀ-ÿ]+){0,3})\s+(\d+)\s+(\d+)\s+((?:COMISSAO|COMISSÃO)(?:\s+[A-ZÀ-ÿ]+)*|GANHO\s+EXTRA|ESTORNO(?:\s+[A-ZÀ-ÿ]+)*|AJUSTE(?:\s+[A-ZÀ-ÿ]+)*)\s+(\d+)\/(\d+)\s+R\$\s*(-?[\d.]+,\d{2})\s+(-?[\d.,]+)%\s+R\$\s*(-?[\d.]+,\d{2})(?=\s+[A-ZÀ-ÿ]|\s+P[áa]gina|\s*$)/gi;
+            let match;
+            let count = 0;
+            while ((match = tokioRegex.exec(textoNormalizado)) !== null) {
+                const cliente = cleanExtractedName(match[1]);
+                if (!cliente || /SEGURADO|NEG[ÓO]CIO|RAMO|TOTAL|COMISS[ÃA]O/i.test(cliente)) continue;
+
+                const negocio = match[2];
+                const ramo = String(match[3] || '').trim().toUpperCase();
+                const apolice = match[4];
+                const endosso = match[5];
+                const tipo = String(match[6] || '').trim().toUpperCase();
+                const parcelaAtual = match[7];
+                const totalParcelas = match[8];
+                const premio = parseCurrencyValue(match[9]);
+                const percentual = String(match[10] || '').trim();
+                const comissao = parseCurrencyValue(match[11]);
+                if (premio === 0 && comissao === 0) continue;
+
+                const servicoTokio = ramo.includes('AUTO') ? 'Auto' : (ramo.includes('EMPRESARIAL') ? 'Seguro Empresarial' : 'Seguro');
+                const inserted = pushRegistroExtraido({
+                    contrato: apolice, // Apólice / Bilhete
+                    cliente,
+                    parcela: parcelaAtual,
+                    data: dataPagamentoTokio,
+                    valorTotal: premio, // Prêmio(R$) vira Valor Total
+                    comissao,
+                    codigoOperadora: 'TOKIO',
+                    vitalicio: 'Não',
+                    servico: servicoTokio,
+                    desconto: `Negócio ${negocio} / Ramo ${ramo} / Endosso ${endosso} / ${tipo} / Parcela ${parcelaAtual}/${totalParcelas} / Comissão ${percentual}%`
+                });
+                if (inserted) count++;
+            }
+            return count > 0;
+        };
+
         const parseBlocosExtrato = (blocosContrato) => {
+            const empresaBloco = isAmilExtrato ? empresaAmil : empresaContexto;
+            const empresaBlocoUpper = isAmilExtrato ? empresaAmilUpper : empresaContextoUpper;
             for (let bloco of blocosContrato) {
                 try {
                     bloco = bloco.trim(); 
@@ -2352,7 +3239,7 @@ export default function App() {
                             email: '', 
                             situacao: true,
                             operadora: extratoOperadora,
-                            empresa: empresaContexto
+                            empresa: empresaBloco
                         });
                     } else {
                         let existingCli = clientes.find(c => c.nome.toLowerCase() === nomeCliente.toLowerCase());
@@ -2395,7 +3282,8 @@ export default function App() {
                             inicioVigenciaDetectada = `${partes[2]}-${partes[1]}-${partes[0]}`; 
                         }
 
-                        let vendedorDetectado = nomeEmpresa; 
+                        const dataMovimentoDetectada = extractDataDoExtrato(bloco) || dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date) || (isAmilExtrato ? '' : dataDeHojeInterna());
+                        let vendedorDetectado = empresaBloco; 
                         let parcelaDetectada = "1";
                         let numeroEsperado = null;
                         const historicoVendasCliente = vendasList.filter(v => 
@@ -2417,7 +3305,7 @@ export default function App() {
                             }
                         }
 
-                        let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataDeHojeInterna());
+                        let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataMovimentoDetectada);
                         if (calcParcela) {
                             parcelaDetectada = calcParcela;
                         }
@@ -2429,19 +3317,19 @@ export default function App() {
                             codigoOperadora: extratoOperadora, 
                             vidas: vidasDetectadas,
                             cliente: nomeCliente, 
-                            data: dataDeHojeInterna(), 
-                            situacao: `FATURADO ${empresaContextoUpper} NF`, 
-                            loja: empresaContextoUpper, 
+                            data: dataMovimentoDetectada, 
+                            situacao: `FATURADO ${empresaBlocoUpper} NF`, 
+                            loja: empresaBlocoUpper, 
                             valorTotal, 
                             comissao, 
-                            vendedor: nomeEmpresa, 
+                            vendedor: vendedorDetectado, 
                             parcela: parcelaDetectada,
                             inicioVigencia: inicioVigenciaDetectada, 
                             notaFiscal: reportDoc?.notaFiscal || (reportDoc?.parceiro?.match(/\(NF:\s*([^)]+)\)/)?.[1] || ''), 
                             vitalicio: 'Sim', 
-                            assessoria: empresaContexto, 
-                            formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
-                            servico: '', 
+                            assessoria: empresaBloco, 
+                            formaPagamento: empresaBlocoUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
+                            servico: isAmilExtrato ? 'Plano de Saúde' : '', 
                             desconto: '', 
                             selected: true
                         });
@@ -2464,6 +3352,7 @@ export default function App() {
                     let comissao = 0;
                     let parcelaDetectada = "1";
                     let contratoDetectado = "";
+                    let dataPagamentoDetectada = "";
 
                     const matchNome = bloco.match(/^(.*?)\s+Ap[oó]lice\/T[ií]tulo/i) || bloco.match(/^(.*?)\s+Tipo de documento/i) ||  bloco.match(/^(.*?)\s+Contrato/i);
                     if(matchNome) nomeCliente = matchNome[1].trim().toUpperCase();
@@ -2493,6 +3382,9 @@ export default function App() {
                         inicioVigenciaDetectada = `${partes[2]}-${partes[1]}-${partes[0]}`;
                     }
 
+                    const matchDataPagamento = bloco.match(/Data pagamento\s*:\s*(\d{2}\/\d{2}\/\d{4})/i);
+                    if (matchDataPagamento) dataPagamentoDetectada = formatDateForInput(matchDataPagamento[1]);
+
                     if (valorTotal > 0) {
                         currentMaxVendaCodigo++;
                         let codRegistro = String(currentMaxVendaCodigo).padStart(5, '0');
@@ -2511,7 +3403,7 @@ export default function App() {
                                 email: '', 
                                 situacao: true,
                                 operadora: extratoOperadora,
-                                empresa: empresaContexto
+                                empresa: empresaSulAmerica
                             });
                         } else {
                             let existingCli = clientes.find(c => c.nome.toLowerCase() === nomeCliente.toLowerCase());
@@ -2522,7 +3414,7 @@ export default function App() {
                             }
                         }
 
-                        let vendedorDetectado = nomeEmpresa; 
+                        let vendedorDetectado = empresaSulAmerica; 
                         let numeroEsperado = null;
                         const historicoVendasCliente = vendasList.filter(v => 
                             (v.cliente && v.cliente.toLowerCase() === nomeCliente.toLowerCase()) || 
@@ -2542,7 +3434,7 @@ export default function App() {
                             }
                         }
 
-                        let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataDeHojeInterna());
+                        let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataPagamentoDetectada || dataDeHojeInterna());
                         if (calcParcela) {
                             parcelaDetectada = calcParcela;
                         }
@@ -2554,9 +3446,9 @@ export default function App() {
                             codigoOperadora: extratoOperadora, 
                             vidas: "1",
                             cliente: nomeCliente, 
-                            data: dataDeHojeInterna(), 
-                            situacao: `FATURADO ${empresaContextoUpper} NF`, 
-                            loja: empresaContextoUpper, 
+                            data: dataPagamentoDetectada || dataDeHojeInterna(), 
+                            situacao: `FATURADO ${empresaSulAmericaUpper} NF`, 
+                            loja: empresaSulAmericaUpper, 
                             valorTotal, 
                             comissao, 
                             vendedor: vendedorDetectado, 
@@ -2564,9 +3456,9 @@ export default function App() {
                             inicioVigencia: inicioVigenciaDetectada, 
                             notaFiscal: reportDoc?.notaFiscal || (reportDoc?.parceiro?.match(/\(NF:\s*([^)]+)\)/)?.[1] || ''), 
                             vitalicio: 'Sim', 
-                            assessoria: empresaContexto, 
-                            formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
-                            servico: 'Saúde', 
+                            assessoria: empresaSulAmerica, 
+                            formaPagamento: empresaSulAmericaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
+                            servico: 'Plano de Saúde', 
                             desconto: '', 
                             selected: true
                         });
@@ -2577,7 +3469,29 @@ export default function App() {
             }
         };
 
-        if (extratoOperadora === 'SULAMERICA' || extratoOperadora.toUpperCase().includes('SUL AMERICA')) {
+        if (isMetlifeExtrato && processMetlifeExtrato()) {
+            // METLIFE: Cliente, Apólice, Parcela, Prêmio Líquido/Base de Cálculo e Comissão.
+        } else if (isCassiPasiExtrato && processCassiPasiExtrato()) {
+            // CASSI PASI: Cliente = Subestipulante, contrato = Apólice, valor total = Prêmio e comissão = Comissão.
+        } else if (isHdiExtrato && processHdiRows(linhasPlanilha)) {
+            // HDI CSV: Cliente, Documento/Apólice, Prêmio, Percentual, Valor de Comissão e Data.
+        } else if (isPetLoveExtrato && processPetLoveRows(linhasPlanilha)) {
+            // PET LOVE XLS: Tutor, Proposta, Parcela, Valor da Parcela, Comissão Paga e Data de Pagamento.
+        } else if (isOdontoprevExtrato && processOdontoprevExtrato()) {
+            // ODONTOPREV: Cliente, Nº Proposta, Prestação/Parcela, Comissão e percentual. Valor Total é calculado por comissão ÷ percentual.
+        } else if (isSuhaiExtrato && processSuhaiExtrato()) {
+            // SUHAI: Cliente, Apólice/Proposta, Parcela, Valor Parcela e Valor Comissão.
+        } else if (isAllianzExtrato && processAllianzExtrato()) {
+            // ALLIANZ: Cliente = Nome Segurado; Contrato = Apólice Susep; Valor Total = Prêmio; Comissão = Comissão.
+        } else if (isMapfreExtrato && processMapfreExtrato()) {
+            // MAPFRE: Cliente = Segurado; Contrato = Apólice; Valor Total = Prêmio Líquido; Comissão = Valor Comissão.
+        } else if (isTokioExtrato && processTokioExtrato()) {
+            // TOKIO: Cliente = Segurado; Contrato = Apólice/Bilhete; Valor Total = Prêmio(R$); Comissão = Comissão(R$).
+        } else if (isMongeralExtrato && processMongeralRows(linhasPlanilha)) {
+            // Planilhas/CSV da Mongeral usam Nome/Razão social, Proposta, Parcela comissionada, Valor base e valores de comissão/angariação.
+        } else if (Array.isArray(linhasPlanilha) && linhasPlanilha.length > 0 && processPreventRows(linhasPlanilha)) {
+            // Planilhas da Prevent Senior possuem colunas como beneficiario, matricula, Valor Provento e Tipo Comissão.
+        } else if (isSulAmericaExtrato) {
             const blocosSulAmerica = textoNormalizado.split(/Nome\s*:/i);
             if (blocosSulAmerica.length > 0) blocosSulAmerica.shift();
             parseSulAmericaExtrato(blocosSulAmerica);
@@ -2600,6 +3514,9 @@ export default function App() {
                         currentMaxVendaCodigo++;
                         let codRegistro = String(currentMaxVendaCodigo).padStart(5, '0');
                         let nomeCliente = data.cliente.trim().toUpperCase();
+                        const empresaRegistro = isAmilExtrato ? empresaAmil : empresaContexto;
+                        const empresaRegistroUpper = isAmilExtrato ? empresaAmilUpper : empresaContextoUpper;
+                        const dataMovimentoDetectada = formatDateForInput(data.data) || (isAmilExtrato ? (dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date)) : dataDeHojeInterna());
 
                         if(!nomesClientesExistem.has(nomeCliente.toLowerCase())) {
                             nomesClientesExistem.add(nomeCliente.toLowerCase());
@@ -2615,7 +3532,7 @@ export default function App() {
                                 email: '', 
                                 situacao: true,
                                 operadora: extratoOperadora,
-                                empresa: empresaContexto
+                                empresa: empresaRegistro
                             });
                         } else {
                             let existingCli = clientes.find(c => c.nome.toLowerCase() === nomeCliente.toLowerCase());
@@ -2627,7 +3544,7 @@ export default function App() {
                         }
 
                         let vendedorDetectado = nomeEmpresa; 
-                        let inicioVigenciaDetectada = data.inicioVigencia || "";
+                        let inicioVigenciaDetectada = formatDateForInput(data.inicioVigencia) || data.inicioVigencia || "";
                         const historicoVendasCliente = vendasList.filter(v => 
                             (v.cliente && v.cliente.toLowerCase() === nomeCliente.toLowerCase()) || 
                             (data.contrato && v.contrato === data.contrato)
@@ -2639,7 +3556,7 @@ export default function App() {
                             if (!inicioVigenciaDetectada && ultimaVenda.inicioVigencia) inicioVigenciaDetectada = ultimaVenda.inicioVigencia;
                         }
 
-                        let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataDeHojeInterna());
+                        let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataMovimentoDetectada);
                         let parcelaDetectada = data.parcela || calcParcela || "1";
 
                         novosRegistos.push({ 
@@ -2649,9 +3566,9 @@ export default function App() {
                             codigoOperadora: extratoOperadora, 
                             vidas: data.vidas || "1",
                             cliente: nomeCliente, 
-                            data: dataDeHojeInterna(), 
-                            situacao: `FATURADO ${empresaContextoUpper} NF`, 
-                            loja: empresaContextoUpper, 
+                            data: dataMovimentoDetectada, 
+                            situacao: `FATURADO ${empresaRegistroUpper} NF`, 
+                            loja: empresaRegistroUpper, 
                             valorTotal: data.valorTotal || 0, 
                             comissao: data.comissao || 0, 
                             vendedor: vendedorDetectado, 
@@ -2659,8 +3576,8 @@ export default function App() {
                             inicioVigencia: inicioVigenciaDetectada, 
                             notaFiscal: reportDoc?.notaFiscal || '', 
                             vitalicio: data.vitalicio !== undefined ? data.vitalicio : 'Sim', 
-                            assessoria: empresaContexto, 
-                            formaPagamento: 'Crédito em conta',
+                            assessoria: empresaRegistro, 
+                            formaPagamento: empresaRegistroUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
                             servico: data.servico || 'Saúde', 
                             desconto: '', 
                             selected: true
@@ -2672,6 +3589,108 @@ export default function App() {
 
             let isMatched = false;
             
+            // ASSIM - Novo Comissionamento Plano Empresa
+            if (!isMatched && (textoUpper.includes('NOVO COMISSIONAMENTO PLANO EMPRESA') || textoUpper.includes('PAGAMENTOS REFERENTES'))) {
+                const assimRegex = /(\d{3,})-([A-ZÀ-ÿ0-9 .&'ºª\/-]+?)\s*(\d{2}\/\d{4})\s+(\d{1,3})\s+([\d.]+,\d{2})\s+([\d.]+,\d{2})\s+(\d{2}\/\d{2}\/\d{2,4})\s+([\d.]+,\d{2})\s+([\d.]+,\d{2})\s+\d+/gi;
+                isMatched = processGenericRegex(assimRegex, textoNormalizado, match => ({
+                    contrato: match[1],
+                    cliente: match[2],
+                    parcela: String(parseInt(match[4], 10)),
+                    data: match[7],
+                    valorTotal: parseCurrencyValue(match[8]),
+                    comissao: parseCurrencyValue(match[9]),
+                    vitalicio: 'Sim',
+                    servico: 'Plano de Saúde'
+                }));
+            }
+
+            // Bradesco Saúde - Detalhes do Pagamento
+            if (!isMatched && textoUpper.includes('BRADESCO')) {
+                const bradescoModeloRegex = /(?:^|\s)100\s+(\d+)\s+(\d+)\s+([0-9A-Z\/.\-]+)\s+(\d+)\s+(\d+)\s+([\d,]+)\s+([A-ZÀ-ÿ][A-ZÀ-ÿ0-9 .&'\-]+?)\s+(\d{2})\s+(\d{1,3})\s+R\$\s*([\d.]+,\d{2})\s+R\$\s*([\d.]+,\d{2})/gi;
+                isMatched = processGenericRegex(bradescoModeloRegex, textoNormalizado, match => {
+                    const valorA = parseCurrencyValue(match[10]);
+                    const valorB = parseCurrencyValue(match[11]);
+                    return {
+                        contrato: match[3],
+                        cliente: match[7],
+                        parcela: match[9],
+                        valorTotal: Math.max(valorA, valorB),
+                        comissao: Math.min(valorA, valorB),
+                        vitalicio: 'Não',
+                        servico: 'Plano de Saúde'
+                    };
+                });
+            }
+
+            // ICATU - Extrato Analítico Individual
+            if (!isMatched && (textoUpper.includes('EXTRATO ANALÍTICO INDIVIDUAL') || textoUpper.includes('ESSENCIAL-CANAL CORRETOR') || textoUpper.includes('PAGAMENTO DE COMISSÃO DE CORRETAGEM') || textoUpper.includes('PAGAMENTO DE COMISSAO DE CORRETAGEM'))) {
+                let currentIcatuCliente = 'CLIENTE DESCONHECIDO';
+                const icatuClienteMatch = textoNormalizado.match(/Cliente\s+CPF\s+Total\s+de\s+Comiss[aã]o\s+(.+?)\s+(\d{11}|\d{3}\.\d{3}\.\d{3}-\d{2})\s+R\$\s*[\d.]+,\d{2}/i)
+                    || textoNormalizado.match(/Extrato\s+Anal[ií]tico\s+Individual.*?Cliente\s+CPF.*?([A-ZÀ-ÿ][A-ZÀ-ÿa-zà-ÿ ]{5,})\s+(\d{11}|\d{3}\.\d{3}\.\d{3}-\d{2})/i);
+                if (icatuClienteMatch) currentIcatuCliente = icatuClienteMatch[1].trim();
+
+                // Campos extraídos da linha ICATU:
+                // Cliente = cabeçalho do extrato; Proposta = 3º número após Apólice;
+                // Parcela = número após Proposta; Valor Base = Valor Total; Comissão = Comissão.
+                const icatuRegex = /Pagamento\s+de\s+Comiss[aã]o\s+de\s+Corretagem\s+(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{6,})\s+(\d{3,})\s+(\d{6,})\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+R\$?\s*([\d.]+,\d{2})\s+(\d+(?:[,.]\d+)?)\s+R\$?\s*([\d.]+,\d{2})/gi;
+                isMatched = processGenericRegex(icatuRegex, textoNormalizado, match => ({
+                    contrato: match[5], // Proposta
+                    cliente: currentIcatuCliente,
+                    parcela: match[6],
+                    data: match[2],
+                    inicioVigencia: match[7],
+                    valorTotal: parseCurrencyValue(match[8]), // Valor Base vira Valor Total
+                    comissao: parseCurrencyValue(match[10]),
+                    vitalicio: 'Não',
+                    servico: 'Seguro de Vida'
+                }));
+
+                // Fallback para quando o PDF.js remove ou quebra a expressão "Pagamento de Comissão de Corretagem".
+                if (!isMatched) {
+                    const icatuFallbackRegex = /(?:ESSENCIAL-CANAL\s+CORRETOR|[A-ZÀ-Ú0-9][A-ZÀ-Ú0-9\s\-/]{3,})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{6,})\s+(\d{3,})\s+(\d{6,})\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+R\$?\s*([\d.]+,\d{2})\s+(\d+(?:[,.]\d+)?)\s+R\$?\s*([\d.]+,\d{2})/gi;
+                    isMatched = processGenericRegex(icatuFallbackRegex, textoNormalizado, match => ({
+                        contrato: match[4], // Proposta
+                        cliente: currentIcatuCliente,
+                        parcela: match[5],
+                        data: match[1],
+                        inicioVigencia: match[6],
+                        valorTotal: parseCurrencyValue(match[7]), // Valor Base vira Valor Total
+                        comissao: parseCurrencyValue(match[9]),
+                        vitalicio: 'Não',
+                        servico: 'Seguro de Vida'
+                    }));
+                }
+            }
+
+            // OMINT - Comissão corporativa/coletivo
+            if (!isMatched && textoUpper.includes('OMINT')) {
+                const omintModeloRegex = /(?:COLETIVO|INDIVIDUAL|PESSOA FÍSICA|PESSOA FISICA)?\s*(\d{5,})\s+([A-ZÀ-ÿ0-9 .&'\-]+?)\s+([A-Z]\d{1,3})\s+([\d.]+,\d{2})\s+(VITAL[IÍ]CIO|ADES[AÃ]O|COLETIVO|PME|[A-ZÀ-ÿ ]+?)\s+[\d.,]+\s+.*?(\d{1,2}\/\d{4})\s+(\d{1,2}\/\d{4})\s+([\d.]+,\d{2})(?:\s+([\d.]+,\d{2}))?/gi;
+                isMatched = processGenericRegex(omintModeloRegex, textoNormalizado, match => ({
+                    contrato: match[1],
+                    cliente: match[2],
+                    parcela: '1',
+                    valorTotal: parseCurrencyValue(match[4]),
+                    comissao: parseCurrencyValue(match[9] || match[8]),
+                    vitalicio: /vital/i.test(match[5]) ? 'Sim' : 'Não',
+                    servico: 'Plano de Saúde'
+                }));
+            }
+
+            // SUPERMED - Recibo de Comissões em ordem visual alternativa
+            if (!isMatched && textoUpper.includes('SUPERMED')) {
+                const supermedModeloRegex = /COMISS[ÃA]O VALOR PARCELA:\s*R\$\s*([\d.]+,\d{2}).*?(\d{2}\/\d{2}\/\d{4})\s+Comiss[aã]o\s+C\s+([\d.]+,\d{2})\s+(\d+)\s+([A-ZÀ-ÿ ]+?)\s+SUPERMED\s*(?:\([^)]+\))?\s+(\d+)/gi;
+                isMatched = processGenericRegex(supermedModeloRegex, textoNormalizado, match => ({
+                    contrato: match[6],
+                    cliente: match[5],
+                    parcela: match[4],
+                    data: match[2],
+                    valorTotal: parseCurrencyValue(match[1]),
+                    comissao: parseCurrencyValue(match[3]),
+                    vitalicio: 'Não',
+                    servico: 'Plano de Saúde'
+                }));
+            }
+
             // Bradesco
             if (!isMatched && textoNormalizado.toLowerCase().includes('bradesco')) {
                 const bradescoRegex = /(\d+)\s+(\d+)\s+([0-9/a-zA-Z-]+)\s+(\d+)\s+(\d+)\s+([\d,]+(?:%|))\s+([a-zA-ZÀ-ÿ0-9 .&'-]+?)\s+(\d{2})\s+(\d{1,3})\s*(?:R\$)?\s*([\d.,]+)\s*(?:R\$)?\s*([\d.,]+)/gi;
@@ -2714,26 +3733,38 @@ export default function App() {
             }
             // Omint
             if (!isMatched && textoNormalizado.toUpperCase().includes('OMINT')) {
-                const omintRegex = /(\d{5,15})\s+([A-ZÀ-ÿ][A-Z0-9À-ÿ .&'-]+?)(?:\s+[A-Z0-9-]{2,10}\s+\d{1,5})?\s+(VITALICIO|ADESÃO|VITALÍCIO|ADESAO|COLETIVO|PME)\b(.*?)\s*(\d{1,2}\/\d{4})\s+(\d{1,2}\/\d{4})\s+([\d.,]+)\s+(\d+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/gi;
+                const omintRegex = /(\d{5,15})\s+(.*?)\s+(\d{1,2}\/\d{2,4})\s+(\d{1,2}\/\d{2,4})\s+([\d.,]+)\s+(\d+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/gi;
                 isMatched = processGenericRegex(omintRegex, textoNormalizado, match => {
-                    const groupStr = (match[3] + ' ' + match[4]).toLowerCase();
-                    const isVitalicio = groupStr.includes('vitalicio') || groupStr.includes('vitalício') ? 'Sim' : 'Não';
+                    const rawCliente = match[2];
+                    const isVitalicio = rawCliente.toLowerCase().includes('vitalicio') || rawCliente.toLowerCase().includes('vitalício') ? 'Sim' : 'Não';
+                    let clienteLimpo = rawCliente.replace(/\s+(C\d+|P\d+|PLANO).*$/i, '').replace(/\s+(VITALICIO|ADESÃO|VITALÍCIO|ADESAO|COLETIVO|PME).*$/i, '').trim();
+                    
                     return {
                         contrato: match[1], 
-                        cliente: match[2].trim(), 
-                        parcela: match[8], 
-                        valorTotal: parseFloat(match[7].replace(/\./g, '').replace(',', '.')), 
-                        comissao: parseFloat(match[11].replace(/\./g, '').replace(',', '.')),
+                        cliente: clienteLimpo, 
+                        parcela: '1', 
+                        valorTotal: parseFloat(match[5].replace(/\./g, '').replace(',', '.')), 
+                        comissao: parseFloat(match[9].replace(/\./g, '').replace(',', '.')),
                         vitalicio: isVitalicio
                     };
                 });
             }
             // Porto Seguro
-            if (!isMatched && textoNormalizado.includes('PORTO SEGURO')) {
-                const portoRegex = /(.*?)\s+Porto\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d{4}-\d{2}-\d{2})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+(\d+)-(.*)/g;
-                isMatched = processGenericRegex(portoRegex, textoNormalizado, match => ({
-                    contrato: match[4], cliente: match[1], parcela: match[6], valorTotal: parseFloat(match[9].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[11].replace(/\./g, '').replace(',', '.'))
-                }));
+            if (!isMatched && textoNormalizado.toUpperCase().includes('PORTO SEGURO')) {
+                const portoRegex = /([a-zA-ZÀ-ÿ0-9 :"'()&.-]+?)\s+(?:Porto\s+)?(\d{2,3})\s+(\d+)\s+([\d/]+)(?:\s+(\d+))?\s+(\d+)\s+(?:(\d+)\s+)?(\d{4}-\d{2}-\d{2})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+(\d{2,4})-(AGENCIAMENTO|COMISS[AÃ]O\s+FRACIONADA|COMISS[AÃ]O\s+TOTAL|VENDA\s+AVULSA\s+PORTO\s+VISA|ESTORNO|LANCAMENTO|RENOVACAO|CANCELAMENTO|ENDOSSO|COMISS[AÃ]O|[A-ZÀ-ÿ]+(?:\s+[A-ZÀ-ÿ]+){0,3}?)/gi;
+                isMatched = processGenericRegex(portoRegex, textoNormalizado, match => {
+                    let rawCliente = match[1].trim();
+                    rawCliente = rawCliente.replace(/^Agenciamento Sub:\s*/i, '').replace(/\s*Compet:$/i, '').trim();
+                    rawCliente = rawCliente.replace(/^(?:.*?(?:Tipo|Prêmio|Taxa|Comissão|Histórico|Marca|Suc|Ramo|Apl\/Prop|Fat\/Eds|Parc|Carne|Data|Ordem)\s+)+/i, '').trim();
+                    return {
+                        contrato: match[4], 
+                        cliente: rawCliente, 
+                        parcela: match[6], 
+                        valorTotal: parseFloat(match[9].replace(/\./g, '').replace(',', '.')), 
+                        comissao: parseFloat(match[11].replace(/\./g, '').replace(',', '.')),
+                        vitalicio: 'Não'
+                    };
+                });
             }
             // SulAmérica Tabular
             if (!isMatched && textoNormalizado.includes('SulAmérica Saúde Seguradora')) {
@@ -2742,15 +3773,20 @@ export default function App() {
                     contrato: match[2], cliente: match[3], parcela: match[6], valorTotal: parseFloat(match[7].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[9].replace(/\./g, '').replace(',', '.'))
                 }));
             }
-            // Supermed (Amil)
+            // Supermed
             if (!isMatched && textoNormalizado.includes('SUPERMED')) {
-                const supermedRegex = /SUPERMED\s*\(AMIL\)\s+(\d+)\s+([A-ZÀ-ÿ\s]+?)\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+Comissão[\s\S]*?R\$\s*([\d.,]+)[^(]*\([^)]+\)\s*([\d.,]+)\s*C/g;
+                const supermedRegex = /SUPERMED\s*(?:\([^)]+\))?\s+(\d+)\s+(.*?)\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+Comiss.o.*?R\$\s*([\d.,]+)(?:\s*\([^)]+\))?\s+([\d.,]+)\s*C/gi;
                 isMatched = processGenericRegex(supermedRegex, textoNormalizado, match => ({
-                    contrato: match[1], cliente: match[2], parcela: match[3], valorTotal: parseFloat(match[5].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[6].replace(/\./g, '').replace(',', '.'))
+                    contrato: match[1], 
+                    cliente: match[2].trim(), 
+                    parcela: match[3], 
+                    valorTotal: parseFloat(match[5].replace(/\./g, '').replace(',', '.')), 
+                    comissao: parseFloat(match[6].replace(/\./g, '').replace(',', '.')),
+                    vitalicio: 'Não'
                 }));
             }
             // Tokio Marine
-            if (!isMatched && textoNormalizado.includes('TOKIO MARINE')) {
+            if (!isMatched && isTokioExtrato) {
                 const tokioRegex = /([A-ZÀ-ÿ\s]+?)\s+(\d+)\s+([A-Z]+)\s+(\d+)\s+(\d+)\s+([A-Z ]+)\s+(\d+)\/(\d+)\s+R\$\s*([\d.,]+)\s+([\d.,]+)%\s+R\$\s*([\d.,]+)/g;
                 isMatched = processGenericRegex(tokioRegex, textoNormalizado, match => ({
                     contrato: match[4], cliente: match[1], parcela: match[7], valorTotal: parseFloat(match[9].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[11].replace(/\./g, '').replace(',', '.'))
@@ -2779,7 +3815,7 @@ export default function App() {
         }
         
         setPdfData(novosRegistos); 
-        showAlert("Extrato processado com sucesso! Nomes limpos e parcelas calculadas.");
+        showAlert(novosRegistos.length > 0 ? `Extrato processado com sucesso! ${novosRegistos.length} lançamento(s) extraído(s).` : "Nenhum lançamento foi extraído. Verifique se o modelo e os campos do extrato estão corretos.");
     };
 
     const toggleSelectAll = (e) => {
@@ -2914,28 +3950,17 @@ export default function App() {
                 }
             }
 
-            let alertasSequencia = [];
-            for (let r of dadosParaSalvar) {
-                const historicoVendasCliente = vendasList.filter(v => 
-                    (v.cliente && v.cliente.toLowerCase() === r.cliente.toLowerCase()) || 
-                    (r.contrato && v.contrato === r.contrato)
-                );
-                
-                let numeroEsperado = null;
-                if (historicoVendasCliente.length > 0) {
-                    const ultimaVenda = historicoVendasCliente.sort((a,b) => new Date(b.dataVenda) - new Date(a.dataVenda))[0];
-                    if (ultimaVenda.parcela) { 
-                        let numeroAtual = parseInt(ultimaVenda.parcela.toString().replace(/\D/g, '')); 
-                        if (!isNaN(numeroAtual)) {
-                            numeroEsperado = numeroAtual + 1;
-                        }
-                    }
-                }
-                let numCalculado = parseInt(r.parcela);
-                if (numeroEsperado !== null && !isNaN(numCalculado) && numCalculado > numeroEsperado) {
-                    alertasSequencia.push(`Cliente ${r.cliente}: Pulo detectado! Esperava parcela ${numeroEsperado}, inserida/calculada ${r.parcela}.`);
-                }
-            }
+            const relatorioSalvoLocal = { ...dataToSave, id: savedId };
+            const savedReportsAposSalvar = currentReportId
+                ? savedReportsList.map(rep => rep.id === currentReportId ? relatorioSalvoLocal : rep)
+                : [...savedReportsList, relatorioSalvoLocal];
+
+            // A varredura de inconsistências agora roda somente depois que o relatório foi salvo.
+            const inconsistenciasAposSalvar = rodarVarreduraInconsistencias(vendasList, savedReportsAposSalvar);
+            const chavesDoRelatorioSalvo = new Set(dadosParaSalvar.map(r => r.contrato || r.cliente).filter(Boolean));
+            const alertasSequencia = inconsistenciasAposSalvar
+                .filter(inc => chavesDoRelatorioSalvo.has(inc.id))
+                .map(inc => `Cliente ${inc.cliente}: Pulo detectado! Parcelas faltantes: ${inc.faltantes.join(', ')}.`);
 
             await loadFromDB();
             setLoading(false);
@@ -3772,7 +4797,7 @@ export default function App() {
                                             <button onClick={exportarVendasParaExcel} className="w-full text-left px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-600 dark:hover:text-emerald-400 text-slate-700 dark:text-slate-300 font-medium flex items-center transition-colors">
                                                 <FileOutput size={16} className="mr-2"/> Exportar para Excel
                                             </button>
-                                            <button onClick={() => { setCurrentView('inconsistencias'); setShowVendasAcoesMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:text-amber-600 dark:hover:text-amber-400 text-slate-700 dark:text-slate-300 font-medium flex items-center transition-colors border-t border-slate-100 dark:border-slate-700">
+                                            <button onClick={() => { rodarVarreduraInconsistencias(); setCurrentView('inconsistencias'); setShowVendasAcoesMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:text-amber-600 dark:hover:text-amber-400 text-slate-700 dark:text-slate-300 font-medium flex items-center transition-colors border-t border-slate-100 dark:border-slate-700">
                                                 <AlertTriangle size={16} className="mr-2"/> Painel de Inconsistências
                                             </button>
                                             <button onClick={reorganizarRegistosVendas} className="w-full text-left px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400 text-slate-700 dark:text-slate-300 font-medium flex items-center transition-colors border-t border-slate-100 dark:border-slate-700">
@@ -4719,6 +5744,9 @@ export default function App() {
                                             <option value="LEVE SAUDE">LEVE SAUDE</option>
                                             <option value="NOTRE DAME">NOTRE DAME</option>
                                             <option value="PREVENT">PREVENT</option>
+                                            <option value="ODONTOPREV">ODONTOPREV</option>
+                                            <option value="METLIFE">METLIFE</option>
+                                            <option value="PET LOVE">PET LOVE</option>
                                             <option value="QUALICORP">QUALICORP</option>
                                             <option value="SUPERMED">SUPERMED</option>
                                             <option value="MED SENIOR">MED SENIOR</option>
@@ -4729,9 +5757,12 @@ export default function App() {
                                             <option value="AZUL">AZUL</option>
                                             <option value="BRADESCO">BRADESCO</option>
                                             <option value="HDI">HDI</option>
+                                            <option value="CASSI PASI">CASSI PASI</option>
                                             <option value="ICATU">ICATU</option>
                                             <option value="MONGERAL">MONGERAL</option>
+                                            <option value="MAPFRE">MAPFRE</option>
                                             <option value="SULAMERICA">SULAMERICA</option>
+                                            <option value="TOKIO">TOKIO</option>
                                         </optgroup>
                                         <option value={importNfPdfForm.cliente}>Manter: {importNfPdfForm.cliente}</option>
                                     </select>
@@ -5624,9 +6655,9 @@ export default function App() {
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Ficheiros Anexos</label>
                                 <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 hover:border-blue-500 transition-colors">
-                                    <Layers size={24} className="text-slate-400 mb-2" /><p className="text-sm text-slate-500 dark:text-slate-300">Clique para anexar os extratos (PDF, Excel)</p>
+                                    <Layers size={24} className="text-slate-400 mb-2" /><p className="text-sm text-slate-500 dark:text-slate-300">Clique para anexar os extratos (PDF, Excel, TXT)</p>
                                 </div>
-                                <input type="file" ref={fileInputRef} onChange={(e)=>{ const newFiles = Array.from(e.target.files); if(newFiles.length>0){setFormData(prev=>({...prev, arquivos: [...prev.arquivos, ...newFiles]})); setFormError('');} if(fileInputRef.current) fileInputRef.current.value=""; }} className="hidden" multiple accept=".pdf,.csv,.xlsx,.xls" />
+                                <input type="file" ref={fileInputRef} onChange={(e)=>{ const newFiles = Array.from(e.target.files); if(newFiles.length>0){setFormData(prev=>({...prev, arquivos: [...prev.arquivos, ...newFiles]})); setFormError('');} if(fileInputRef.current) fileInputRef.current.value=""; }} className="hidden" multiple accept=".pdf,.txt,.csv,.xlsx,.xls" />
                                 {formData.arquivos.length > 0 && <div className="mt-2 space-y-2">{formData.arquivos.map((f, i) => <div key={i} className="bg-slate-50 dark:bg-slate-900 p-2 rounded border border-slate-200 dark:border-slate-700 flex justify-between items-center"><span className="text-xs text-slate-700 dark:text-slate-300 truncate">{f.name}</span><button type="button" onClick={() => setFormData(prev => ({...prev, arquivos: prev.arquivos.filter((_, idx) => idx !== i)}))} className="text-rose-500 dark:text-rose-400"><X size={14} /></button></div>)}</div>}
                             </div>
                             {formError && <p className="text-rose-500 dark:text-rose-400 text-sm font-medium">{formError}</p>}
@@ -6254,6 +7285,9 @@ export default function App() {
                                                 <option value="LEVE SAUDE">LEVE SAUDE</option>
                                                 <option value="NOTRE DAME">NOTRE DAME</option>
                                                 <option value="PREVENT">PREVENT</option>
+                                                <option value="ODONTOPREV">ODONTOPREV</option>
+                                                <option value="METLIFE">METLIFE</option>
+                                                <option value="PET LOVE">PET LOVE</option>
                                                 <option value="QUALICORP">QUALICORP</option>
                                                 <option value="SUPERMED">SUPERMED</option>
                                                 <option value="MED SENIOR">MED SENIOR</option>
@@ -6264,8 +7298,11 @@ export default function App() {
                                                 <option value="AZUL">AZUL</option>
                                                 <option value="BRADESCO">BRADESCO</option>
                                                 <option value="HDI">HDI</option>
+                                                <option value="CASSI PASI">CASSI PASI</option>
                                                 <option value="ICATU">ICATU</option>
                                                 <option value="MONGERAL">MONGERAL</option>
+                                                <option value="MAPFRE">MAPFRE</option>
+                                                <option value="TOKIO">TOKIO</option>
                                             </optgroup>
                                         </select>
                                     </div>
