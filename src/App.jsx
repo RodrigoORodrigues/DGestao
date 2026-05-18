@@ -2384,6 +2384,7 @@ export default function App() {
         const isHdiExtrato = operadoraNormalizada.includes('HDI') || (textoUpper.includes('TIPO CMS') && (textoUpper.includes('PRÊMIO') || textoUpper.includes('PREMIO')) && textoUpper.includes('VALOR (R$)'));
         const isPetLoveExtrato = operadoraNormalizada.includes('PETLOVE') || textoUpper.includes('PET LOVE') || textoUpper.includes('PETLOVE') || (textoUpper.includes('NOME DO TUTOR') && (textoUpper.includes('COMISSÃO PAGA') || textoUpper.includes('COMISSAO PAGA')));
         const isTokioExtrato = operadoraNormalizada.includes('TOKIO') || textoUpper.includes('TOKIO MARINE') || (textoUpper.includes('EXTRATO DO CORRETOR') && (textoUpper.includes('SEGURADO NEGÓCIO RAMO') || textoUpper.includes('SEGURADO NEGOCIO RAMO')) && (textoUpper.includes('APOLICE') || textoUpper.includes('APÓLICE')) && (textoUpper.includes('COMISSÃO (R$)') || textoUpper.includes('COMISSAO (R$)')));
+        const isIcatuExtrato = operadoraNormalizada.includes('ICATU') || textoUpper.includes('EXTRATO ANALÍTICO INDIVIDUAL') || textoUpper.includes('EXTRATO ANALITICO INDIVIDUAL') || textoUpper.includes('ESSENCIAL-CANAL CORRETOR') || textoUpper.includes('PAGAMENTO DE COMISSÃO DE CORRETAGEM') || textoUpper.includes('PAGAMENTO DE COMISSAO DE CORRETAGEM');
         const empresaSulAmerica = nomeEmpresa;
         const empresaSulAmericaUpper = nomeEmpresaUpper;
         const empresaAmil = nomeEmpresa;
@@ -2768,7 +2769,7 @@ export default function App() {
                     codigoOperadora: 'MONGERAL',
                     vitalicio: 'Não',
                     servico: /vida|life|sucess[aã]o|morte|acidental|term/i.test(String(produto)) ? 'Seguro de Vida' : 'Seguro',
-                    desconto: tipoLancamento || ''
+                    desconto: ''
                 });
                 if (inserted) count++;
             });
@@ -3001,7 +3002,7 @@ export default function App() {
                     codigoOperadora: 'ODONTOPREV',
                     vitalicio: 'Não',
                     servico: 'Plano Dental',
-                    desconto: `Contrato ${contratoOdonto} / Ramo ${ramo} / Endosso ${endosso} / Item ${item} / Comissão ${match[8]}%`
+                    desconto: ''
                 });
                 if (inserted) count++;
             }
@@ -3039,7 +3040,7 @@ export default function App() {
                     codigoOperadora: 'SUHAI',
                     vitalicio: 'Não',
                     servico: 'Seguro',
-                    desconto: `Endosso ${match[3]} / ${String(match[6] || '').trim()} / Comissão ${match[5]}%`
+                    desconto: ''
                 });
                 if (inserted) count++;
             }
@@ -3096,7 +3097,7 @@ export default function App() {
                         codigoOperadora: 'ALLIANZ',
                         vitalicio: 'Não',
                         servico: 'Seguro',
-                        desconto: `Ramo ${ramo} / Apólice ${apolice} / Endosso ${endosso} / Antecipada ${antecipada}`
+                        desconto: ''
                     });
                     if (inserted) count++;
                 }
@@ -3196,7 +3197,7 @@ export default function App() {
                     codigoOperadora: 'TOKIO',
                     vitalicio: 'Não',
                     servico: servicoTokio,
-                    desconto: `Negócio ${negocio} / Ramo ${ramo} / Endosso ${endosso} / ${tipo} / Parcela ${parcelaAtual}/${totalParcelas} / Comissão ${percentual}%`
+                    desconto: ''
                 });
                 if (inserted) count++;
             }
@@ -3469,7 +3470,59 @@ export default function App() {
             }
         };
 
-        if (isMetlifeExtrato && processMetlifeExtrato()) {
+
+        const processIcatuExtrato = () => {
+            const icatuClienteMatch = textoNormalizado.match(/Cliente\s+CPF\s+Total\s+de\s+Comiss[aã]o\s+(.+?)\s+(\d{11}|\d{3}\.\d{3}\.\d{3}-\d{2})\s+R\$\s*[\d.]+,\d{2}/i)
+                || textoNormalizado.match(/Extrato\s+Anal[ií]tico\s+Individual.*?Cliente\s+CPF.*?([A-ZÀ-ÿ][A-ZÀ-ÿa-zà-ÿ ]{5,})\s+(\d{11}|\d{3}\.\d{3}\.\d{3}-\d{2})/i);
+            const clienteIcatu = icatuClienteMatch ? cleanExtractedName(icatuClienteMatch[1]) : '';
+            if (!clienteIcatu) return false;
+
+            const pushIcatuMatch = (match, offset = 0) => pushRegistroExtraido({
+                contrato: match[5 - offset], // Proposta
+                cliente: clienteIcatu,
+                parcela: match[6 - offset],
+                data: match[2 - offset], // Data de pagamento
+                inicioVigencia: match[7 - offset], // Vencimento
+                valorTotal: parseCurrencyValue(match[8 - offset]), // Valor Base vira Valor Total
+                comissao: parseCurrencyValue(match[10 - offset]),
+                codigoOperadora: 'ICATU',
+                vitalicio: 'Não',
+                servico: 'Seguro de Vida',
+                desconto: ''
+            });
+
+            let count = 0;
+            const icatuRegex = /Pagamento\s+de\s+Comiss[aã]o\s+de\s+Corretagem\s+(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{6,})\s+(\d{3,})\s+(\d{6,})\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})(?:\s+\d{2}\/\d{2}\/\d{4})?\s+R?\$?\s*([\d.]+,\d{2})\s+(\d+(?:[,.]\d+)?)%?\s+R?\$?\s*([\d.]+,\d{2})/gi;
+            let match;
+            while ((match = icatuRegex.exec(textoNormalizado)) !== null) {
+                if (pushIcatuMatch(match, 0)) count++;
+            }
+
+            if (count === 0) {
+                const icatuFallbackRegex = /(?:ESSENCIAL-CANAL\s+CORRETOR|[A-ZÀ-Ú0-9][A-ZÀ-Ú0-9\s\-/]{3,})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{6,})\s+(\d{3,})\s+(\d{6,})\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})(?:\s+\d{2}\/\d{2}\/\d{4})?\s+R?\$?\s*([\d.]+,\d{2})\s+(\d+(?:[,.]\d+)?)%?\s+R?\$?\s*([\d.]+,\d{2})/gi;
+                while ((match = icatuFallbackRegex.exec(textoNormalizado)) !== null) {
+                    const inserted = pushRegistroExtraido({
+                        contrato: match[4], // Proposta
+                        cliente: clienteIcatu,
+                        parcela: match[5],
+                        data: match[1],
+                        inicioVigencia: match[6],
+                        valorTotal: parseCurrencyValue(match[7]),
+                        comissao: parseCurrencyValue(match[9]),
+                        codigoOperadora: 'ICATU',
+                        vitalicio: 'Não',
+                        servico: 'Seguro de Vida',
+                        desconto: ''
+                    });
+                    if (inserted) count++;
+                }
+            }
+            return count > 0;
+        };
+
+        if (isIcatuExtrato && processIcatuExtrato()) {
+            // ICATU: Cliente do cabeçalho; Proposta = contrato; Valor Base vira Valor Total; Comissão = Comissão.
+        } else if (isMetlifeExtrato && processMetlifeExtrato()) {
             // METLIFE: Cliente, Apólice, Parcela, Prêmio Líquido/Base de Cálculo e Comissão.
         } else if (isCassiPasiExtrato && processCassiPasiExtrato()) {
             // CASSI PASI: Cliente = Subestipulante, contrato = Apólice, valor total = Prêmio e comissão = Comissão.
