@@ -138,7 +138,7 @@ const printColLabels = {
     cliente: 'Cliente', data: 'Data', loja: 'Loja', servico: 'Serviço', 
     desconto: 'Desc.', corretor: 'Corretor', parc: 'Parc.', 
     inicioVig: 'Início Vig.', nfe: 'NF-e', vitalicio: 'Vitalício', 
-    pagamento: 'Pagamento', valorTotal: 'Valor Total', comissao: 'Comissão'
+    pagamento: 'Pagamento', valorTotal: 'Valor Total', comissaoPorcentagem: '%', comissao: 'Comissão'
 };
 const defaultPrintCols = Object.keys(printColLabels).reduce((acc, key) => ({ ...acc, [key]: true }), {});
 
@@ -371,7 +371,7 @@ export default function App() {
     const [inconsistenciasList, setInconsistenciasList] = useState([]);
 
     const vendasColLabels = {
-        numero: 'Registo', cliente: 'Cliente', dataVenda: 'Data', situacao: 'Situação', valor: 'Valor', comissao: 'Comissão',
+        numero: 'Registo', cliente: 'Cliente', dataVenda: 'Data', situacao: 'Situação', valor: 'Valor', comissaoPorcentagem: '%', comissao: 'Comissão',
         contrato: 'Contrato', codOperadora: 'Cód. Op.', codigoOperadora: 'Operadora', vidas: 'Vidas', loja: 'Loja',
         servico: 'Serviço', corretor: 'Corretor', parcela: 'Parcela', inicioVigencia: 'Início Vigência',
         notaFiscal: 'NF', vitalicio: 'Vitalício', assessoria: 'Assessoria', formaPagamento: 'Pagamento',
@@ -643,9 +643,57 @@ export default function App() {
                 setUsersList(filteredSubs);
             }
             if (resCli.data) setClientes(userFilters(resCli.data));
-            if (resVendas.data) setVendasList(userFilters(resVendas.data));
+            if (resVendas.data) {
+                let allVendas = resVendas.data;
+                const toUpdate = [];
+                allVendas = allVendas.map(v => {
+                    const c = parseFloat(v.comissao) || 0;
+                    const t = parseFloat(v.valor) || 0;
+                    if (t > 0 && c > 0 && (v.comissaoPorcentagem === null || v.comissaoPorcentagem === undefined || v.comissaoPorcentagem === '')) {
+                        const pct = String(Number(((c / t) * 100).toFixed(2)));
+                        v.comissaoPorcentagem = pct;
+                        toUpdate.push({ id: v.id, comissaoPorcentagem: pct });
+                    }
+                    return v;
+                });
+                
+                if (toUpdate.length > 0) {
+                    console.log(`Migrating ${toUpdate.length} vendas to set comissaoPorcentagem...`);
+                    Promise.all(toUpdate.map(upd => 
+                        safeSupabaseUpdate('vendas', { comissaoPorcentagem: upd.comissaoPorcentagem }, 'id', upd.id)
+                    )).catch(e => console.error('Erro migrando % comissao:', e));
+                }
+                
+                setVendasList(userFilters(allVendas));
+            }
             if (resSaved.data) {
                 const validReports = resSaved.data.filter(r => r.nome !== '___LOCAL_SYS_CONFIG___');
+                
+                const reportsToUpdate = [];
+                validReports.forEach(r => {
+                    let changed = false;
+                    if (Array.isArray(r.dados)) {
+                        r.dados = r.dados.map(dado => {
+                            const c = parseFloat(dado.comissao) || 0;
+                            const t = parseFloat(dado.valorTotal) || 0;
+                            if (t > 0 && c > 0 && (dado.comissaoPorcentagem === null || dado.comissaoPorcentagem === undefined || dado.comissaoPorcentagem === '')) {
+                                dado.comissaoPorcentagem = String(Number(((c / t) * 100).toFixed(2)));
+                                changed = true;
+                            }
+                            return dado;
+                        });
+                    }
+                    if (changed) {
+                        reportsToUpdate.push({ id: r.id, dados: r.dados });
+                    }
+                });
+
+                if (reportsToUpdate.length > 0) {
+                    Promise.all(reportsToUpdate.map(upd => 
+                        safeSupabaseUpdate('savedReports', { dados: upd.dados }, 'id', upd.id)
+                    )).catch(e => console.error('Erro migrando % comissao (reports):', e));
+                }
+                
                 const filtered = userFilters(validReports);
                 console.log("Loaded Saved Reports from Supabase:", validReports.length, "Filtered:", filtered.length, filtered);
                 setSavedReportsList(filtered);
@@ -1105,7 +1153,7 @@ export default function App() {
                         corretor: dado.vendedor || '', inicioVigencia: dado.inicioVigencia || '', notaFiscal: dado.notaFiscal || '',
                         contrato: dado.contrato || '', codigoOperadora: dado.codigoOperadora || 'AMIL', vidas: dado.vidas || '', 
                         vitalicio: dado.vitalicio || '', assessoria: dado.assessoria || nomeEmpresa, formaPagamento: dado.formaPagamento || (nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta'),
-                        servico: dado.servico || '', desconto: dado.desconto || '', notas: dado.notas || '', comissao: dado.comissao || 0
+                        servico: dado.servico || '', desconto: dado.desconto || '', notas: dado.notas || '', comissao: dado.comissao || 0, comissaoPorcentagem: dado.comissaoPorcentagem || ''
                     });
                 });
             }
@@ -1469,7 +1517,15 @@ export default function App() {
     const onChangeVendaField = (field, value) => {
         let newForm = { ...vendaForm, [field]: value };
         
-        if (['valor', 'comissaoPorcentagem', 'desconto'].includes(field)) {
+        if (field === 'comissao') {
+            const val = parseFloat(newForm.valor) || 0;
+            const com = parseFloat(value) || 0;
+            if (val > 0 && com > 0) {
+                newForm.comissaoPorcentagem = Number(((com / val) * 100).toFixed(2));
+            } else {
+                newForm.comissaoPorcentagem = '';
+            }
+        } else if (['valor', 'comissaoPorcentagem', 'desconto'].includes(field)) {
             const val = parseFloat(newForm.valor) || 0;
             const pct = parseFloat(newForm.comissaoPorcentagem);
             const desc = parseFloat(newForm.desconto) || 0;
@@ -3914,7 +3970,19 @@ export default function App() {
             }
         }
         
-        setPdfData(novosRegistos); 
+        const comissaoPreenchida = novosRegistos.map(r => {
+            let comissaoPorcentagem = '';
+            const t = parseFloat(r.valorTotal) || 0;
+            const c = parseFloat(r.comissao) || 0;
+            if (t > 0 && c > 0 && (!r.comissaoPorcentagem)) {
+                comissaoPorcentagem = Number(((c / t) * 100).toFixed(2));
+            } else if (r.comissaoPorcentagem) {
+                comissaoPorcentagem = r.comissaoPorcentagem;
+            }
+            return { ...r, comissaoPorcentagem };
+        });
+
+        setPdfData(comissaoPreenchida); 
         showAlert(novosRegistos.length > 0 ? `Extrato processado com sucesso! ${novosRegistos.length} lançamento(s) extraído(s).` : "Nenhum lançamento foi extraído. Verifique se o modelo e os campos do extrato estão corretos.");
     };
 
@@ -5269,6 +5337,11 @@ export default function App() {
                                                 Valor {getSortIcon('valor')}
                                             </th>
                                         )}
+                                        {vendasTableCols.comissaoPorcentagem && (
+                                            <th onClick={() => handleSortVendas('comissaoPorcentagem')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-sky-600 dark:text-sky-400 border-r border-slate-200 dark:border-slate-700 w-24 text-center">
+                                                % {getSortIcon('comissaoPorcentagem')}
+                                            </th>
+                                        )}
                                         {vendasTableCols.comissao && (
                                             <th onClick={() => handleSortVendas('comissao')} className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-sky-600 dark:text-sky-400 border-r border-slate-200 dark:border-slate-700 w-32 text-right">
                                                 Comissão {getSortIcon('comissao')}
@@ -5343,6 +5416,7 @@ export default function App() {
                                                 {vendasTableCols.corretor && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.corretor || '-'}</td>}
                                                 {vendasTableCols.situacao && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-center border-r border-slate-200 dark:border-slate-700"><span className={`${getSituacaoColor(venda.situacao)} px-3 py-1 rounded text-xs font-bold uppercase`}>{venda.situacao}</span></td>}
                                                 {vendasTableCols.valor && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-emerald-800 dark:text-emerald-200 font-medium text-right border-r border-slate-200 dark:border-slate-700">{formatarMoeda(venda.valor)}</td>}
+                                                {vendasTableCols.comissaoPorcentagem && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-sky-800 dark:text-sky-200 font-medium text-center border-r border-slate-200 dark:border-slate-700">{venda.comissaoPorcentagem ? `${venda.comissaoPorcentagem}%` : '-'}</td>}
                                                 {vendasTableCols.comissao && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-sky-800 dark:text-sky-200 font-medium text-right border-r border-slate-200 dark:border-slate-700">{formatarMoeda(venda.comissao)}</td>}
                                                 {vendasTableCols.parcela && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{venda.parcela || '-'}</td>}
                                                 {vendasTableCols.inicioVigencia && <td onClick={() => abrirModalVenda(venda)} className="cursor-pointer py-4 px-4 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700">{formatarDataVisivel(venda.inicioVigencia)}</td>}
@@ -5660,6 +5734,7 @@ export default function App() {
                                         {reportTableCols.vitalicio && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-purple-600 dark:text-purple-400">Vitalício</th>}
                                         {reportTableCols.pagamento && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-indigo-600 dark:text-indigo-400">Pagamento</th>}
                                         {reportTableCols.valorTotal && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-right text-emerald-600 dark:text-emerald-400">Valor total</th>}
+                                        {reportTableCols.comissaoPorcentagem && <th className="py-2 px-2 font-bold text-center text-sky-600 dark:text-sky-400">%</th>}
                                         {reportTableCols.comissao && <th className="py-2 px-2 font-bold text-right text-emerald-600 dark:text-emerald-400">Comissão</th>}
                                         <th className="py-2 px-2 font-bold text-center w-28">Ações</th>
                                     </tr>
@@ -5730,7 +5805,28 @@ export default function App() {
                                                             <option value=""></option><option>Crédito em conta</option><option>Dinheiro à vista</option>
                                                         </select>
                                                     </td>}
-                                                    {reportTableCols.valorTotal && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="number" step="0.01" value={editRowData.valorTotal} onChange={e=>setEditRowData({...editRowData, valorTotal: e.target.value})} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500 text-right w-16" /></td>}
+                                                    {reportTableCols.valorTotal && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="number" step="0.01" value={editRowData.valorTotal} onChange={e=>{
+                                                        const newVal = e.target.value;
+                                                        const t = parseFloat(newVal) || 0;
+                                                        const c = parseFloat(editRowData.comissao) || 0;
+                                                        let newPct = editRowData.comissaoPorcentagem;
+                                                        if (t > 0 && c > 0) {
+                                                            newPct = Number(((c / t) * 100).toFixed(2));
+                                                        } else {
+                                                            newPct = '';
+                                                        }
+                                                        setEditRowData({...editRowData, valorTotal: newVal, comissaoPorcentagem: newPct});
+                                                    }} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500 text-right w-16" /></td>}
+                                                    {reportTableCols.comissaoPorcentagem && <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700"><input type="number" step="0.01" value={editRowData.comissaoPorcentagem || ''} onChange={e=>{
+                                                        const rawVal = e.target.value;
+                                                        const pct = parseFloat(rawVal);
+                                                        const t = parseFloat(editRowData.valorTotal) || 0;
+                                                        let newComissao = editRowData.comissao;
+                                                        if (!isNaN(pct) && t > 0) {
+                                                            newComissao = Number((t * (pct / 100)).toFixed(2));
+                                                        }
+                                                        setEditRowData({...editRowData, comissaoPorcentagem: rawVal, comissao: newComissao});
+                                                    }} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-sky-500 text-center w-12" placeholder="%"/></td>}
                                                     {reportTableCols.comissao && <td className="py-1 px-1">
                                                         <input type="number" step="0.01" value={editRowData.comissao} onChange={e => {
                                                             const rawVal = e.target.value;
@@ -5747,7 +5843,14 @@ export default function App() {
                                                                 descValue = parseFloat(rawDesconto.replace(',', '.')) || 0;
                                                                 newBase = numVal + descValue;
                                                             }
-                                                            setEditRowData({...editRowData, comissao: rawVal, comissaoBase: newBase});
+                                                            let newPct = editRowData.comissaoPorcentagem;
+                                                            const t = parseFloat(editRowData.valorTotal) || 0;
+                                                            if (t > 0 && numVal > 0) {
+                                                                newPct = Number(((numVal / t) * 100).toFixed(2));
+                                                            } else {
+                                                                newPct = '';
+                                                            }
+                                                            setEditRowData({...editRowData, comissao: rawVal, comissaoBase: newBase, comissaoPorcentagem: newPct});
                                                         }} className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-sky-500 text-right w-16" />
                                                     </td>}
                                                     <td className="py-1 px-1 text-center no-print">
@@ -5778,6 +5881,7 @@ export default function App() {
                                                     {reportTableCols.vitalicio && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[11px]">{linha.vitalicio || '-'}</td>}
                                                     {reportTableCols.pagamento && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[11px]">{linha.formaPagamento || '-'}</td>}
                                                     {reportTableCols.valorTotal && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-right font-medium text-slate-700 dark:text-slate-300 text-xs">{formatarMoeda(linha.valorTotal)}</td>}
+                                                    {reportTableCols.comissaoPorcentagem && <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-sky-600 dark:text-sky-400 text-[11px]">{linha.comissaoPorcentagem ? `${linha.comissaoPorcentagem}%` : '-'}</td>}
                                                     {reportTableCols.comissao && <td className="py-1 px-2 text-right font-bold text-sky-600 dark:text-sky-400 text-xs">{formatarMoeda(linha.comissao)}</td>}
                                                     <td className="py-1 px-1 text-center no-print">
                                                         <div className="flex gap-1 justify-center">
@@ -5797,6 +5901,7 @@ export default function App() {
                                         <tr className="bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-white border-t-2 border-slate-300 dark:border-slate-600 transition-colors duration-200">
                                             <td colSpan={['cod', 'contrato', 'op', 'vidas', 'cliente', 'data', 'loja', 'servico', 'desconto', 'corretor', 'parc', 'inicioVig', 'nfe', 'vitalicio', 'assessoria', 'pagamento'].filter(k => reportTableCols[k]).length + 1} className="py-3 px-4 font-bold text-right">TOTAIS APURADOS (Selecionados)</td>
                                             {reportTableCols.valorTotal && <td className="py-3 px-2 text-right font-bold text-emerald-600 dark:text-emerald-400 text-lg">{formatarMoeda(pdfData.filter(r => r.selected).reduce((acc, l)=>acc+(Number(l.valorTotal)||0), 0))}</td>}
+                                            {reportTableCols.comissaoPorcentagem && <td></td>}
                                             {reportTableCols.comissao && <td className="py-3 px-2 text-right font-bold text-sky-600 dark:text-sky-400 text-lg">{formatarMoeda(pdfData.filter(r => r.selected).reduce((acc, l)=>acc+(Number(l.comissao)||0), 0))}</td>}
                                             <td></td>
                                         </tr>
@@ -7603,7 +7708,7 @@ export default function App() {
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Comissão (R$)</label>
-                                        <input type="number" step="0.01" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.comissao} onChange={e => setVendaForm({...vendaForm, comissao: parseFloat(e.target.value) || 0})} placeholder="0.00" />
+                                        <input type="number" step="0.01" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" value={vendaForm.comissao} onChange={e => onChangeVendaField('comissao', e.target.value)} placeholder="0.00" />
                                     </div>
 
                                     <div>

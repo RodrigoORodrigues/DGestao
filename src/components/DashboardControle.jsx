@@ -14,6 +14,7 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [selectedEntity, setSelectedEntity] = useState(`TOTAL ${nomeEmpresaUpper}`);
     const [selectedOperatorMonth, setSelectedOperatorMonth] = useState('Todos');
+    const [calculoTipo, setCalculoTipo] = useState('valor');
     const reportRef = useRef();
 
     const BASE_COLORS = [
@@ -42,7 +43,7 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
             const dateObj = new Date(dateStr);
             if (dateObj.getFullYear() !== selectedYear) return;
             const monthObj = dateObj.getMonth();
-            let val = v.valor;
+            let val = calculoTipo === 'comissao' ? v.comissao : v.valor;
             if (typeof val === 'string') {
                 val = parseFloat(val.replace(/\./g, '').replace(',', '.')) || 0;
             } else {
@@ -174,6 +175,10 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
                 <div className="flex items-center gap-3">
                     <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="bg-blue-50 text-blue-800 border-none font-bold rounded-lg px-4 py-2 outline-none">
                         {[2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    <select value={calculoTipo} onChange={(e) => setCalculoTipo(e.target.value)} className="bg-emerald-50 text-emerald-800 border-none font-bold rounded-lg px-4 py-2 outline-none">
+                        <option value="valor">Valor das Parcelas Base</option>
+                        <option value="comissao">Comissões</option>
                     </select>
                 </div>
                 
