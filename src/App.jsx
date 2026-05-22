@@ -1212,14 +1212,17 @@ export default function App() {
                     if (monthsDiff > 0) startParcel = 1 + monthsDiff;
                 }
             } else if (!param.inicioVigencia) {
-                let maxBefore2026 = 0;
+                let minData = null;
+                let firstParcel = 1;
                 Object.keys(param.parcelasData).forEach(p => {
-                    if (param.parcelasData[p] && param.parcelasData[p] < dataLimite) {
-                        const num = parseInt(p, 10);
-                        if (num > maxBefore2026) maxBefore2026 = num;
+                    const num = parseInt(p, 10);
+                    const dataObj = param.parcelasData[p];
+                    if (dataObj && (!minData || dataObj < minData)) {
+                        minData = dataObj;
+                        firstParcel = num;
                     }
                 });
-                if (maxBefore2026 > 0) startParcel = maxBefore2026 + 1;
+                if (minData) startParcel = firstParcel;
             }
 
             const max = uniqueParcelas[uniqueParcelas.length - 1];
@@ -2661,6 +2664,17 @@ export default function App() {
             }
 
             let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataMovimentoIso || dataMovimentoDetectada);
+            if (!calcParcela && !inicioVigenciaDetectada && historicoVendasCliente && historicoVendasCliente.length > 0) {
+                const primeiraVenda = historicoVendasCliente.sort((a,b) => new Date(a.dataVenda) - new Date(b.dataVenda))[0];
+                if (primeiraVenda && primeiraVenda.dataVenda) {
+                    let diff = calcularParcelaDaVigencia(primeiraVenda.dataVenda, dataMovimentoIso || dataMovimentoDetectada);
+                    let diffNum = parseInt(diff, 10);
+                    let baseParcela = parseInt(primeiraVenda.parcela || "1", 10);
+                    if (!isNaN(diffNum) && !isNaN(baseParcela)) {
+                        calcParcela = String(Math.max(1, baseParcela + (diffNum - 1)));
+                    }
+                }
+            }
             let parcelaDetectada = data.parcela || calcParcela || "1";
 
             novosRegistos.push({ 
@@ -3307,6 +3321,17 @@ export default function App() {
                         }
 
                         let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataMovimentoDetectada);
+                        if (!calcParcela && !inicioVigenciaDetectada && historicoVendasCliente && historicoVendasCliente.length > 0) {
+                            const primeiraVenda = historicoVendasCliente.sort((a,b) => new Date(a.dataVenda) - new Date(b.dataVenda))[0];
+                            if (primeiraVenda && primeiraVenda.dataVenda) {
+                                let diff = calcularParcelaDaVigencia(primeiraVenda.dataVenda, dataMovimentoDetectada);
+                                let diffNum = parseInt(diff, 10);
+                                let baseParcela = parseInt(primeiraVenda.parcela || "1", 10);
+                                if (!isNaN(diffNum) && !isNaN(baseParcela)) {
+                                    calcParcela = String(Math.max(1, baseParcela + (diffNum - 1)));
+                                }
+                            }
+                        }
                         if (calcParcela) {
                             parcelaDetectada = calcParcela;
                         }
@@ -3436,6 +3461,17 @@ export default function App() {
                         }
 
                         let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataPagamentoDetectada || dataDeHojeInterna());
+                        if (!calcParcela && !inicioVigenciaDetectada && historicoVendasCliente && historicoVendasCliente.length > 0) {
+                            const primeiraVenda = historicoVendasCliente.sort((a,b) => new Date(a.dataVenda) - new Date(b.dataVenda))[0];
+                            if (primeiraVenda && primeiraVenda.dataVenda) {
+                                let diff = calcularParcelaDaVigencia(primeiraVenda.dataVenda, dataPagamentoDetectada || dataDeHojeInterna());
+                                let diffNum = parseInt(diff, 10);
+                                let baseParcela = parseInt(primeiraVenda.parcela || "1", 10);
+                                if (!isNaN(diffNum) && !isNaN(baseParcela)) {
+                                    calcParcela = String(Math.max(1, baseParcela + (diffNum - 1)));
+                                }
+                            }
+                        }
                         if (calcParcela) {
                             parcelaDetectada = calcParcela;
                         }
@@ -3610,6 +3646,17 @@ export default function App() {
                         }
 
                         let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataMovimentoDetectada);
+                        if (!calcParcela && !inicioVigenciaDetectada && historicoVendasCliente && historicoVendasCliente.length > 0) {
+                            const primeiraVenda = historicoVendasCliente.sort((a,b) => new Date(a.dataVenda) - new Date(b.dataVenda))[0];
+                            if (primeiraVenda && primeiraVenda.dataVenda) {
+                                let diff = calcularParcelaDaVigencia(primeiraVenda.dataVenda, dataMovimentoDetectada);
+                                let diffNum = parseInt(diff, 10);
+                                let baseParcela = parseInt(primeiraVenda.parcela || "1", 10);
+                                if (!isNaN(diffNum) && !isNaN(baseParcela)) {
+                                    calcParcela = String(Math.max(1, baseParcela + (diffNum - 1)));
+                                }
+                            }
+                        }
                         let parcelaDetectada = data.parcela || calcParcela || "1";
 
                         novosRegistos.push({ 
