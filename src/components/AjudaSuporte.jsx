@@ -47,7 +47,7 @@ const BOT_KNOWLEDGE = [
 ];
 
 const AjudaSuporte = () => {
-    const [msgs, setMsgs] = useState([{ user: false, text: "Olá! Sou o assistente de ajuda do Don Gestão. Pode perguntar algo básico como 'como emitir nota fiscal?' ou 'como trocar a senha?'" }]);
+    const [msgs, setMsgs] = useState([{ user: false, text: "Olá! Sou o Don, assistente virtual do Don Gestão. Pode perguntar algo básico como 'como emitir nota fiscal?' ou 'como trocar a senha?'" }]);
     const [input, setInput] = useState("");
     const [openFaq, setOpenFaq] = useState(null);
     const chatEndRef = useRef(null);
@@ -148,7 +148,7 @@ const AjudaSuporte = () => {
                                 <Bot size={20} />
                             </div>
                             <div>
-                                <h3 className="font-bold text-slate-800 dark:text-white leading-tight">Assistente Virtual</h3>
+                                <h3 className="font-bold text-slate-800 dark:text-white leading-tight">Don Assistente Virtual</h3>
                                 <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center mt-0.5 uppercase tracking-wide">
                                     <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1.5 animate-pulse"></span> Online
                                 </p>
