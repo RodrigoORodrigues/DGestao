@@ -117,6 +117,8 @@ import Sidebar from './components/Sidebar';
 import DashboardControle from './components/DashboardControle';
 import EmpresasGestao from './components/EmpresasGestao';
 import AjudaSuporte from './components/AjudaSuporte';
+import AceiteTermosLGPD from './components/AceiteTermosLGPD';
+import TermosLGPDGestao from './components/TermosLGPDGestao';
 
 // Ícones importados diretamente do pacote npm que instalámos
 import { 
@@ -168,6 +170,7 @@ export default function App() {
     const [loginError, setLoginError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [showUserPassword, setShowUserPassword] = useState(false);
+    const [pendingTermsUser, setPendingTermsUser] = useState(null);
 
     const [alertDialog, setAlertDialog] = useState({ isOpen: false, message: '' });
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null });
@@ -995,6 +998,48 @@ export default function App() {
         setClientesCurrentPage(1);
     }, [filtroNomeCliente, filtrosCli]);
 
+    const applyLoginSession = (sessionUser) => {
+        setCurrentUser(sessionUser); 
+        if (loginData.rememberMe) {
+            localStorage.setItem('protetta_auth_user', JSON.stringify(sessionUser));
+        } else {
+            sessionStorage.setItem('protetta_auth_user', JSON.stringify(sessionUser));
+        }
+        setLoginError(''); setLoginData({ user: '', password: '', rememberMe: false }); setShowPassword(false);
+        
+        if (sessionUser.role !== 'admin' && sessionUser.role !== 'master' && !sessionUser.permissions.includes('dashboard')) {
+            if (sessionUser.permissions.length > 0) setCurrentView(sessionUser.permissions[0]);
+        } else { setCurrentView('dashboard'); }
+    };
+
+    const performTermsCheckAndLogin = async (sessionUser, dbUser = null) => {
+        try {
+            const { data: actTerms } = await supabase.from('lgpd_terms_versions').select('id, version').eq('status', 'active').limit(1);
+            if (actTerms && actTerms.length > 0) {
+                const termId = actTerms[0].id;
+                
+                // For regular users, check dbUser.must_accept_terms if available
+                if (dbUser && dbUser.must_accept_terms === true) {
+                    setPendingTermsUser(sessionUser);
+                    setLoading(false);
+                    return;
+                }
+                
+                // Verify explicitly if they accepted this active term in DB
+                const { data: accs } = await supabase.from('lgpd_acceptances').select('id').eq('term_version_id', termId).eq('username', sessionUser.username).limit(1);
+                if (!accs || accs.length === 0) {
+                    setPendingTermsUser(sessionUser);
+                    setLoading(false);
+                    return;
+                }
+            }
+        } catch(e) {
+            console.error("Erro validando termos. Ignorando para fallback...", e);
+        }
+        applyLoginSession(sessionUser);
+        setLoading(false);
+    };
+
     const handleLogin = async (e) => {
         e.preventDefault(); setLoading(true); setLoadingMsg("Autenticando...");
         try {
@@ -1003,15 +1048,7 @@ export default function App() {
             // Master login fallback
             if (loginData.user === 'Donfim' && loginData.password === '121418') {
                 const sessionUser = { id: 99999, username: 'Donfim', role: 'master', permissions: SYSTEM_MODULES ? SYSTEM_MODULES.map(m => m.id) : [], empresa: 'Todas' };
-                setCurrentUser(sessionUser); 
-                if (loginData.rememberMe) {
-                    localStorage.setItem('protetta_auth_user', JSON.stringify(sessionUser));
-                } else {
-                    sessionStorage.setItem('protetta_auth_user', JSON.stringify(sessionUser));
-                }
-                setLoginError(''); setLoginData({ user: '', password: '', rememberMe: false }); setShowPassword(false);
-                setCurrentView('dashboard');
-                setLoading(false);
+                await performTermsCheckAndLogin(sessionUser);
                 return;
             }
 
@@ -1019,37 +1056,26 @@ export default function App() {
             if (loginData.user === 'admin' && loginData.password === 'admin') {
                 if (error) console.error("Supabase Error (falling back to local admin):", error);
                 const sessionUser = { id: 1, username: 'admin', role: 'admin', permissions: SYSTEM_MODULES ? SYSTEM_MODULES.map(m => m.id) : [] };
-                setCurrentUser(sessionUser); 
-                if (loginData.rememberMe) {
-                    localStorage.setItem('protetta_auth_user', JSON.stringify(sessionUser));
-                } else {
-                    sessionStorage.setItem('protetta_auth_user', JSON.stringify(sessionUser));
-                }
-                setLoginError(''); setLoginData({ user: '', password: '', rememberMe: false }); setShowPassword(false);
-                setCurrentView('dashboard');
-                setLoading(false);
+                await performTermsCheckAndLogin(sessionUser);
                 return;
             }
 
             if (error) {
                 console.error("Supabase Error:", error);
                 setLoginError('Erro DB: ' + error.message);
+                setLoading(false);
             } else if (users && users.length > 0 && users[0].password === loginData.password) {
                 const user = users[0];
-                const sessionUser = { id: user.id, username: user.username, role: user.role, permissions: user.permissions || [] };
-                setCurrentUser(sessionUser); 
-                if (loginData.rememberMe) {
-                    localStorage.setItem('protetta_auth_user', JSON.stringify(sessionUser));
-                } else {
-                    sessionStorage.setItem('protetta_auth_user', JSON.stringify(sessionUser));
-                }
-                setLoginError(''); setLoginData({ user: '', password: '', rememberMe: false }); setShowPassword(false);
-                
-                if (user.role !== 'admin' && !user.permissions.includes('dashboard')) {
-                    if (user.permissions.length > 0) setCurrentView(user.permissions[0]);
-                } else { setCurrentView('dashboard'); }
-            } else { setLoginError('Credenciais inválidas.'); }
-        } catch(err) { setLoginError('Erro de conexão: ' + err.message); } finally { setLoading(false); }
+                const sessionUser = { id: user.id, username: user.username, role: user.role, permissions: user.permissions || [], empresa: user.empresa };
+                await performTermsCheckAndLogin(sessionUser, user);
+            } else { 
+                setLoginError('Credenciais inválidas.'); 
+                setLoading(false);
+            }
+        } catch(err) { 
+            setLoginError('Erro de conexão: ' + err.message); 
+            setLoading(false); 
+        }
     };
 
     const handleLogout = () => {
@@ -4625,6 +4651,23 @@ export default function App() {
         );
     }
 
+    if (pendingTermsUser) {
+        return (
+            <AceiteTermosLGPD 
+                user={pendingTermsUser}
+                onAccepted={(acceptanceData) => {
+                    setPendingTermsUser(null);
+                    applyLoginSession(pendingTermsUser);
+                }}
+                onDeclined={() => {
+                    setPendingTermsUser(null);
+                    setLoginError('');
+                    setLoginData({ user: '', password: '', rememberMe: false });
+                }}
+            />
+        );
+    }
+
     if (!currentUser) {
         return (
             <div className="flex h-screen w-screen items-center justify-center bg-slate-100 dark:bg-slate-900 transition-colors duration-200 p-4">
@@ -7887,6 +7930,10 @@ export default function App() {
 
                 {currentView === 'ajuda' && (
                     <AjudaSuporte />
+                )}
+
+                {currentView === 'lgpd' && hasAccess('lgpd') && (
+                    <TermosLGPDGestao currentUser={currentUser} />
                 )}
 
                 </main>

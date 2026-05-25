@@ -165,12 +165,13 @@ export default function Sidebar({ currentUser, currentView, setCurrentView, hasA
                 {hasAccess('gestor') && <SidebarItem collapsed={collapsed} icon={Plus} label="Incluir Extrato" active={currentView === 'gestor-add'} onClick={() => setCurrentView('gestor-add')} />}
                 {hasAccess('gestor') && <SidebarItem collapsed={collapsed} icon={FolderTree} label="Consultar Extratos" active={currentView === 'gestor-browse'} onClick={() => setCurrentView('gestor-browse')} />}
                 
-                {(hasAccess('settings') || hasAccess('usuarios') || hasAccess('empresas')) && <p className={`text-xs font-bold text-slate-400 dark:text-slate-500 uppercase pt-6 mb-2 truncate ${collapsed ? 'text-center' : ''}`}>
+                {(hasAccess('settings') || hasAccess('usuarios') || hasAccess('empresas') || hasAccess('lgpd')) && <p className={`text-xs font-bold text-slate-400 dark:text-slate-500 uppercase pt-6 mb-2 truncate ${collapsed ? 'text-center' : ''}`}>
                     {collapsed ? '...' : 'Sistema'}
                 </p>}
                 {hasAccess('empresas') && <SidebarItem collapsed={collapsed} icon={Building} label="Gestão de Empresas" active={currentView === 'empresas'} onClick={() => setCurrentView('empresas')} />}
                 {hasAccess('usuarios') && <SidebarItem collapsed={collapsed} icon={Shield} label="Controle de Acessos" active={currentView === 'usuarios'} onClick={() => setCurrentView('usuarios')} />}
                 {hasAccess('settings') && <SidebarItem collapsed={collapsed} icon={Settings} label="Configurações" active={currentView === 'settings'} onClick={() => setCurrentView('settings')} />}
+                {hasAccess('lgpd') && <SidebarItem collapsed={collapsed} icon={FileCheck} label="Termos e LGPD" active={currentView === 'lgpd'} onClick={() => setCurrentView('lgpd')} />}
                 <SidebarItem collapsed={collapsed} icon={HelpCircle} label="Ajuda e Suporte" active={currentView === 'ajuda'} onClick={() => setCurrentView('ajuda')} />
             </nav>
 

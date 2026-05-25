@@ -9,7 +9,8 @@ export const SYSTEM_MODULES = [
     { id: 'gestor', label: 'Gestor de Extratos (Arquivos Internos)' },
     { id: 'empresas', label: 'Gestão de Empresas' },
     { id: 'usuarios', label: 'Controle de Acessos e Permissões' },
-    { id: 'settings', label: 'Configurações do Sistema e Backups' }
+    { id: 'settings', label: 'Configurações do Sistema e Backups' },
+    { id: 'lgpd', label: 'Governança LGPD e Termos Aceitos' }
 ];
 
 export const EMPRESAS_INTERNAS = ["Protetta"];
@@ -138,4 +139,12 @@ export const validarCpfCnpj = (val) => {
     if (nums.length === 11) return validarCPF(nums);
     if (nums.length === 14) return validarCNPJ(nums);
     return false;
+};
+
+export const generateSHA256Hash = async (text) => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(text);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
