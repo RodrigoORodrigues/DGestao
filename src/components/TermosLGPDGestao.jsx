@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../config/supabase.js';
 import { generateSHA256Hash, formatarDataVisivel } from '../utils/helpers.js';
 import { Shield, FileText, Download, Users, CheckCircle, Search, Edit3, Plus, X, Eye } from 'lucide-react';
-import * as html2pdf from 'html2pdf.js';
+import html2pdf from 'html2pdf.js';
 
 const TermosLGPDGestao = ({ currentUser }) => {
     const [view, setView] = useState('list'); // 'list', 'new_version', 'view_acceptance'
@@ -47,7 +47,7 @@ const TermosLGPDGestao = ({ currentUser }) => {
                 setVersions(vers || []);
                 const nextV = (vers && vers.length > 0) ? (parseFloat(vers[0].version) + 0.1).toFixed(1) : '1.0';
                 setNewVersionCode(nextV);
-                setNewVersionTitle(vers && vers.length > 0 ? vers[0].title : 'Termos de Uso, Política de Privacidade e Consentimento LGPD - DonGestão');
+                setNewVersionTitle(vers && vers.length > 0 ? vers[0].title : 'Termos de Uso, Política de Privacidade e Consentimento LGPD - Don Gestão');
             }
         } catch (error) {
             console.error("Erro geral lgpd:", error);
@@ -290,7 +290,7 @@ const TermosLGPDGestao = ({ currentUser }) => {
                             <h1 className="text-2xl font-bold uppercase tracking-wider text-slate-900">Comprovante de Aceite</h1>
                             <p className="text-slate-500 mt-1">Termos de Uso, Política de Privacidade e Tratamento de Dados Pessoais (LGPD)</p>
                             <div className="mt-4 inline-block bg-slate-100 rounded-full px-4 py-1 text-xs font-mono font-bold text-slate-600 border border-slate-200">
-                                COMPROVANTE GERADO PELO SISTEMA DONGESTÃO
+                                COMPROVANTE GERADO PELO SISTEMA DON GESTÃO
                             </div>
                         </div>
 
@@ -319,7 +319,7 @@ const TermosLGPDGestao = ({ currentUser }) => {
                         </div>
 
                         <div className="text-center mt-12 pt-6 border-t font-mono border-slate-200">
-                            <p className="text-[10px] text-slate-400">Documento gerado automaticamente pelo sistema DonGestão para fins de auditoria, governança, segurança da informação e comprovação de aceite. ID interno: {selectedAcceptance.id}</p>
+                            <p className="text-[10px] text-slate-400">Documento gerado automaticamente pelo sistema Don Gestão para fins de auditoria, governança, segurança da informação e comprovação de aceite. ID interno: {selectedAcceptance.id}</p>
                         </div>
                     </div>
                     
