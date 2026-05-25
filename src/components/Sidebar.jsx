@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
     Home, ShoppingCart, Users, FileCheck, History, Receipt, 
     Plus, FolderTree, Shield, Settings, User, Moon, Sun, LogOut, Layers,
-    ChevronLeft, ChevronRight, GripVertical, Building
+    ChevronLeft, ChevronRight, GripVertical, Building, HelpCircle
 } from 'lucide-react';
 
 const SidebarItem = ({ icon: Icon, label, active, onClick, collapsed }) => (
@@ -171,6 +171,7 @@ export default function Sidebar({ currentUser, currentView, setCurrentView, hasA
                 {hasAccess('empresas') && <SidebarItem collapsed={collapsed} icon={Building} label="Gestão de Empresas" active={currentView === 'empresas'} onClick={() => setCurrentView('empresas')} />}
                 {hasAccess('usuarios') && <SidebarItem collapsed={collapsed} icon={Shield} label="Controle de Acessos" active={currentView === 'usuarios'} onClick={() => setCurrentView('usuarios')} />}
                 {hasAccess('settings') && <SidebarItem collapsed={collapsed} icon={Settings} label="Configurações" active={currentView === 'settings'} onClick={() => setCurrentView('settings')} />}
+                <SidebarItem collapsed={collapsed} icon={HelpCircle} label="Ajuda e Suporte" active={currentView === 'ajuda'} onClick={() => setCurrentView('ajuda')} />
             </nav>
 
             <div className={`mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 space-y-2 pb-4 ${collapsed ? 'px-2' : 'px-4'}`}>

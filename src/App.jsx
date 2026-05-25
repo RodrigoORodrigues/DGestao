@@ -116,6 +116,7 @@ import {
 import Sidebar from './components/Sidebar';
 import DashboardControle from './components/DashboardControle';
 import EmpresasGestao from './components/EmpresasGestao';
+import AjudaSuporte from './components/AjudaSuporte';
 
 // Ícones importados diretamente do pacote npm que instalámos
 import { 
@@ -7884,6 +7885,10 @@ export default function App() {
                     </div>
                 )}
 
+                {currentView === 'ajuda' && (
+                    <AjudaSuporte />
+                )}
+
                 </main>
 
                 {/* Footer fixo */}
@@ -7896,11 +7901,11 @@ export default function App() {
                         <span>copyright © 2026</span>
                     </p>
                     <div className="flex items-center gap-6">
-                        <a href="tel:#" className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Suporte por Telefone">
+                        <a href="https://wa.me/5521973987378" target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Suporte por WhatsApp">
                             <Phone size={16} className="text-blue-500" />
                             <span className="hidden sm:inline">Suporte</span>
                         </a>
-                        <a href="mailto:suporte@donfim.tech" className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Suporte por Email">
+                        <a href="mailto:donfim@gmail.com" className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Suporte por Email">
                             <Mail size={16} className="text-blue-500" />
                             <span className="hidden sm:inline">Email</span>
                         </a>
