@@ -486,6 +486,7 @@ export default function App() {
 
     const hasAccess = (module) => {
         if (!currentUser) return false;
+        if (module === 'lgpd') return currentUser.username === 'Donfim' || currentUser.role === 'master';
         if (currentUser.role === 'master') return true;
         if (module === 'empresas' && currentUser.empresa && currentUser.empresa !== 'Todas') return false;
         if (currentUser.role === 'admin') return true; 
