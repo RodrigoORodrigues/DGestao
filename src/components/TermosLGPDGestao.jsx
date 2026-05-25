@@ -86,7 +86,7 @@ const TermosLGPDGestao = ({ currentUser }) => {
             setView('list');
         } catch (error) {
             console.error("Erro ao criar versão:", error);
-            alert("Erro ao salvar a nova versão.");
+            alert("Erro ao salvar a nova versão: " + (error.message || JSON.stringify(error)));
         }
         setSavingVersion(false);
     };
