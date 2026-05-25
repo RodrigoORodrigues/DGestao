@@ -171,6 +171,42 @@ export default function App() {
     const [showPassword, setShowPassword] = useState(false);
     const [showUserPassword, setShowUserPassword] = useState(false);
     const [pendingTermsUser, setPendingTermsUser] = useState(null);
+    const [isSessionVerified, setIsSessionVerified] = useState(false);
+
+    useEffect(() => {
+        const verifySessionTerms = async () => {
+            if (!currentUser) {
+                setIsSessionVerified(true);
+                return;
+            }
+            try {
+                const { data: actTerms } = await supabase.from('lgpd_terms_versions').select('id, version').eq('status', 'active').limit(1);
+                if (actTerms && actTerms.length > 0) {
+                    const termId = actTerms[0].id;
+                    
+                    const { data: dbUser } = await supabase.from('users').select('must_accept_terms, id').eq('username', currentUser.username).limit(1);
+                    if (dbUser && dbUser.length > 0 && dbUser[0].must_accept_terms === true) {
+                        setPendingTermsUser(currentUser);
+                        setCurrentUser(null);
+                        setIsSessionVerified(true);
+                        return;
+                    }
+
+                    const { data: accs } = await supabase.from('lgpd_acceptances').select('id').eq('term_version_id', termId).eq('username', currentUser.username).limit(1);
+                    if (!accs || accs.length === 0) {
+                        setPendingTermsUser(currentUser);
+                        setCurrentUser(null);
+                        setIsSessionVerified(true);
+                        return;
+                    }
+                }
+            } catch(e) {
+                console.error("Erro verificando termos na sessao:", e);
+            }
+            setIsSessionVerified(true);
+        };
+        verifySessionTerms();
+    }, []);
 
     const [alertDialog, setAlertDialog] = useState({ isOpen: false, message: '' });
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null });
@@ -4666,6 +4702,14 @@ export default function App() {
                     setLoginData({ user: '', password: '', rememberMe: false });
                 }}
             />
+        );
+    }
+
+    if (!isSessionVerified && currentUser && !pendingTermsUser) {
+        return (
+            <div className="flex h-screen w-screen items-center justify-center bg-slate-100 dark:bg-slate-900">
+                <div className="animate-spin h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full"></div>
+            </div>
         );
     }
 
