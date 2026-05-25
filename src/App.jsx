@@ -5690,7 +5690,7 @@ export default function App() {
                         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm overflow-x-auto transition-colors duration-200 w-full">
                             <table className="w-full text-left border-collapse text-sm whitespace-nowrap">
                                 <thead>
-                                    <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750 text-slate-600 dark:text-slate-300 transition-colors duration-200">
+                                    <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750 text-slate-600 dark:text-slate-300 transition-colors duration-200 align-middle">
                                         <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center w-10">
                                             <input type="checkbox" checked={pdfData.length > 0 && pdfData.every(r => r.selected)} onChange={toggleSelectAll} className="w-4 h-4 accent-blue-500 rounded cursor-pointer" title="Marcar/Desmarcar Todos" />
                                         </th>
@@ -5699,29 +5699,33 @@ export default function App() {
                                         {reportTableCols.op && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400">Op. | Seg.</th>}
                                         {reportTableCols.vidas && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center text-indigo-600 dark:text-indigo-400">Vidas</th>}
                                         {reportTableCols.cliente && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700">Cliente</th>}
-                                        {reportTableCols.data && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center">Data
-                                            <div className="mt-1 font-normal flex flex-col items-center gap-1">
-                                                <input 
-                                                    type="date" 
-                                                    value={globalDateInput}
-                                                    onChange={e => setGlobalDateInput(e.target.value)}
-                                                    className="text-[10px] text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1 py-0.5 outline-none no-print w-full" 
-                                                />
-                                                <button 
-                                                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] px-2 py-0.5 rounded focus:outline-none transition-colors w-full"
-                                                    onClick={() => {
-                                                        if(!globalDateInput) return;
-                                                        showConfirm(`Deseja alterar a data de TODAS as linhas para ${globalDateInput.split('-').reverse().join('/')}?`, () => {
-                                                            setPdfData(prev => prev.map(l => {
-                                                                const calcParcela = calcularParcelaDaVigencia(l.inicioVigencia, globalDateInput);
-                                                                return { ...l, data: globalDateInput, parcela: calcParcela || l.parcela };
-                                                            }));
-                                                            setReportName(`Relatório ${globalDateInput.split('-').reverse().join('/')}`);
-                                                        });
-                                                    }}
-                                                >
-                                                    Inserir
-                                                </button>
+                                        {reportTableCols.data && <th className="py-2 px-2 border-r border-slate-200 dark:border-slate-700 text-center">
+                                            <div className="flex items-center gap-2 justify-center">
+                                                <span className="font-bold">Data</span>
+                                                <div className="flex items-center gap-1 font-normal">
+                                                    <input 
+                                                        type="date" 
+                                                        value={globalDateInput}
+                                                        onChange={e => setGlobalDateInput(e.target.value)}
+                                                        className="text-[10px] text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 outline-none no-print w-[90px]" 
+                                                    />
+                                                    <button 
+                                                        className="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] px-2 py-1 rounded focus:outline-none transition-colors"
+                                                        onClick={() => {
+                                                            if(!globalDateInput) return;
+                                                            showConfirm(`Deseja alterar a data de TODAS as linhas para ${globalDateInput.split('-').reverse().join('/')}?`, () => {
+                                                                setPdfData(prev => prev.map(l => {
+                                                                    const calcParcela = calcularParcelaDaVigencia(l.inicioVigencia, globalDateInput);
+                                                                    return { ...l, data: globalDateInput, parcela: calcParcela || l.parcela };
+                                                                }));
+                                                                setReportName(`Relatório ${globalDateInput.split('-').reverse().join('/')}`);
+                                                            });
+                                                        }}
+                                                        title="Preencher data nas linhas selecionadas"
+                                                    >
+                                                        OK
+                                                    </button>
+                                                </div>
                                             </div>
                                         </th>}
                                         {reportTableCols.loja && <th className="py-2 px-2 font-bold border-r border-slate-200 dark:border-slate-700 text-center">Loja</th>}
