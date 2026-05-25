@@ -181,6 +181,14 @@ export default function App() {
             }
             try {
                 const { data: actTerms } = await supabase.from('lgpd_terms_versions').select('id, version').eq('status', 'active').limit(1);
+                
+                if (!actTerms || actTerms.length === 0) {
+                    setPendingTermsUser(currentUser);
+                    setCurrentUser(null);
+                    setIsSessionVerified(true);
+                    return;
+                }
+
                 if (actTerms && actTerms.length > 0) {
                     const termId = actTerms[0].id;
                     
@@ -1052,6 +1060,12 @@ export default function App() {
     const performTermsCheckAndLogin = async (sessionUser, dbUser = null) => {
         try {
             const { data: actTerms } = await supabase.from('lgpd_terms_versions').select('id, version').eq('status', 'active').limit(1);
+            if (!actTerms || actTerms.length === 0) {
+                setPendingTermsUser(sessionUser);
+                setLoading(false);
+                return;
+            }
+            
             if (actTerms && actTerms.length > 0) {
                 const termId = actTerms[0].id;
                 
