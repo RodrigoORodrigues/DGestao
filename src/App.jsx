@@ -5820,7 +5820,7 @@ export default function App() {
                             </div>
                             <div className="flex flex-wrap gap-3 justify-start xl:justify-end w-full">
                                 <button onClick={() => setModalArquivosOpen(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 px-6 rounded-lg font-bold flex items-center shadow-lg transition-colors"> <Database size={18} className="mr-2"/> Buscar no Sistema</button>
-                                <button onClick={iniciarRelatorioManual} className="bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 px-6 rounded-lg font-bold flex items-center shadow-lg transition-colors"><FilePlus size={18} className="mr-2"/> Novo Documento (Manual)</button>
+                                <button onClick={iniciarRelatorioManual} className="bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 px-6 rounded-lg font-bold flex items-center shadow-lg transition-colors"><FilePlus size={18} className="mr-2"/> Novo Relatório</button>
                                 {pdfData.length > 0 && (
                                     <React.Fragment>
                                         <button onClick={() => setShowModalVendasRelatorio(true)} className="bg-purple-600 hover:bg-purple-500 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"><ShoppingCart size={18} className="mr-2"/> Incluir Vendas</button>
