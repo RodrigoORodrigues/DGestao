@@ -95,7 +95,8 @@ export async function syncGlobalSysConfigToDB(empresas, printPresets, customOpSe
             dados: { 
                 empresas: (empresas && empresas.length > 0) ? empresas : (existingDados.empresas || JSON.parse(localStorage.getItem('protetta_empresas') || '[]')),
                 print_presets: (printPresets && printPresets.length > 0) ? printPresets : (existingDados.print_presets || JSON.parse(localStorage.getItem('protetta_print_presets') || '[]')),
-                custom_op_seg: savedCustomOpSeg || existingDados.custom_op_seg || { operadoras: [], seguradoras: [] }
+                custom_op_seg: savedCustomOpSeg || existingDados.custom_op_seg || { operadoras: [], seguradoras: [] },
+                inconsistencias_meta: existingDados.inconsistencias_meta || JSON.parse(localStorage.getItem('protetta_inconsistencias_meta') || '{}')
             },
             empresa: 'Todas'
         };
@@ -302,10 +303,8 @@ export default function App() {
         } else {
             newList = newListOrFunc;
         }
-        setRawEmpresasList(newList);
-        localStorage.setItem('protetta_empresas', JSON.stringify(newList));
-        
-        // Save to global DB fallback
+
+        // Save to global DB fallback BEFORE changing local state
         await syncGlobalSysConfigToDB(newList, null);
         
         if (supabase) {
@@ -318,6 +317,10 @@ export default function App() {
                 }
             } catch(e) {}
         }
+        
+        // NOW change local state (this will trigger loadFromDB via useEffect)
+        setRawEmpresasList(newList);
+        localStorage.setItem('protetta_empresas', JSON.stringify(newList));
     };
 
     const activeEmpresa = (currentUser?.empresa && currentUser?.empresa !== 'Todas') 
@@ -424,6 +427,8 @@ export default function App() {
     const [vendasSortConfig, setVendasSortConfig] = useState({ key: 'dataVenda', direction: 'desc' });
     const [selectedInconsistencias, setSelectedInconsistencias] = useState([]);
     const [inconsistenciasList, setInconsistenciasList] = useState([]);
+    const [inconsistenciasMeta, setInconsistenciasMeta] = useState({});
+    const [showResolvedInconsistencias, setShowResolvedInconsistencias] = useState(false);
 
     const vendasColLabels = {
         numero: 'Registo', cliente: 'Cliente', dataVenda: 'Data', situacao: 'Situação', valor: 'Valor', comissaoPorcentagem: '%', comissao: 'Comissão',
@@ -587,6 +592,10 @@ export default function App() {
                 if (Array.isArray(parsed)) parsed = { operadoras: parsed, seguradoras: [] };
                 setCustomOpSeg(parsed);
                 localStorage.setItem('protetta_custom_op_seg', JSON.stringify(parsed));
+            }
+            if (sysConfig.inconsistencias_meta) {
+                setInconsistenciasMeta(sysConfig.inconsistencias_meta);
+                localStorage.setItem('protetta_inconsistencias_meta', JSON.stringify(sysConfig.inconsistencias_meta));
             }
 
             // Reconstruct and update companies list based on data
@@ -1381,6 +1390,13 @@ export default function App() {
         setInconsistenciasList(resultado);
         setSelectedInconsistencias([]);
         return resultado;
+    };
+
+    const updateInconsistenciaMeta = (id, resolvida, comentario) => {
+        const newMeta = { ...inconsistenciasMeta, [id]: { resolvida, comentario } };
+        setInconsistenciasMeta(newMeta);
+        localStorage.setItem('protetta_inconsistencias_meta', JSON.stringify(newMeta));
+        syncGlobalSysConfigToDB(null, null, null, newMeta);
     };
 
     const handleSelectAllInconsistencias = () => {
@@ -4943,65 +4959,106 @@ export default function App() {
                         </header>
                         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm overflow-hidden transition-colors duration-200">
                             {(() => {
-                                if (inconsistenciasList.length === 0) {
-                                    return <div className="p-12 text-center text-slate-500 italic"><CheckCircle size={48} className="mx-auto text-emerald-500 mb-4 opacity-50"/>Tudo certo! Nenhuma inconsistência ou salto de parcela detectado.</div>;
-                                }
-
+                                const displayList = inconsistenciasList.filter(inc => showResolvedInconsistencias || !inconsistenciasMeta[inc.id]?.resolvida);
+                                
                                 return (
-                                    <table className="w-full text-left border-collapse text-sm">
-                                        <thead>
-                                            <tr className="border-b-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750/50">
-                                                <th className="py-3 px-4 w-12 text-center">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer" 
-                                                        checked={selectedInconsistencias.length === inconsistenciasList.length && inconsistenciasList.length > 0} 
-                                                        onChange={handleSelectAllInconsistencias} 
-                                                        title="Selecionar/Desmarcar Todos" 
-                                                    />
-                                                </th>
-                                                <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Cliente</th>
-                                                <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center">Contrato</th>
-                                                <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center text-rose-600 dark:text-rose-400">Parcelas Faltantes</th>
-                                                <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center w-24">Ação</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {inconsistenciasList.map((inc, i) => (
-                                                <tr key={i} className="border-b border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-750/50 transition-colors">
-                                                    <td className="py-3 px-4 text-center">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer" 
-                                                            checked={selectedInconsistencias.includes(inc.id)} 
-                                                            onChange={() => {
-                                                                setSelectedInconsistencias(prev => prev.includes(inc.id) ? prev.filter(id => id !== inc.id) : [...prev, inc.id]);
-                                                            }}
-                                                        />
-                                                    </td>
-                                                    <td className="py-3 px-4 font-medium text-slate-900 dark:text-white">{inc.cliente}</td>
-                                                    <td className="py-3 px-4 text-center text-slate-600 dark:text-slate-400 font-mono">{inc.contrato || '-'}</td>
-                                                    <td className="py-3 px-4 text-center font-bold text-rose-500 dark:text-rose-400">
-                                                        <div className="flex flex-wrap gap-1 justify-center">
-                                                            {inc.faltantes.map(f => <span key={f} className="bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 px-2 py-0.5 rounded text-xs">P: {f}</span>)}
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-3 px-4 text-center">
-                                                        <button 
-                                                            onClick={async () => {
-                                                                const vFiltersToUse = { ...defaultVendasFilters, cliente: inc.contrato ? '' : inc.cliente, contrato: inc.contrato || '' };
-                                                                setVendasFilterForm(vFiltersToUse);
-                                                                setShowVendasFilter(true);
-                                                                setAppliedVendasFilters(vFiltersToUse);
-                                                                setCurrentView('vendas');
-                                                            }} 
-                                                            className="text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded transition-colors"
-                                                        >Ver Vendas</button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                    <>
+                                        <div className="bg-slate-50 dark:bg-slate-750/50 p-4 border-b border-slate-200 dark:border-slate-700 flex justify-end">
+                                            <label className="flex items-center space-x-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600"
+                                                    checked={showResolvedInconsistencias}
+                                                    onChange={e => setShowResolvedInconsistencias(e.target.checked)}
+                                                />
+                                                <span>Mostrar resolvidas</span>
+                                            </label>
+                                        </div>
+                                        {displayList.length === 0 ? (
+                                            <div className="p-12 text-center text-slate-500 italic"><CheckCircle size={48} className="mx-auto text-emerald-500 mb-4 opacity-50"/>Tudo certo! Nenhuma inconsistência ou salto de parcela detectado.</div>
+                                        ) : (
+                                            <table className="w-full text-left border-collapse text-sm">
+                                                <thead>
+                                                    <tr className="border-b-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750/50">
+                                                        <th className="py-3 px-4 w-12 text-center">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer" 
+                                                                checked={selectedInconsistencias.length === displayList.length && displayList.length > 0} 
+                                                                onChange={e => {
+                                                                    if (e.target.checked) setSelectedInconsistencias(displayList.map(i => i.id));
+                                                                    else setSelectedInconsistencias([]);
+                                                                }} 
+                                                                title="Selecionar/Desmarcar Todos" 
+                                                            />
+                                                        </th>
+                                                        <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Cliente</th>
+                                                        <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center">Contrato</th>
+                                                        <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center text-rose-600 dark:text-rose-400">Parcelas Faltantes</th>
+                                                        <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Comentário / Detalhes</th>
+                                                        <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center w-32">Ações</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {displayList.map((inc, i) => {
+                                                        const meta = inconsistenciasMeta[inc.id] || { resolvida: false, comentario: '' };
+                                                        return (
+                                                        <tr key={i} className={`border-b border-slate-200 dark:border-slate-700/50 transition-colors ${meta.resolvida ? 'bg-slate-100/50 dark:bg-slate-800/50 opacity-60' : 'hover:bg-slate-50 dark:hover:bg-slate-750/50'}`}>
+                                                            <td className="py-3 px-4 text-center">
+                                                                <input 
+                                                                    type="checkbox" 
+                                                                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer" 
+                                                                    checked={selectedInconsistencias.includes(inc.id)} 
+                                                                    onChange={() => {
+                                                                        setSelectedInconsistencias(prev => prev.includes(inc.id) ? prev.filter(id => id !== inc.id) : [...prev, inc.id]);
+                                                                    }}
+                                                                />
+                                                            </td>
+                                                            <td className="py-3 px-4 font-medium text-slate-900 dark:text-white max-w-[200px] truncate" title={inc.cliente}>{inc.cliente}</td>
+                                                            <td className="py-3 px-4 text-center text-slate-600 dark:text-slate-400 font-mono">{inc.contrato || '-'}</td>
+                                                            <td className="py-3 px-4 text-center font-bold text-rose-500 dark:text-rose-400">
+                                                                <div className="flex flex-wrap gap-1 justify-center">
+                                                                    {inc.faltantes.map(f => <span key={f} className={`px-2 py-0.5 rounded text-xs ${meta.resolvida ? 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400' : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400'}`}>P: {f}</span>)}
+                                                                </div>
+                                                            </td>
+                                                            <td className="py-3 px-4">
+                                                                <input 
+                                                                    type="text" 
+                                                                    defaultValue={meta.comentario}
+                                                                    placeholder="Adicione um comentário..."
+                                                                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-3 py-1.5 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                                                    onBlur={(e) => updateInconsistenciaMeta(inc.id, meta.resolvida, e.target.value)}
+                                                                />
+                                                            </td>
+                                                            <td className="py-3 px-4 text-center">
+                                                                <div className="flex flex-col gap-2">
+                                                                    <button 
+                                                                        onClick={() => updateInconsistenciaMeta(inc.id, !meta.resolvida, meta.comentario)}
+                                                                        className={`text-xs px-3 py-1.5 rounded font-bold transition-colors shadow-sm flex items-center justify-center ${meta.resolvida ? 'bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-900/30 dark:hover:bg-amber-800/40 dark:text-amber-400' : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-800/40 dark:text-emerald-400'}`}
+                                                                    >
+                                                                        {meta.resolvida ? <XCircle size={14} className="mr-1"/> : <CheckCircle size={14} className="mr-1"/>}
+                                                                        {meta.resolvida ? 'Reabrir' : 'Resolver'}
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={async () => {
+                                                                            const vFiltersToUse = { ...defaultVendasFilters, cliente: inc.contrato ? '' : inc.cliente, contrato: inc.contrato || '' };
+                                                                            setVendasFilterForm(vFiltersToUse);
+                                                                            setShowVendasFilter(true);
+                                                                            setAppliedVendasFilters(vFiltersToUse);
+                                                                            setCurrentView('vendas');
+                                                                        }} 
+                                                                        className="text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded transition-colors flex items-center justify-center"
+                                                                    >
+                                                                        <Search size={14} className="mr-1" /> Vendas
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )})}
+                                                </tbody>
+                                            </table>
+                                        )}
+                                    </>
                                 );
                             })()}
                         </div>
