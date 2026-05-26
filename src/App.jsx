@@ -3447,10 +3447,15 @@ export default function App() {
                     const fallbackVidas = /(?:\s+)(\d{1,3})\s+(?:\d{1,2},\d{2}\s+)?(?:[\d\.]+,\d{2})\s+(?:[\d\.]+,\d{2})/i; 
                     let matchFallbackVidas = fallbackVidas.exec(bloco);
                     
+                    const regex3Num = /(?:Qtd[^\d]*?)?(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})\s+(?:[\d.,]+\s+)?[\d.,]+\s+[\d.,]+/i;
+                    let match3Num = regex3Num.exec(bloco);
+
                     const regexVidas = /(?:Qtd(?:[.\s]*(?:de\s*)?(?:Vidas?|Benefici[aá]rios?))?|Vidas?|Benefici[aá]rios?)\s*(?::\s*|-)?\s*(\d+)/i; 
                     let matchVidas = regexVidas.exec(bloco);
                     
-                    if (matchVidas && parseInt(matchVidas[1], 10) > 0) { 
+                    if (match3Num && parseInt(match3Num[3], 10) > 0) {
+                        vidasDetectadas = parseInt(match3Num[3], 10).toString();
+                    } else if (matchVidas && parseInt(matchVidas[1], 10) > 0) { 
                         vidasDetectadas = parseInt(matchVidas[1], 10).toString(); 
                     } else if (matchFallbackVidas && parseInt(matchFallbackVidas[1], 10) > 0) {
                         vidasDetectadas = parseInt(matchFallbackVidas[1], 10).toString();
