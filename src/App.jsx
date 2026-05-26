@@ -362,6 +362,9 @@ export default function App() {
     const [selectedPreset, setSelectedPreset] = useState('');
 
     const [pdfData, setPdfData] = useState([]);
+    const [showModalVendasRelatorio, setShowModalVendasRelatorio] = useState(false);
+    const [relatorioVendasSearch, setRelatorioVendasSearch] = useState('');
+    const [relatorioVendasSelected, setRelatorioVendasSelected] = useState(new Set());
     const [backupList, setBackupList] = useState([]);
     const [loadingBackups, setLoadingBackups] = useState(false);
     const tabelaPdfRef = useRef(null);
@@ -3425,10 +3428,16 @@ export default function App() {
                         }
                     }
 
-                    const regexVidas = /(?:\s+)(\d+)\s+(?:\d{1,2},\d{2}\s+)?(?:[\d\.]+,\d{2})\s+(?:[\d\.]+,\d{2})/i; 
+                    const regexVidas = /(?:Qtd\.?|Vidas?)\s*(?::\s*)?(\d+)/i; 
                     let matchVidas = regexVidas.exec(bloco);
                     if (matchVidas) { 
-                        vidasDetectadas = matchVidas[1]; 
+                        vidasDetectadas = parseInt(matchVidas[1], 10).toString(); 
+                    } else {
+                        const fallbackVidas = /(?:\s+)(\d+)\s+(?:\d{1,2},\d{2}\s+)?(?:[\d\.]+,\d{2})\s+(?:[\d\.]+,\d{2})/i; 
+                        let matchFallbackVidas = fallbackVidas.exec(bloco);
+                        if (matchFallbackVidas) {
+                            vidasDetectadas = parseInt(matchFallbackVidas[1], 10).toString();
+                        }
                     }
 
                     if (valorTotal > 0) {
@@ -4153,6 +4162,68 @@ export default function App() {
             }
         });
     };
+    const iniciarRelatorioManual = () => {
+        setPdfData([]);
+        setReportName('Relatório Manual - ' + formatDateBR(dataDeHojeInterna(), true));
+        const hoje = new Date(dataDeHojeInterna());
+        setReportPeriod(`${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`);
+        setCurrentReportId(null);
+    };
+
+    const confirmarVendasRelatorio = () => {
+        const vendasParaAdicionar = getAllVendas().filter(v => relatorioVendasSelected.has(v.id));
+        if (vendasParaAdicionar.length === 0) return showAlert("Selecione pelo menos uma venda.");
+
+        let currentMaxVendaCodigo = getAllVendas().reduce((max, v) => {
+            let num = parseInt(v.numero, 10);
+            return !isNaN(num) && num > max ? num : max;
+        }, 0);
+        let currentPdfMax = pdfData.reduce((max, v) => {
+            let num = parseInt(v.cod, 10);
+            return !isNaN(num) && num > max ? num : max;
+        }, 0);
+        
+        let maxCod = Math.max(currentMaxVendaCodigo, currentPdfMax);
+
+        const newPdfRows = vendasParaAdicionar.map(v => {
+            maxCod++;
+            return {
+                cod: String(maxCod).padStart(5, '0'), 
+                contrato: v.contrato || '', 
+                codigoOperadora: v.codigoOperadora || v.codOperadora || 'AMIL', 
+                vidas: String(v.vidas || '1'),
+                cliente: v.cliente || '', 
+                data: v.dataVenda ? formatDateForInput(v.dataVenda) : dataDeHojeInterna(), 
+                situacao: v.situacao || `FATURADO ${nomeEmpresaUpper} NF`, 
+                loja: v.loja || nomeEmpresaUpper, 
+                valorTotal: Number(v.valor) || 0, 
+                comissao: Number(v.comissao) || 0, 
+                vendedor: v.corretor || nomeEmpresa, 
+                parcela: String(v.parcela || '1'), 
+                inicioVigencia: v.inicioVigencia || '', 
+                notaFiscal: v.notaFiscal || ((pdfData.length > 0) ? (pdfData[0].notaFiscal || '') : ''),
+                vitalicio: String(v.vitalicio || 'Sim'), 
+                assessoria: v.assessoria || nomeEmpresa, 
+                formaPagamento: v.formaPagamento || (nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta'),
+                servico: v.servico || '', 
+                desconto: v.desconto || '', 
+                comissaoPorcentagem: v.comissaoPorcentagem || '',
+                selected: true 
+            };
+        });
+
+        if (pdfData.length === 0 && newPdfRows.length > 0) {
+            setReportName('Relatório Manual - ' + formatDateBR(dataDeHojeInterna(), true));
+            const hoje = new Date(dataDeHojeInterna());
+            setReportPeriod(`${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`);
+            setCurrentReportId(null);
+        }
+
+        setPdfData([...pdfData, ...newPdfRows]);
+        setRelatorioVendasSelected(new Set());
+        setShowModalVendasRelatorio(false);
+    };
+
     const addManualRow = () => {
         let currentMaxVendaCodigo = getAllVendas().reduce((max, v) => {
             let num = parseInt(v.numero, 10);
@@ -5749,8 +5820,10 @@ export default function App() {
                             </div>
                             <div className="flex flex-wrap gap-3 justify-start xl:justify-end w-full">
                                 <button onClick={() => setModalArquivosOpen(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 px-6 rounded-lg font-bold flex items-center shadow-lg transition-colors"> <Database size={18} className="mr-2"/> Buscar no Sistema</button>
+                                <button onClick={iniciarRelatorioManual} className="bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 px-6 rounded-lg font-bold flex items-center shadow-lg transition-colors"><FilePlus size={18} className="mr-2"/> Novo Documento (Manual)</button>
                                 {pdfData.length > 0 && (
                                     <React.Fragment>
+                                        <button onClick={() => setShowModalVendasRelatorio(true)} className="bg-purple-600 hover:bg-purple-500 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"><ShoppingCart size={18} className="mr-2"/> Incluir Vendas</button>
                                         <button onClick={addManualRow} className="bg-amber-500 hover:bg-amber-400 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"><Plus size={18} className="mr-2"/> Adicionar Linha</button>
                                         {pdfData.some(r => r.selected) && (
                                             <React.Fragment>
@@ -6024,6 +6097,111 @@ export default function App() {
                                     </tfoot>
                                 )}
                             </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal Selecionar Vendas para o Relatório */}
+                {showModalVendasRelatorio && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-4xl relative mx-4 max-h-[90vh] flex flex-col">
+                            <button type="button" onClick={() => setShowModalVendasRelatorio(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors z-10">
+                                <X size={20} />
+                            </button>
+                            <h3 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center mb-6">
+                                <ShoppingCart size={24} className="mr-3 text-emerald-500"/>
+                                Selecionar Vendas para Inclusão
+                            </h3>
+                            <div className="flex gap-4 mb-4">
+                                <input 
+                                    type="text" 
+                                    placeholder="Buscar por cliente, operadora ou número..." 
+                                    className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white"
+                                    value={relatorioVendasSearch}
+                                    onChange={e => setRelatorioVendasSearch(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex-1 overflow-auto border border-slate-200 dark:border-slate-700 rounded-lg relative">
+                                <table className="w-full text-left text-sm whitespace-nowrap">
+                                    <thead className="sticky top-0 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 z-10 shadow-sm shadow-slate-200/50 dark:shadow-black/50">
+                                        <tr>
+                                            <th className="p-3 text-center w-10">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="w-4 h-4 accent-blue-500 rounded cursor-pointer" 
+                                                    onChange={e => {
+                                                        const isChecked = e.target.checked;
+                                                        const visibleVendas = getAllVendas().filter(v => {
+                                                            const matches = [v.numero, v.cliente, v.codigoOperadora, v.corretor].join(' ').toLowerCase().includes(relatorioVendasSearch.toLowerCase());
+                                                            const isFaturado = v.situacao && v.situacao.toLowerCase().includes('faturado');
+                                                            return matches && isFaturado;
+                                                        });
+                                                        if (isChecked) {
+                                                            const newSet = new Set(relatorioVendasSelected);
+                                                            visibleVendas.forEach(v => newSet.add(v.id));
+                                                            setRelatorioVendasSelected(newSet);
+                                                        } else {
+                                                            const newSet = new Set(relatorioVendasSelected);
+                                                            visibleVendas.forEach(v => newSet.delete(v.id));
+                                                            setRelatorioVendasSelected(newSet);
+                                                        }
+                                                    }}
+                                                />
+                                            </th>
+                                            <th className="p-3 font-bold">Data</th>
+                                            <th className="p-3 font-bold">Cliente</th>
+                                            <th className="p-3 font-bold">Op|Seg</th>
+                                            <th className="p-3 font-bold text-center">Valor</th>
+                                            <th className="p-3 font-bold text-center">Situação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {getAllVendas().filter(v => {
+                                            const matches = [v.numero, v.cliente, v.codigoOperadora, v.corretor].join(' ').toLowerCase().includes(relatorioVendasSearch.toLowerCase());
+                                            return matches;
+                                        }).length === 0 ? (
+                                            <tr>
+                                                <td colSpan="6" className="py-6 text-center text-slate-500">Nenhuma venda faturada encontrada.</td>
+                                            </tr>
+                                        ) : (
+                                            getAllVendas().filter(v => {
+                                                const matches = [v.numero, v.cliente, v.codigoOperadora, v.corretor].join(' ').toLowerCase().includes(relatorioVendasSearch.toLowerCase());
+                                                return matches;
+                                            }).map(v => (
+                                                <tr key={v.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer" onClick={() => {
+                                                    const newSet = new Set(relatorioVendasSelected);
+                                                    if (newSet.has(v.id)) newSet.delete(v.id);
+                                                    else newSet.add(v.id);
+                                                    setRelatorioVendasSelected(newSet);
+                                                }}>
+                                                    <td className="p-3 text-center">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            className="w-4 h-4 accent-blue-500 rounded cursor-pointer pointer-events-none" 
+                                                            checked={relatorioVendasSelected.has(v.id)}
+                                                            readOnly
+                                                        />
+                                                    </td>
+                                                    <td className="p-3">{formatarDataVisivel(v.dataVenda)}</td>
+                                                    <td className="p-3 font-medium text-slate-900 dark:text-white">{v.cliente}</td>
+                                                    <td className="p-3">{v.codigoOperadora || 'AMIL'}</td>
+                                                    <td className="p-3 text-center text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">R$ {(Number(v.valor) || 0).toFixed(2)}</td>
+                                                    <td className="p-3 text-center text-xs">
+                                                        <span className="px-2 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 whitespace-nowrap inline-block truncate max-w-[150px]">{v.situacao}</span>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div className="mt-6 flex justify-between items-center">
+                                <span className="text-sm font-bold text-slate-500 dark:text-slate-400">{relatorioVendasSelected.size} selecionadas</span>
+                                <div className="flex gap-3">
+                                    <button onClick={() => setShowModalVendasRelatorio(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white rounded-lg font-bold">Cancelar</button>
+                                    <button onClick={confirmarVendasRelatorio} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">Confirmar Adição</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}
