@@ -62,7 +62,7 @@ export async function syncUserPrefsToDB(userId, prefs) {
         if (existing && existing.length > 0) {
             await safeSupabaseUpdate('savedReports', payload, 'id', existing[0].id);
         } else {
-            await safeSupabaseInsert('savedReports', [{...payload, id: 0, periodo: 'System', dataCriacao: new Date().toISOString(), criadoPor: `User_${userId}` }]);
+            await safeSupabaseInsert('savedReports', [{...payload, periodo: 'System', dataCriacao: new Date().toISOString(), criadoPor: `User_${userId}` }]);
         }
     } catch(e) { console.error("User Prefs Sync Failed", e); }
 }
@@ -103,7 +103,7 @@ export async function syncGlobalSysConfigToDB(empresas, printPresets, customOpSe
         if (existing && existing.length > 0) {
             await safeSupabaseUpdate('savedReports', payload, 'id', existing[0].id);
         } else {
-            await safeSupabaseInsert('savedReports', [{...payload, id: 0, periodo: 'System', dataCriacao: new Date().toISOString(), criadoPor: 'System' }]);
+            await safeSupabaseInsert('savedReports', [{...payload, periodo: 'System', dataCriacao: new Date().toISOString(), criadoPor: 'System' }]);
         }
     } catch(e) { console.error("SysConfig Sync Failed", e); }
 }
@@ -127,7 +127,7 @@ import {
     Layers, Settings, Database, RefreshCw, Trash2, HardDrive, Users, FileCheck, 
     CheckCircle, XCircle, Edit, Edit2, ListFilter, Upload, Sun, Moon, Printer, Archive, 
     History, AlertCircle, Lock, User, Key, LogOut, Shield, ShoppingCart, Receipt, 
-    Send, Percent, DollarSign, FileOutput, Copy, Info, Tag, AlertTriangle, LayoutGrid, List, Phone, Mail, Maximize, Minimize
+    Send, Percent, DollarSign, FileOutput, Copy, Info, Tag, AlertTriangle, LayoutGrid, List, Phone, Mail, Maximize, Minimize, FilePlus
 } from 'lucide-react';
 
 import * as XLSX from 'xlsx';
