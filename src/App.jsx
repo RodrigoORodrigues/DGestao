@@ -4163,11 +4163,27 @@ export default function App() {
         });
     };
     const iniciarRelatorioManual = () => {
-        setPdfData([]);
+        let currentMaxVendaCodigo = getAllVendas().reduce((max, v) => {
+            let num = parseInt(v.numero, 10);
+            return !isNaN(num) && num > max ? num : max;
+        }, 0);
+        let maxCod = currentMaxVendaCodigo + 1;
+        
+        const novaLinha = { 
+            cod: String(maxCod).padStart(5, '0'), contrato: '', codigoOperadora: currentReportOperadora || 'AMIL', vidas: '1',
+            cliente: 'Novo Cliente', data: '', situacao: `FATURADO ${nomeEmpresaUpper} NF`, loja: nomeEmpresaUpper, 
+            valorTotal: 0, comissao: 0, vendedor: nomeEmpresa, parcela: '1', inicioVigencia: '', notaFiscal: '',
+            vitalicio: 'Sim', assessoria: nomeEmpresa, formaPagamento: nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
+            servico: '', desconto: '', selected: true 
+        };
+
+        setPdfData([novaLinha]);
         setReportName('Relatório Manual - ' + formatDateBR(dataDeHojeInterna(), true));
         const hoje = new Date(dataDeHojeInterna());
         setReportPeriod(`${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`);
         setCurrentReportId(null);
+        setEditRowIndex(0);
+        setEditRowData(novaLinha);
     };
 
     const confirmarVendasRelatorio = () => {
@@ -5821,10 +5837,10 @@ export default function App() {
                             <div className="flex flex-wrap gap-3 justify-start xl:justify-end w-full">
                                 <button onClick={() => setModalArquivosOpen(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 px-6 rounded-lg font-bold flex items-center shadow-lg transition-colors"> <Database size={18} className="mr-2"/> Buscar no Sistema</button>
                                 <button onClick={iniciarRelatorioManual} className="bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 px-6 rounded-lg font-bold flex items-center shadow-lg transition-colors"><FilePlus size={18} className="mr-2"/> Novo Relatório</button>
+                                <button onClick={addManualRow} className="bg-amber-500 hover:bg-amber-400 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"><Plus size={18} className="mr-2"/> Adicionar Linha</button>
+                                
                                 {pdfData.length > 0 && (
                                     <React.Fragment>
-                                        <button onClick={() => setShowModalVendasRelatorio(true)} className="bg-purple-600 hover:bg-purple-500 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"><ShoppingCart size={18} className="mr-2"/> Incluir Vendas</button>
-                                        <button onClick={addManualRow} className="bg-amber-500 hover:bg-amber-400 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"><Plus size={18} className="mr-2"/> Adicionar Linha</button>
                                         {pdfData.some(r => r.selected) && (
                                             <React.Fragment>
                                                 <button onClick={prepararEmissaoNfLote} className="bg-blue-600 hover:bg-blue-500 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"><Receipt size={18} className="mr-2"/> Gerar NF</button>
