@@ -432,11 +432,11 @@ export default function App() {
     
     // As colunas originais padrão para Vendas
     const defaultVendasCols = {
-        numero: true, cliente: true, dataVenda: true, situacao: true, valor: true, comissao: true,
-        contrato: false, codOperadora: false, codigoOperadora: false, vidas: false, loja: false,
-        servico: false, corretor: false, parcela: false, inicioVigencia: false,
+        numero: false, cliente: true, dataVenda: true, situacao: false, valor: true, comissaoPorcentagem: false, comissao: true,
+        contrato: false, codOperadora: false, codigoOperadora: true, vidas: false, loja: false,
+        servico: false, corretor: false, parcela: true, inicioVigencia: false,
         notaFiscal: true, vitalicio: false, assessoria: false, formaPagamento: false,
-        desconto: false
+        desconto: false, notas: false
     };
 
     const [vendasTableCols, setVendasTableCols] = useState(defaultVendasCols);
