@@ -2436,6 +2436,70 @@ export default function App() {
         } catch (err) { showAlert("Erro ao importar: " + err.message); } finally { setLoading(false); event.target.value = ''; }
     };
 
+    const parseCurrencyValue = (value) => {
+        if (value === null || value === undefined || value === '') return 0;
+        if (typeof value === 'number') return value;
+        let str = String(value).replace(/R\$/gi, '').replace(/\s+/g, '').replace(/[^\d,.-]/g, '');
+        if (!str) return 0;
+        const negative = str.includes('-');
+        str = str.replace(/-/g, '');
+        if (str.includes(',')) {
+            str = str.replace(/\./g, '').replace(',', '.');
+        } else {
+            const partes = str.split('.');
+            if (partes.length > 2) str = partes.join('');
+        }
+        const parsed = parseFloat(str);
+        return isNaN(parsed) ? 0 : (negative ? -parsed : parsed);
+    };
+
+    const formatDateForInput = (value) => {
+        if (!value && value !== 0) return '';
+        if (value instanceof Date && !isNaN(value)) {
+            return value.toISOString().slice(0, 10);
+        }
+        if (typeof value === 'number' && !isNaN(value)) {
+            const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+            return date.toISOString().slice(0, 10);
+        }
+        const str = String(value).trim();
+        if (!str) return '';
+        if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+        const match = str.match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
+        if (match) {
+            let ano = match[3].length === 2 ? `20${match[3]}` : match[3];
+            return `${ano}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+        }
+        return '';
+    };
+
+    const formatDateBR = (value) => {
+        if (!value && value !== 0) return '';
+        const pad = (n) => String(n).padStart(2, '0');
+        if (value instanceof Date && !isNaN(value)) {
+            return `${pad(value.getDate())}/${pad(value.getMonth() + 1)}/${value.getFullYear()}`;
+        }
+        if (typeof value === 'number' && !isNaN(value)) {
+            const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+            return `${pad(date.getUTCDate())}/${pad(date.getUTCMonth() + 1)}/${date.getUTCFullYear()}`;
+        }
+        const str = String(value).trim();
+        if (!str) return '';
+        const isoMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+        if (isoMatch) return `${isoMatch[3].padStart(2, '0')}/${isoMatch[2].padStart(2, '0')}/${isoMatch[1]}`;
+        const brMatch = str.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
+        if (brMatch) {
+            const ano = brMatch[3].length === 2 ? `20${brMatch[3]}` : brMatch[3];
+            return `${brMatch[1].padStart(2, '0')}/${brMatch[2].padStart(2, '0')}/${ano}`;
+        }
+        const anyDate = str.match(/(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/);
+        if (anyDate) {
+            const ano = anyDate[3].length === 2 ? `20${anyDate[3]}` : anyDate[3];
+            return `${anyDate[1].padStart(2, '0')}/${anyDate[2].padStart(2, '0')}/${ano}`;
+        }
+        return '';
+    };
+
     const processarArquivoDoBanco = async (report) => {
         setLoading(true); setLoadingMsg("A descarregar ficheiro da nuvem..."); setModalArquivosOpen(false); 
         try {
@@ -2572,70 +2636,6 @@ export default function App() {
             let v = parseInt(c.codigo, 10);
             return !isNaN(v) && v > max ? v : max;
         }, 0);
-
-        const parseCurrencyValue = (value) => {
-            if (value === null || value === undefined || value === '') return 0;
-            if (typeof value === 'number') return value;
-            let str = String(value).replace(/R\$/gi, '').replace(/\s+/g, '').replace(/[^\d,.-]/g, '');
-            if (!str) return 0;
-            const negative = str.includes('-');
-            str = str.replace(/-/g, '');
-            if (str.includes(',')) {
-                str = str.replace(/\./g, '').replace(',', '.');
-            } else {
-                const partes = str.split('.');
-                if (partes.length > 2) str = partes.join('');
-            }
-            const parsed = parseFloat(str);
-            return isNaN(parsed) ? 0 : (negative ? -parsed : parsed);
-        };
-
-        const formatDateForInput = (value) => {
-            if (!value && value !== 0) return '';
-            if (value instanceof Date && !isNaN(value)) {
-                return value.toISOString().slice(0, 10);
-            }
-            if (typeof value === 'number' && !isNaN(value)) {
-                const date = new Date(Math.round((value - 25569) * 86400 * 1000));
-                return date.toISOString().slice(0, 10);
-            }
-            const str = String(value).trim();
-            if (!str) return '';
-            if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
-            const match = str.match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
-            if (match) {
-                let ano = match[3].length === 2 ? `20${match[3]}` : match[3];
-                return `${ano}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
-            }
-            return '';
-        };
-
-        const formatDateBR = (value) => {
-            if (!value && value !== 0) return '';
-            const pad = (n) => String(n).padStart(2, '0');
-            if (value instanceof Date && !isNaN(value)) {
-                return `${pad(value.getDate())}/${pad(value.getMonth() + 1)}/${value.getFullYear()}`;
-            }
-            if (typeof value === 'number' && !isNaN(value)) {
-                const date = new Date(Math.round((value - 25569) * 86400 * 1000));
-                return `${pad(date.getUTCDate())}/${pad(date.getUTCMonth() + 1)}/${date.getUTCFullYear()}`;
-            }
-            const str = String(value).trim();
-            if (!str) return '';
-            const isoMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-            if (isoMatch) return `${isoMatch[3].padStart(2, '0')}/${isoMatch[2].padStart(2, '0')}/${isoMatch[1]}`;
-            const brMatch = str.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
-            if (brMatch) {
-                const ano = brMatch[3].length === 2 ? `20${brMatch[3]}` : brMatch[3];
-                return `${brMatch[1].padStart(2, '0')}/${brMatch[2].padStart(2, '0')}/${ano}`;
-            }
-            const anyDate = str.match(/(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/);
-            if (anyDate) {
-                const ano = anyDate[3].length === 2 ? `20${anyDate[3]}` : anyDate[3];
-                return `${anyDate[1].padStart(2, '0')}/${anyDate[2].padStart(2, '0')}/${ano}`;
-            }
-            return '';
-        };
 
         const extractDataDoExtrato = (origem) => {
             const raw = String(origem || '').replace(/\s+/g, ' ').trim();
@@ -4203,57 +4203,66 @@ export default function App() {
     };
 
     const confirmarVendasRelatorio = () => {
-        const vendasParaAdicionar = getAllVendas().filter(v => relatorioVendasSelected.has(v.id));
-        if (vendasParaAdicionar.length === 0) return showAlert("Selecione pelo menos uma venda.");
+        try {
+            const vendasParaAdicionar = getAllVendas().filter(v => relatorioVendasSelected.has(v.id));
+            if (vendasParaAdicionar.length === 0) {
+                showAlert("Selecione pelo menos uma venda.");
+                return;
+            }
 
-        let currentMaxVendaCodigo = getAllVendas().reduce((max, v) => {
-            let num = parseInt(v.numero, 10);
-            return !isNaN(num) && num > max ? num : max;
-        }, 0);
-        let currentPdfMax = pdfData.reduce((max, v) => {
-            let num = parseInt(v.cod, 10);
-            return !isNaN(num) && num > max ? num : max;
-        }, 0);
-        
-        let maxCod = Math.max(currentMaxVendaCodigo, currentPdfMax);
+            let currentMaxVendaCodigo = getAllVendas().reduce((max, v) => {
+                let num = parseInt(v.numero, 10);
+                return !isNaN(num) && num > max ? num : max;
+            }, 0);
+            let currentPdfMax = pdfData.reduce((max, v) => {
+                let num = parseInt(v.cod, 10);
+                return !isNaN(num) && num > max ? num : max;
+            }, 0);
+            
+            let maxCod = Math.max(currentMaxVendaCodigo, currentPdfMax);
 
-        const newPdfRows = vendasParaAdicionar.map(v => {
-            maxCod++;
-            return {
-                cod: String(maxCod).padStart(5, '0'), 
-                contrato: v.contrato || '', 
-                codigoOperadora: v.codigoOperadora || v.codOperadora || 'AMIL', 
-                vidas: String(v.vidas || '1'),
-                cliente: v.cliente || '', 
-                data: v.dataVenda ? formatDateForInput(v.dataVenda) : dataDeHojeInterna(), 
-                situacao: v.situacao || `FATURADO ${nomeEmpresaUpper} NF`, 
-                loja: v.loja || nomeEmpresaUpper, 
-                valorTotal: Number(v.valor) || 0, 
-                comissao: Number(v.comissao) || 0, 
-                vendedor: v.corretor || nomeEmpresa, 
-                parcela: String(v.parcela || '1'), 
-                inicioVigencia: v.inicioVigencia || '', 
-                notaFiscal: v.notaFiscal || ((pdfData.length > 0) ? (pdfData[0].notaFiscal || '') : ''),
-                vitalicio: String(v.vitalicio || 'Sim'), 
-                assessoria: v.assessoria || nomeEmpresa, 
-                formaPagamento: v.formaPagamento || (nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta'),
-                servico: v.servico || '', 
-                desconto: v.desconto || '', 
-                comissaoPorcentagem: v.comissaoPorcentagem || '',
-                selected: true 
-            };
-        });
+            const newPdfRows = vendasParaAdicionar.map(v => {
+                maxCod++;
+                return {
+                    cod: String(maxCod).padStart(5, '0'), 
+                    contrato: v.contrato || '', 
+                    codigoOperadora: v.codigoOperadora || v.codOperadora || 'AMIL', 
+                    vidas: String(v.vidas || '1'),
+                    cliente: v.cliente || '', 
+                    data: v.dataVenda ? formatDateForInput(v.dataVenda) : dataDeHojeInterna(), 
+                    situacao: v.situacao || `FATURADO ${nomeEmpresaUpper} NF`, 
+                    loja: v.loja || nomeEmpresaUpper, 
+                    valorTotal: Number(v.valor) || 0, 
+                    comissao: Number(v.comissao) || 0, 
+                    vendedor: v.corretor || nomeEmpresa, 
+                    parcela: String(v.parcela || '1'), 
+                    inicioVigencia: v.inicioVigencia || '', 
+                    notaFiscal: v.notaFiscal || ((pdfData.length > 0) ? (pdfData[0].notaFiscal || '') : ''),
+                    vitalicio: String(v.vitalicio || 'Sim'), 
+                    assessoria: v.assessoria || nomeEmpresa, 
+                    formaPagamento: v.formaPagamento || (nomeEmpresaUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta'),
+                    servico: v.servico || '', 
+                    desconto: v.desconto || '', 
+                    comissaoPorcentagem: v.comissaoPorcentagem || '',
+                    selected: true 
+                };
+            });
 
-        if (pdfData.length === 0 && newPdfRows.length > 0) {
-            setReportName('Relatório Manual - ' + formatDateBR(dataDeHojeInterna(), true));
-            const hoje = new Date(dataDeHojeInterna());
-            setReportPeriod(`${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`);
-            setCurrentReportId(null);
+            if (pdfData.length === 0 && newPdfRows.length > 0) {
+                setReportName('Relatório Manual - ' + formatDateBR(dataDeHojeInterna(), true));
+                const hoje = new Date(dataDeHojeInterna());
+                setReportPeriod(`${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`);
+                setCurrentReportId(null);
+            }
+
+            setPdfData([...pdfData, ...newPdfRows]);
+            setRelatorioVendasSelected(new Set());
+            setShowModalVendasRelatorio(false);
+        } catch (err) {
+            console.error("Erro ao adicionar vendas:", err);
+            showAlert("Erro ao adicionar. " + err.message);
+            setShowModalVendasRelatorio(false);
         }
-
-        setPdfData([...pdfData, ...newPdfRows]);
-        setRelatorioVendasSelected(new Set());
-        setShowModalVendasRelatorio(false);
     };
 
     const addManualRow = () => {
@@ -5894,6 +5903,7 @@ export default function App() {
                             <div className="flex flex-wrap gap-3 justify-start xl:justify-end w-full">
                                 <button onClick={() => setModalArquivosOpen(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 px-6 rounded-lg font-bold flex items-center shadow-lg transition-colors"> <Database size={18} className="mr-2"/> Buscar no Sistema</button>
                                 <button onClick={iniciarRelatorioManual} className="bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 px-6 rounded-lg font-bold flex items-center shadow-lg transition-colors"><FilePlus size={18} className="mr-2"/> Novo Relatório</button>
+                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowModalVendasRelatorio(true); }} className="bg-purple-600 hover:bg-purple-500 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"><ShoppingCart size={18} className="mr-2"/> Adicionar</button>
                                 <button onClick={addManualRow} className="bg-amber-500 hover:bg-amber-400 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"><Plus size={18} className="mr-2"/> Adicionar Linha</button>
                                 
                                 {pdfData.length > 0 && (
@@ -6272,7 +6282,7 @@ export default function App() {
                                 <span className="text-sm font-bold text-slate-500 dark:text-slate-400">{relatorioVendasSelected.size} selecionadas</span>
                                 <div className="flex gap-3">
                                     <button onClick={() => setShowModalVendasRelatorio(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white rounded-lg font-bold">Cancelar</button>
-                                    <button onClick={confirmarVendasRelatorio} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">Confirmar Adição</button>
+                                    <button onClick={confirmarVendasRelatorio} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">Adicionar</button>
                                 </div>
                             </div>
                         </div>
