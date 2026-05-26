@@ -3444,16 +3444,16 @@ export default function App() {
                         }
                     }
 
-                    const regexVidas = /(?:Qtd\.?|Vidas?)\s*(?::\s*)?(\d+)/i; 
+                    const fallbackVidas = /(?:\s+)(\d{1,3})\s+(?:\d{1,2},\d{2}\s+)?(?:[\d\.]+,\d{2})\s+(?:[\d\.]+,\d{2})/i; 
+                    let matchFallbackVidas = fallbackVidas.exec(bloco);
+                    
+                    const regexVidas = /(?:Qtd(?:[.\s]*(?:de\s*)?(?:Vidas?|Benefici[aá]rios?))?|Vidas?|Benefici[aá]rios?)\s*(?::\s*|-)?\s*(\d+)/i; 
                     let matchVidas = regexVidas.exec(bloco);
-                    if (matchVidas) { 
+                    
+                    if (matchVidas && parseInt(matchVidas[1], 10) > 0) { 
                         vidasDetectadas = parseInt(matchVidas[1], 10).toString(); 
-                    } else {
-                        const fallbackVidas = /(?:\s+)(\d+)\s+(?:\d{1,2},\d{2}\s+)?(?:[\d\.]+,\d{2})\s+(?:[\d\.]+,\d{2})/i; 
-                        let matchFallbackVidas = fallbackVidas.exec(bloco);
-                        if (matchFallbackVidas) {
-                            vidasDetectadas = parseInt(matchFallbackVidas[1], 10).toString();
-                        }
+                    } else if (matchFallbackVidas && parseInt(matchFallbackVidas[1], 10) > 0) {
+                        vidasDetectadas = parseInt(matchFallbackVidas[1], 10).toString();
                     }
 
                     if (valorTotal > 0) {
@@ -5903,7 +5903,7 @@ export default function App() {
                             <div className="flex flex-wrap gap-3 justify-start xl:justify-end w-full">
                                 <button onClick={() => setModalArquivosOpen(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 px-6 rounded-lg font-bold flex items-center shadow-lg transition-colors"> <Database size={18} className="mr-2"/> Buscar no Sistema</button>
                                 <button onClick={iniciarRelatorioManual} className="bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 px-6 rounded-lg font-bold flex items-center shadow-lg transition-colors"><FilePlus size={18} className="mr-2"/> Novo Relatório</button>
-                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowModalVendasRelatorio(true); }} className="bg-purple-600 hover:bg-purple-500 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"><ShoppingCart size={18} className="mr-2"/> Adicionar</button>
+                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowModalVendasRelatorio(true); }} className="bg-purple-600 hover:bg-purple-500 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"><ShoppingCart size={18} className="mr-2"/> Adicionar Venda</button>
                                 <button onClick={addManualRow} className="bg-amber-500 hover:bg-amber-400 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"><Plus size={18} className="mr-2"/> Adicionar Linha</button>
                                 
                                 {pdfData.length > 0 && (
