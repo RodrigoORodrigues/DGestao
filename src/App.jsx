@@ -3432,33 +3432,56 @@ export default function App() {
                     
                     const regexValores = /Sem Repique\s+(\d{1,2},\d{2})\s+([\d\.]+,\d{2})\s+([\d\.]+,\d{2})/i; 
                     let matchValores = regexValores.exec(bloco);
+                    
+                    const regexFallback = /(\d{1,2},\d{2})\s+([\d\.]+,\d{2})\s+([\d\.]+,\d{2})\s+Médico/i; 
+                    let matchFallback = regexFallback.exec(bloco);
+
+                    const regexValoresSeq = /(?:(?<!\d)(\d{1,4})\s+)?(?:(?:\d{1,2},\d{2}\s+)?([\d\.]+,\d{2})\s+([\d\.]+,\d{2}))(?:\s*(?:(?:Benef|Qtd)[^\d]*|\b\d{4,}\b|$|Médico))/i;
+                    let matchValoresSeq = regexValoresSeq.exec(bloco);
+
                     if (matchValores) { 
                         valorTotal = parseFloat(matchValores[2].replace(/\./g, '').replace(',', '.')); 
                         comissao = parseFloat(matchValores[3].replace(/\./g, '').replace(',', '.')); 
-                    } else {
-                        const regexFallback = /(\d{1,2},\d{2})\s+([\d\.]+,\d{2})\s+([\d\.]+,\d{2})\s+Médico/i; 
-                        let matchFallback = regexFallback.exec(bloco);
-                        if(matchFallback){ 
-                            valorTotal = parseFloat(matchFallback[2].replace(/\./g, '').replace(',', '.')); 
-                            comissao = parseFloat(matchFallback[3].replace(/\./g, '').replace(',', '.')); 
+                    } else if (matchFallback) { 
+                        valorTotal = parseFloat(matchFallback[2].replace(/\./g, '').replace(',', '.')); 
+                        comissao = parseFloat(matchFallback[3].replace(/\./g, '').replace(',', '.')); 
+                    } else if (matchValoresSeq) {
+                        if (matchValoresSeq[1]) {
+                            vidasDetectadas = parseInt(matchValoresSeq[1], 10).toString();
                         }
+                        valorTotal = parseFloat(matchValoresSeq[2].replace(/\./g, '').replace(',', '.')); 
+                        comissao = parseFloat(matchValoresSeq[3].replace(/\./g, '').replace(',', '.')); 
                     }
 
-                    const fallbackVidas = /(?:\s+)(\d{1,3})\s+(?:\d{1,2},\d{2}\s+)?(?:[\d\.]+,\d{2})\s+(?:[\d\.]+,\d{2})/i; 
+                    const fallbackVidas = /(?:\s+)(?<!\d)(\d{1,4})(?!\d)\s+(?:\d{1,2},\d{2}\s+)?(?:[\d\.]+,\d{2})\s+(?:[\d\.]+,\d{2})/i; 
                     let matchFallbackVidas = fallbackVidas.exec(bloco);
                     
-                    const regex3Num = /(?:Qtd[^\d]*?)?(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})\s+(?:[\d.,]+\s+)?[\d.,]+\s+[\d.,]+/i;
+                    const regex3Num = /(?:Qtd[^\d]*?)?(?<!\d)(\d{1,4})\s+(?<!\d)(\d{1,4})\s+(?<!\d)(\d{1,4})(?!\d)\s+(?:[\d.,]+\s+)?[\d.,]+\s+[\d.,]+/i;
                     let match3Num = regex3Num.exec(bloco);
 
-                    const regexVidas = /(?:Qtd(?:[.\s]*(?:de\s*)?(?:Vidas?|Benefici[aá]rios?))?|Vidas?|Benefici[aá]rios?)\s*(?::\s*|-)?\s*(\d+)/i; 
+                    const regexVidas = /(?:Qtd[^\d]*?|Vidas?\s*:?\s*|Benef[a-zÀ-ÿ.]*\s*:?\s*)(?<!\d)(\d{1,4})(?!\d)/i; 
                     let matchVidas = regexVidas.exec(bloco);
                     
-                    if (match3Num && parseInt(match3Num[3], 10) > 0) {
-                        vidasDetectadas = parseInt(match3Num[3], 10).toString();
-                    } else if (matchVidas && parseInt(matchVidas[1], 10) > 0) { 
+                    if (matchVidas && parseInt(matchVidas[1], 10) > 0) { 
                         vidasDetectadas = parseInt(matchVidas[1], 10).toString(); 
+                    } else if (vidasDetectadas !== "1") {
+                        // Already got it from matchValoresSeq!
+                    } else if (match3Num && parseInt(match3Num[3], 10) > 0) {
+                        vidasDetectadas = parseInt(match3Num[3], 10).toString();
                     } else if (matchFallbackVidas && parseInt(matchFallbackVidas[1], 10) > 0) {
                         vidasDetectadas = parseInt(matchFallbackVidas[1], 10).toString();
+                    }
+                    
+                    if (parseInt(vidasDetectadas, 10) > 9999) {
+                        vidasDetectadas = "1";
+                    }
+
+                    if (extratoOperadora === 'MED SENIOR') {
+                        const regexVidasMedSenior = /Vidas[^\d]*?(?<!\d)(\d{1,4})(?!\d)/i;
+                        let matchMedSenior = regexVidasMedSenior.exec(bloco);
+                        if (matchMedSenior && parseInt(matchMedSenior[1], 10) > 0) {
+                            vidasDetectadas = parseInt(matchMedSenior[1], 10).toString();
+                        }
                     }
 
                     if (valorTotal > 0) {
@@ -3975,7 +3998,7 @@ export default function App() {
             if (!isMatched && textoNormalizado.includes('HAPVIDA')) {
                 const hapvidaRegex = /(\d{8,})\s+([A-Z0-9]+)\s+(.+?)\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+([\d.,]+)\s+([\d.,]+)\s+(\d+)\s+([\d.,]+)\s+([A-Z0-9]+)\s+(.+?)\s+(\d+)\s+[A-Z]/g;
                 isMatched = processGenericRegex(hapvidaRegex, textoNormalizado, match => ({
-                    contrato: match[2], cliente: match[3], parcela: match[8], valorTotal: parseFloat(match[7].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[9].replace(/\./g, '').replace(',', '.')), vitalicio: 'Não'
+                    contrato: match[2], cliente: match[3], empresaObrigacao: match[1], inicioVigencia: match[5], vidas: '', parcela: match[12], valorTotal: parseFloat(match[7].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[9].replace(/\./g, '').replace(',', '.')), vitalicio: 'Não'
                 }));
             }
             // Klini
@@ -4087,7 +4110,23 @@ export default function App() {
             }
         }
         
-        const comissaoPreenchida = novosRegistos.map(r => {
+        // Sum Hapvida duplicate records by Empresa/Obrigação and parcela
+        let registosParaProcessar = novosRegistos;
+        if (extratoOperadora === 'HAPVIDA') {
+            const grouped = [];
+            for (let reg of novosRegistos) {
+                const existing = grouped.find(r => r.empresaObrigacao === reg.empresaObrigacao && r.parcela === reg.parcela && r.codigoOperadora === 'HAPVIDA');
+                if (existing) {
+                    existing.valorTotal = (parseFloat(existing.valorTotal) || 0) + (parseFloat(reg.valorTotal) || 0);
+                    existing.comissao = (parseFloat(existing.comissao) || 0) + (parseFloat(reg.comissao) || 0);
+                } else {
+                    grouped.push({ ...reg });
+                }
+            }
+            registosParaProcessar = grouped;
+        }
+
+        const comissaoPreenchida = registosParaProcessar.map(r => {
             let comissaoPorcentagem = '';
             const t = parseFloat(r.valorTotal) || 0;
             const c = parseFloat(r.comissao) || 0;
@@ -4100,7 +4139,7 @@ export default function App() {
         });
 
         setPdfData(comissaoPreenchida); 
-        showAlert(novosRegistos.length > 0 ? `Extrato processado com sucesso! ${novosRegistos.length} lançamento(s) extraído(s).` : "Nenhum lançamento foi extraído. Verifique se o modelo e os campos do extrato estão corretos.");
+        showAlert(registosParaProcessar.length > 0 ? `Extrato processado com sucesso! ${registosParaProcessar.length} lançamento(s) extraído(s).` : "Nenhum lançamento foi extraído. Verifique se o modelo e os campos do extrato estão corretos.");
     };
 
     const toggleSelectAll = (e) => {
