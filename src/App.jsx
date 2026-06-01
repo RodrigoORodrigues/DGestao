@@ -4099,20 +4099,159 @@ export default function App() {
 
             // Bradesco Saúde - Detalhes do Pagamento
             if (!isMatched && textoUpper.includes('BRADESCO')) {
-                const bradescoModeloRegex = /(?:^|\s)100\s+(\d+)\s+(\d+)\s+([0-9A-Z\/.\-]+)\s+(\d+)\s+(\d+)\s+([\d,]+)\s+([A-ZÀ-ÿ][A-ZÀ-ÿ0-9 .&'\-]+?)\s+(\d{2})\s+(\d{1,3})\s+R\$\s*([\d.]+,\d{2})\s+R\$\s*([\d.]+,\d{2})/gi;
-                isMatched = processGenericRegex(bradescoModeloRegex, textoNormalizado, match => {
-                    const valorA = parseCurrencyValue(match[10]);
-                    const valorB = parseCurrencyValue(match[11]);
-                    return {
-                        contrato: match[3],
-                        cliente: match[7],
-                        parcela: match[9],
-                        valorTotal: Math.max(valorA, valorB),
-                        comissao: Math.min(valorA, valorB),
-                        vitalicio: 'Não',
-                        servico: 'Plano de Saúde'
-                    };
+                const matchTotal = textoUpper.match(/VALOR\s+BRUTO\s*\(D\+E\)\s*-\s*F\s*(?:R\$)?\s*([\d.]+,\d{2})/);
+                const grossTarget = matchTotal ? parseCurrencyValue(matchTotal[1]) : 0;
+                
+                let somaAtual = 0;
+                let addedAny = false;
+                
+                const regex1 = /(?:^|\s)([\w\/\-.,()& ]+?)\s+(\d{1,3})\s+(?:R\$ ?)?([\d.]+,\d{2})\s+([\d,]+(?:%|))\s+(?:R\$ ?)?([\d.]+,\d{2})(?=\s|$)/g;
+                const regex2 = /(?:^|\s)([\w\/\-.,()& ]+?)\s+(\d{1,3})\s+(\d{1,3})\s+(?:R\$ ?)?([\d.]+,\d{2})\s+(?:R\$ ?)?([\d.]+,\d{2})(?=\s|$)/g;
+                const regex3 = /(?:^|\s)([\w\/\-.,()& ]+?)\s+(\d{1,3})\s+(?:R\$ ?)?([\d.]+,\d{2})\s+(?:R\$ ?)?([\d.]+,\d{2})(?=\s|$)/g;
+
+                let matches = [];
+                let m;
+                // Add endIndex to better skip overlaps
+                while ((m = regex1.exec(textoNormalizado)) !== null) matches.push({ type: 1, match: m, index: m.index, endIndex: m.index + m[0].length });
+                while ((m = regex2.exec(textoNormalizado)) !== null) matches.push({ type: 2, match: m, index: m.index, endIndex: m.index + m[0].length });
+                while ((m = regex3.exec(textoNormalizado)) !== null) matches.push({ type: 3, match: m, index: m.index, endIndex: m.index + m[0].length });
+                
+                matches.sort((a,b) => {
+                    if (a.index !== b.index) return a.index - b.index;
+                    return a.type - b.type;
                 });
+
+                let lastEndIndex = -1;
+
+                for (const matchObj of matches) {
+                    if (grossTarget > 0 && somaAtual >= grossTarget - 0.05) break; 
+                    
+                    if (matchObj.index < lastEndIndex) {
+                        continue; // Skip overlapping match
+                    }
+                    
+                    let prefix = null, parcela = null, valA = null, valB = null;
+
+                    if (matchObj.type === 1) { 
+                        prefix = matchObj.match[1]; 
+                        parcela = matchObj.match[2]; 
+                        valA = parseCurrencyValue(matchObj.match[3]); 
+                        valB = parseCurrencyValue(matchObj.match[5]); 
+                    } else if (matchObj.type === 2) { 
+                        prefix = matchObj.match[1]; 
+                        parcela = matchObj.match[3]; 
+                        valA = parseCurrencyValue(matchObj.match[4]); 
+                        valB = parseCurrencyValue(matchObj.match[5]); 
+                    } else if (matchObj.type === 3) {
+                        prefix = matchObj.match[1]; 
+                        parcela = matchObj.match[2]; 
+                        valA = parseCurrencyValue(matchObj.match[3]); 
+                        valB = parseCurrencyValue(matchObj.match[4]); 
+                    }
+
+                    if (prefix) {
+                        lastEndIndex = matchObj.endIndex;
+                        const tokens = prefix.trim().split(/\s+/);
+                        let codes = [];
+                        let nameParts = [];
+                        tokens.forEach(t => { 
+                            if (/^[0-9A-Z/\-.%,]+$/.test(t) && !/^[A-ZÀ-ÿ]+$/.test(t) && /[0-9]/.test(t)) codes.push(t); 
+                            else nameParts.push(t);
+                        });
+                        
+                        let firstWordIdx = tokens.findIndex(t => /[A-Za-zÀ-ÿ]/.test(t) && !/^\d+[A-Z]?$/.test(t));
+                        if (firstWordIdx === -1) firstWordIdx = 0;
+                        let nomeReal = tokens.slice(firstWordIdx).join(' ').replace(/\s*\d{2}$/, '').replace(/[\s-]+$/, '').trim();
+                        let contratoVal = codes.filter(c => c.length > 5)[0] || codes[0] || '';
+
+                        let comissaoVal = Math.min(valA, valB);
+                        let valorTotalVal = Math.max(valA, valB);
+
+                        const dataExt = {
+                            contrato: contratoVal,
+                            cliente: nomeReal,
+                            parcela: parcela,
+                            valorTotal: valorTotalVal,
+                            comissao: comissaoVal,
+                            vitalicio: 'Não',
+                            servico: 'Plano de Saúde'
+                        };
+
+                        if (!dataExt.cliente) continue;
+
+                        somaAtual += dataExt.comissao;
+                        addedAny = true;
+
+                        currentMaxVendaCodigo++;
+                        let codRegistro = String(currentMaxVendaCodigo).padStart(5, '0');
+                        let nomeCliente = dataExt.cliente.trim().toUpperCase();
+                        const empresaRegistro = isAmilExtrato ? empresaAmil : empresaContexto;
+                        const empresaRegistroUpper = isAmilExtrato ? empresaAmilUpper : empresaContextoUpper;
+                        const dataMovimentoDetectada = formatDateForInput(reportDoc?.date) || dataDeHojeInterna();
+
+                        if(!nomesClientesExistem.has(nomeCliente.toLowerCase())) {
+                            nomesClientesExistem.add(nomeCliente.toLowerCase());
+                            currentMaxCodigo++;
+                            let newCodigo = String(currentMaxCodigo).padStart(5, '0');
+                            clientesParaInserir.push({ 
+                                codigo: dataExt.contrato || newCodigo, 
+                                nome: nomeCliente, 
+                                tipo: 'Pessoa jurídica', 
+                                documento: '', telefone: '', celular: '', email: '', 
+                                situacao: true, operadora: extratoOperadora, empresa: empresaRegistro
+                            });
+                        } else {
+                            let existingCli = clientes.find(c => c.nome.toLowerCase() === nomeCliente.toLowerCase());
+                            if (existingCli && (!existingCli.operadora || existingCli.operadora.trim() === '' || existingCli.operadora === '-')) {
+                                if (!clientesParaAtualizar.has(existingCli.id)) {
+                                    clientesParaAtualizar.set(existingCli.id, { operadora: extratoOperadora });
+                                }
+                            }
+                        }
+
+                        let vendedorDetectado = nomeEmpresa; 
+                        let inicioVigenciaDetectada = "";
+                        const historicoVendasCliente = vendasList.filter(v => 
+                            (v.cliente && v.cliente.toLowerCase() === nomeCliente.toLowerCase()) || 
+                            (dataExt.contrato && v.contrato === dataExt.contrato)
+                        );
+
+                        if (historicoVendasCliente.length > 0) {
+                            const ultimaVenda = historicoVendasCliente.sort((a,b) => new Date(b.dataVenda) - new Date(a.dataVenda))[0];
+                            if (ultimaVenda.corretor && ultimaVenda.corretor !== "Todos") vendedorDetectado = ultimaVenda.corretor;
+                            if (ultimaVenda.inicioVigencia) inicioVigenciaDetectada = ultimaVenda.inicioVigencia;
+                        }
+
+                        let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataMovimentoDetectada);
+                        let parcelaDetectada = dataExt.parcela || calcParcela || "1";
+
+                        novosRegistos.push({ 
+                            cod: extratoCodOperadora || codRegistro, 
+                            contrato: dataExt.contrato || "", 
+                            codOperadora: extratoCodOperadora || null,
+                            codigoOperadora: extratoOperadora, 
+                            vidas: "1",
+                            cliente: nomeCliente, 
+                            data: dataMovimentoDetectada, 
+                            situacao: `FATURADO ${empresaRegistroUpper} NF`, 
+                            loja: empresaRegistroUpper, 
+                            valorTotal: dataExt.valorTotal || 0, 
+                            comissao: dataExt.comissao || 0, 
+                            vendedor: vendedorDetectado, 
+                            parcela: parcelaDetectada,
+                            inicioVigencia: inicioVigenciaDetectada, 
+                            notaFiscal: reportDoc?.notaFiscal || '', 
+                            vitalicio: dataExt.vitalicio || 'Não', 
+                            assessoria: empresaRegistro, 
+                            formaPagamento: empresaRegistroUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
+                            servico: dataExt.servico || 'Plano de Saúde', 
+                            desconto: '', 
+                            selected: true
+                        });
+                    }
+                }
+                
+                if (addedAny) isMatched = true;
             }
 
             // ICATU - Extrato Analítico Individual
@@ -4184,13 +4323,6 @@ export default function App() {
                 }));
             }
 
-            // Bradesco
-            if (!isMatched && textoNormalizado.toLowerCase().includes('bradesco')) {
-                const bradescoRegex = /(\d+)\s+(\d+)\s+([0-9/a-zA-Z-]+)\s+(\d+)\s+(\d+)\s+([\d,]+(?:%|))\s+([a-zA-ZÀ-ÿ0-9 .&'-]+?)\s+(\d{2})\s+(\d{1,3})\s*(?:R\$)?\s*([\d.,]+)\s*(?:R\$)?\s*([\d.,]+)/gi;
-                isMatched = processGenericRegex(bradescoRegex, textoNormalizado, match => ({
-                    contrato: match[3], cliente: match[7], parcela: match[9], valorTotal: parseFloat(match[11].replace(/\./g, '').replace(',', '.')), comissao: parseFloat(match[10].replace(/\./g, '').replace(',', '.'))
-                }));
-            }
             // Hapvida
             if (!isMatched && textoNormalizado.includes('HAPVIDA')) {
                 const hapvidaRegex = /(\d{8,})\s+([A-Z0-9]+)\s+(.+?)\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+([\d.,]+)\s+([\d.,]+)\s+(\d+)\s+([\d.,]+)\s+([A-Z0-9]+)\s+(.+?)\s+(\d+)\s+[A-Z]/g;
@@ -5283,8 +5415,18 @@ export default function App() {
                                                             <td className="py-3 px-4 text-center">
                                                                 <div className="flex flex-col gap-2">
                                                                     <button 
+                                                                        onClick={() => {
+                                                                            setVendaForm({...initialVendaForm, cliente: inc.cliente, contrato: inc.contrato || '', parcela: inc.faltantes[0]?.toString() || '1'});
+                                                                            setIsAdminEdit(false); 
+                                                                            setModalVendaOpen(true);
+                                                                        }} 
+                                                                        className="text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-800/50 dark:text-indigo-400 px-3 py-1.5 rounded font-bold transition-colors flex items-center justify-center shadow-sm"
+                                                                    >
+                                                                        <Plus size={14} className="mr-1" /> Add Venda
+                                                                    </button>
+                                                                    <button 
                                                                         onClick={() => updateInconsistenciaMeta(inc.id, !meta.resolvida, meta.comentario)}
-                                                                        className={`text-xs px-3 py-1.5 rounded font-bold transition-colors shadow-sm flex items-center justify-center ${meta.resolvida ? 'bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-900/30 dark:hover:bg-amber-800/40 dark:text-amber-400' : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-800/40 dark:text-emerald-400'}`}
+                                                                        className={`text-xs px-3 py-1.5 rounded transition-colors shadow-sm flex items-center justify-center ${meta.resolvida ? 'bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-900/30 dark:hover:bg-amber-800/40 dark:text-amber-400 font-bold' : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-800/40 dark:text-emerald-400'}`}
                                                                     >
                                                                         {meta.resolvida ? <XCircle size={14} className="mr-1"/> : <CheckCircle size={14} className="mr-1"/>}
                                                                         {meta.resolvida ? 'Reabrir' : 'Resolver'}
@@ -5299,7 +5441,7 @@ export default function App() {
                                                                         }} 
                                                                         className="text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded transition-colors flex items-center justify-center"
                                                                     >
-                                                                        <Search size={14} className="mr-1" /> Vendas
+                                                                        <Search size={14} className="mr-1" /> Ver Vendas
                                                                     </button>
                                                                 </div>
                                                             </td>
