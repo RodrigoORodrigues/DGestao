@@ -2793,7 +2793,10 @@ export default function App() {
             let amilDataIso = "";
             if (isAmilExtrato && typeof data.data === 'string') {
                 const mapRef = data.data.match(/(?<!\d\/)\b(\d{2})\/(\d{4})\b/);
-                if (mapRef) amilDataIso = `${mapRef[2]}-${mapRef[1]}-30`;
+                if (mapRef) {
+                    const lastDay = mapRef[1] === '02' ? '28' : '30';
+                    amilDataIso = `${mapRef[2]}-${mapRef[1]}-${lastDay}`;
+                }
             }
             const dataMovimentoIso = amilDataIso || formatDateForInput(data.data) || (isAmilExtrato ? (dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date)) : dataDeHojeInterna());
             const dataMovimentoDetectada = data.formatoDataBR ? (formatDateBR(data.data) || dataMovimentoIso) : dataMovimentoIso;
@@ -3505,7 +3508,7 @@ export default function App() {
                         }
 
                         let matchRefAmil = isAmilExtrato ? bloco.match(/(?<!\d\/)\b(\d{2})\/(\d{4})\b/) : null;
-                        let dataMovimentoDetectada = matchRefAmil ? `${matchRefAmil[2]}-${matchRefAmil[1]}-30` : (extractDataDoExtrato(bloco) || dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date) || (isAmilExtrato ? '' : dataDeHojeInterna()));
+                        let dataMovimentoDetectada = matchRefAmil ? `${matchRefAmil[2]}-${matchRefAmil[1]}-${matchRefAmil[1] === '02' ? '28' : '30'}` : (extractDataDoExtrato(bloco) || dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date) || (isAmilExtrato ? '' : dataDeHojeInterna()));
 
                         if (extratoOperadora === 'MED SENIOR') {
                             const matchVencimento = bloco.match(/(?:Vencimento|Venc\.?|Data da Venda|Data Venda)\s*:?\s*(\d{2}\/\d{2}\/\d{4})/i);
@@ -3987,7 +3990,10 @@ export default function App() {
                         let amilDataIso = "";
                         if (isAmilExtrato && typeof data.data === 'string') {
                             const mapRef = data.data.match(/(?<!\d\/)\b(\d{2})\/(\d{4})\b/);
-                            if (mapRef) amilDataIso = `${mapRef[2]}-${mapRef[1]}-30`;
+                            if (mapRef) {
+                                const lastDay = mapRef[1] === '02' ? '28' : '30';
+                                amilDataIso = `${mapRef[2]}-${mapRef[1]}-${lastDay}`;
+                            }
                         }
                         const dataMovimentoDetectada = amilDataIso || formatDateForInput(data.data) || (isAmilExtrato ? (dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date)) : dataDeHojeInterna());
 
