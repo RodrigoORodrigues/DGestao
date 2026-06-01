@@ -2790,7 +2790,12 @@ export default function App() {
             const contratoDetectado = String(data.contrato || '').trim();
             const empresaRegistro = isAmilExtrato ? empresaAmil : empresaContexto;
             const empresaRegistroUpper = isAmilExtrato ? empresaAmilUpper : empresaContextoUpper;
-            const dataMovimentoIso = formatDateForInput(data.data) || (isAmilExtrato ? (dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date)) : dataDeHojeInterna());
+            let amilDataIso = "";
+            if (isAmilExtrato && typeof data.data === 'string') {
+                const mapRef = data.data.match(/(?<!\d\/)\b(\d{2})\/(\d{4})\b/);
+                if (mapRef) amilDataIso = `${mapRef[2]}-${mapRef[1]}-30`;
+            }
+            const dataMovimentoIso = amilDataIso || formatDateForInput(data.data) || (isAmilExtrato ? (dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date)) : dataDeHojeInterna());
             const dataMovimentoDetectada = data.formatoDataBR ? (formatDateBR(data.data) || dataMovimentoIso) : dataMovimentoIso;
 
             if(!nomesClientesExistem.has(nomeCliente.toLowerCase())) {
@@ -3499,7 +3504,8 @@ export default function App() {
                             inicioVigenciaDetectada = `${partes[2]}-${partes[1]}-${partes[0]}`; 
                         }
 
-                        let dataMovimentoDetectada = extractDataDoExtrato(bloco) || dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date) || (isAmilExtrato ? '' : dataDeHojeInterna());
+                        let matchRefAmil = isAmilExtrato ? bloco.match(/(?<!\d\/)\b(\d{2})\/(\d{4})\b/) : null;
+                        let dataMovimentoDetectada = matchRefAmil ? `${matchRefAmil[2]}-${matchRefAmil[1]}-30` : (extractDataDoExtrato(bloco) || dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date) || (isAmilExtrato ? '' : dataDeHojeInterna()));
 
                         if (extratoOperadora === 'MED SENIOR') {
                             const matchVencimento = bloco.match(/(?:Vencimento|Venc\.?|Data da Venda|Data Venda)\s*:?\s*(\d{2}\/\d{2}\/\d{4})/i);
@@ -3978,7 +3984,12 @@ export default function App() {
                         let nomeCliente = data.cliente.trim().toUpperCase();
                         const empresaRegistro = isAmilExtrato ? empresaAmil : empresaContexto;
                         const empresaRegistroUpper = isAmilExtrato ? empresaAmilUpper : empresaContextoUpper;
-                        const dataMovimentoDetectada = formatDateForInput(data.data) || (isAmilExtrato ? (dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date)) : dataDeHojeInterna());
+                        let amilDataIso = "";
+                        if (isAmilExtrato && typeof data.data === 'string') {
+                            const mapRef = data.data.match(/(?<!\d\/)\b(\d{2})\/(\d{4})\b/);
+                            if (mapRef) amilDataIso = `${mapRef[2]}-${mapRef[1]}-30`;
+                        }
+                        const dataMovimentoDetectada = amilDataIso || formatDateForInput(data.data) || (isAmilExtrato ? (dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date)) : dataDeHojeInterna());
 
                         if(!nomesClientesExistem.has(nomeCliente.toLowerCase())) {
                             nomesClientesExistem.add(nomeCliente.toLowerCase());
