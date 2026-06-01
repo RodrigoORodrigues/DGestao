@@ -5927,8 +5927,7 @@ export default function App() {
                                                 <td className="py-4 px-4 text-center">
                                                     <div className="flex gap-1.5 justify-center">
                                                         <button onClick={(e) => { e.stopPropagation(); abrirModalVenda(venda); }} className="bg-sky-500 hover:bg-sky-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Visualizar / Editar Detalhes"><Search size={14}/></button>
-                                                        <button onClick={(e) => { e.stopPropagation(); duplicarVenda(venda); }} className="bg-amber-500 hover:bg-amber-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Duplicar Venda"><Copy size={14}/></button>
-                                                        <button onClick={(e) => { e.stopPropagation(); setNfeForm(prev => ({ ...prev, nome: venda.cliente, valor: venda.valor, desc: `Referente a comissão / serviços prestados para ${venda.cliente}.` })); setCurrentView('nfe'); setNfeTab('emitir'); }} className="bg-indigo-500 hover:bg-indigo-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Emitir NF-e"><Receipt size={14}/></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); duplicarVenda(venda); }} className="bg-blue-500 hover:bg-blue-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Duplicar Venda"><Copy size={14}/></button>
                                                         <button onClick={(e) => { e.stopPropagation(); apagarVenda(venda); }} className="bg-rose-500 hover:bg-rose-400 text-white p-1.5 rounded transition-colors shadow-sm" title="Apagar Venda"><Trash2 size={14}/></button>
                                                     </div>
                                                 </td>
@@ -6389,8 +6388,7 @@ export default function App() {
                                                     {reportTableCols.comissao && <td className="py-1 px-2 text-right font-bold text-sky-600 dark:text-sky-400 text-xs">{formatarMoeda(linha.comissao)}</td>}
                                                     <td className="py-1 px-1 text-center no-print">
                                                         <div className="flex gap-1 justify-center">
-                                                            <button onClick={() => prepararEmissaoNF(linha)} className="text-blue-500 hover:text-blue-400 p-1 transition-colors" title="Emitir NF-e Deste Serviço"><Receipt size={14}/></button>
-                                                            <button onClick={() => duplicateRowInReport(idx, linha)} className="text-yellow-500 hover:text-yellow-400 p-1 transition-colors" title="Duplicar Linha"><Copy size={14}/></button>
+                                                            <button onClick={() => duplicateRowInReport(idx, linha)} className="text-blue-500 hover:text-blue-400 p-1 transition-colors" title="Duplicar Linha"><Copy size={14}/></button>
                                                             <button onClick={() => startEditingRow(idx, linha)} className="text-amber-500 hover:text-amber-400 p-1 transition-colors" title="Editar Linha"><Edit size={14}/></button>
                                                             <button onClick={() => deleteRowFromReport(idx)} className="text-rose-500 hover:text-rose-400 p-1 transition-colors" title="Apagar Linha"><Trash2 size={14}/></button>
                                                         </div>
