@@ -4376,17 +4376,18 @@ export default function App() {
             }
             // Porto Seguro
             if (!isMatched && textoNormalizado.toUpperCase().includes('PORTO SEGURO')) {
-                const portoRegex = /([a-zA-ZÀ-ÿ0-9 :"'()&.-]+?)\s+(?:Porto\s+)?(\d{2,3})\s+(\d+)\s+([\d/]+)(?:\s+(\d+))?\s+(\d+)\s+(?:(\d+)\s+)?(\d{4}-\d{2}-\d{2})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+(\d{2,4})-(AGENCIAMENTO|COMISS[AÃ]O\s+FRACIONADA|COMISS[AÃ]O\s+TOTAL|VENDA\s+AVULSA\s+PORTO\s+VISA|ESTORNO|LANCAMENTO|RENOVACAO|CANCELAMENTO|ENDOSSO|COMISS[AÃ]O|[A-ZÀ-ÿ]+(?:\s+[A-ZÀ-ÿ]+){0,3}?)/gi;
+                const portoRegex = /(?:^|\s|\n)([a-zA-ZÀ-ÿ0-9 :"'()&.-]+?)\s+(?:Porto\s+)?(\d{2,3})\s+(\d+)\s+([\w/.-]+)(?:\s+(\d+))?\s+(\d+)\s+(?:(\d+)\s+)?(\d{4}-\d{2}-\d{2})\s+(?:\d+\s+)?(-?\s*[\d.,]+)\s+(-?\s*[\d.,]+)\s+(-?\s*[\d.,]+)\s+(\d{1,4})-(AGENCIAMENTO|COMISS[AÃ]O(?:\s+FRACIONADA|\s+TOTAL)?|VENDA(?:\s+AVULSA(?:\s+PORTO\s+VISA)?)?|ESTORNO(?:\s+DE\s+COMISS[AÃ]O)?|LANCAMENTO(?:\s+DE\s+COMISS[AÃ]O)?|RENOVAC[AÃ]O(?:\s+DE\s+SEGURO)?|CANCELAMENTO(?:\s+DA\s+APOLICE)?|ENDOSSO(?:\s+DE\s+COMISS[AÃ]O)?|RESTITUIC[AÃ]O(?:\s+DE\s+COMISS[AÃ]O)?|AJUSTE(?:\s+DE\s+COMISS[AÃ]O)?|LIQUIDAC[AÃ]O(?:\s+DE\s+COMISS[AÃ]O)?)/gi;
                 isMatched = processGenericRegex(portoRegex, textoNormalizado, match => {
                     let rawCliente = match[1].trim();
+                    rawCliente = rawCliente.replace(/^(?:Porto\s+)+/i, '');
                     rawCliente = rawCliente.replace(/^Agenciamento Sub:\s*/i, '').replace(/\s*Compet:$/i, '').trim();
                     rawCliente = rawCliente.replace(/^(?:.*?(?:Tipo|Prêmio|Taxa|Comissão|Histórico|Marca|Suc|Ramo|Apl\/Prop|Fat\/Eds|Parc|Carne|Data|Ordem)\s+)+/i, '').trim();
                     return {
                         contrato: match[4], 
                         cliente: rawCliente, 
                         parcela: match[6], 
-                        valorTotal: parseFloat(match[9].replace(/\./g, '').replace(',', '.')), 
-                        comissao: parseFloat(match[11].replace(/\./g, '').replace(',', '.')),
+                        valorTotal: parseCurrencyValue(match[9].replace(/\s+/g, '')), 
+                        comissao: parseCurrencyValue(match[11].replace(/\s+/g, '')),
                         vitalicio: 'Não'
                     };
                 });
