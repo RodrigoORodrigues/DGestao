@@ -284,8 +284,14 @@ export default function App() {
             const saved = localStorage.getItem('protetta_empresas');
             const parsed = saved ? JSON.parse(saved) : null;
             if (parsed && parsed.length > 0) {
-                // Ensure default PROTETTA has CNPJ
-                return parsed.map(e => (e.id === 1 && e.nome === 'PROTETTA' && !e.cnpj) ? { ...e, cnpj: '28.291.926/0001-00' } : e);
+                // Remove a empresa "Operadora" que possa estar no cache local e garante PROTETTA
+                let filtered = parsed.filter(e => e.nome !== 'Operadora');
+                filtered = filtered.map(e => (e.id === 1 && e.nome === 'PROTETTA' && !e.cnpj) ? { ...e, cnpj: '28.291.926/0001-00' } : e);
+                if (filtered.length === 0) {
+                    filtered = [{ id: 1, nome: 'PROTETTA', cnpj: '28.291.926/0001-00', isDefault: true }];
+                }
+                setTimeout(() => localStorage.setItem('protetta_empresas', JSON.stringify(filtered)), 100);
+                return filtered;
             }
             return [{ id: 1, nome: 'PROTETTA', cnpj: '28.291.926/0001-00', isDefault: true }];
         } catch { return [{ id: 1, nome: 'PROTETTA', cnpj: '28.291.926/0001-00', isDefault: true }]; }
