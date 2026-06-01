@@ -1394,9 +1394,12 @@ export default function App() {
     const rodarVarreduraInconsistencias = (vendasBase = vendasList, reportsBase = savedReportsList) => {
         const resultado = calcularInconsistencias(vendasBase, reportsBase);
         setInconsistenciasList(resultado);
-        setSelectedInconsistencias([]);
         return resultado;
     };
+
+    useEffect(() => {
+        rodarVarreduraInconsistencias(vendasList, savedReportsList);
+    }, [vendasList, savedReportsList]);
 
     const updateInconsistenciaMeta = (id, resolvida, comentario) => {
         const newMeta = { ...inconsistenciasMeta, [id]: { resolvida, comentario } };
