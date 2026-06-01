@@ -1,0 +1,14 @@
+2611:        const isAmilExtrato = operadoraNormalizada.includes('AMIL');
+2627:        if (isSulAmericaExtrato || isAmilExtrato) {
+2791:            const empresaRegistro = isAmilExtrato ? empresaAmil : empresaContexto;
+2792:            const empresaRegistroUpper = isAmilExtrato ? empresaAmilUpper : empresaContextoUpper;
+2793:            const dataMovimentoIso = formatDateForInput(data.data) || (isAmilExtrato ? (dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date)) : dataDeHojeInterna());
+3390:            const empresaBloco = isAmilExtrato ? empresaAmil : empresaContexto;
+3391:            const empresaBlocoUpper = isAmilExtrato ? empresaAmilUpper : empresaContextoUpper;
+3502:                        let dataMovimentoDetectada = extractDataDoExtrato(bloco) || dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date) || (isAmilExtrato ? '' : dataDeHojeInterna());
+3579:                            servico: isAmilExtrato ? 'Plano de Saúde' : '', 
+3591:            const empresaBloco = isAmilExtrato ? empresaAmil : empresaContexto;
+3592:            const empresaBlocoUpper = isAmilExtrato ? empresaAmilUpper : empresaContextoUpper;
+3979:                        const empresaRegistro = isAmilExtrato ? empresaAmil : empresaContexto;
+3980:                        const empresaRegistroUpper = isAmilExtrato ? empresaAmilUpper : empresaContextoUpper;
+3981:                        const dataMovimentoDetectada = formatDateForInput(data.data) || (isAmilExtrato ? (dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date)) : dataDeHojeInterna());

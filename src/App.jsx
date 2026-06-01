@@ -3439,10 +3439,10 @@ export default function App() {
                     const regexValores = /Sem Repique\s+(\d{1,2},\d{2})\s+([\d\.]+,\d{2})\s+([\d\.]+,\d{2})/i; 
                     let matchValores = regexValores.exec(bloco);
                     
-                    const regexFallback = /(\d{1,2},\d{2})\s+([\d\.]+,\d{2})\s+([\d\.]+,\d{2})\s+Médico/i; 
+                    const regexFallback = /(\d{1,2},\d{2})\s+([\d\.]+,\d{2})\s+([\d\.]+,\d{2})\s+(?:Médico|Dental|Odonto)/i; 
                     let matchFallback = regexFallback.exec(bloco);
 
-                    const regexValoresSeq = /(?:(?<!\d)(\d{1,4})\s+)?(?:(?:\d{1,2},\d{2}\s+)?([\d\.]+,\d{2})\s+([\d\.]+,\d{2}))(?:\s*(?:(?:Benef|Qtd)[^\d]*|\b\d{4,}\b|$|Médico))/i;
+                    const regexValoresSeq = /(?:(?<!\d)(\d{1,4})\s+)?(?:(?:\d{1,2},\d{2}\s+)?([\d\.]+,\d{2})\s+([\d\.]+,\d{2}))(?:\s*(?:(?:Benef|Qtd)[^\d]*|\b\d{4,}\b|$|Médico|Dental|Odonto|D700|205))/i;
                     let matchValoresSeq = regexValoresSeq.exec(bloco);
 
                     if (matchValores) { 
@@ -3576,7 +3576,7 @@ export default function App() {
                             vitalicio: 'Sim', 
                             assessoria: empresaBloco, 
                             formaPagamento: empresaBlocoUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
-                            servico: isAmilExtrato ? 'Plano de Saúde' : '', 
+                            servico: isAmilExtrato ? (/(dental|odonto|d700|205)/i.test(bloco) ? 'Plano Dental' : 'Plano de Saúde') : '', 
                             desconto: '', 
                             selected: true
                         });
