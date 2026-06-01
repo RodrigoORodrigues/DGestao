@@ -3493,7 +3493,26 @@ export default function App() {
                             inicioVigenciaDetectada = `${partes[2]}-${partes[1]}-${partes[0]}`; 
                         }
 
-                        const dataMovimentoDetectada = extractDataDoExtrato(bloco) || dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date) || (isAmilExtrato ? '' : dataDeHojeInterna());
+                        let dataMovimentoDetectada = extractDataDoExtrato(bloco) || dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date) || (isAmilExtrato ? '' : dataDeHojeInterna());
+
+                        if (extratoOperadora === 'MED SENIOR') {
+                            const matchVencimento = bloco.match(/(?:Vencimento|Venc\.?|Data da Venda|Data Venda)\s*:?\s*(\d{2}\/\d{2}\/\d{4})/i);
+                            if (matchVencimento) {
+                                const partes = matchVencimento[1].split('/');
+                                dataMovimentoDetectada = `${partes[2]}-${partes[1]}-${partes[0]}`;
+                            } else {
+                                const todasDatas = [...bloco.matchAll(/\b(\d{2}\/\d{2}\/\d{4})\b/g)];
+                                if (todasDatas.length >= 2) {
+                                    // Se houver múltiplas datas e sem rótulo, a Vigência pegou a primeira.
+                                    // Vamos pegar a última como Data/Vencimento.
+                                    const partes = todasDatas[todasDatas.length - 1][1].split('/');
+                                    dataMovimentoDetectada = `${partes[2]}-${partes[1]}-${partes[0]}`;
+                                } else if (todasDatas.length === 1 && inicioVigenciaDetectada === "") {
+                                    const partes = todasDatas[0][1].split('/');
+                                    dataMovimentoDetectada = `${partes[2]}-${partes[1]}-${partes[0]}`;
+                                }
+                            }
+                        }
                         let vendedorDetectado = empresaBloco; 
                         let parcelaDetectada = "1";
                         let numeroEsperado = null;
@@ -3558,6 +3577,158 @@ export default function App() {
                     }
                 } catch (e) { 
                     console.warn("Erro bloco:", e); 
+                }
+            }
+        };
+
+        const parseMedSeniorExtrato = (blocosContrato) => {
+            const empresaBloco = isAmilExtrato ? empresaAmil : empresaContexto;
+            const empresaBlocoUpper = isAmilExtrato ? empresaAmilUpper : empresaContextoUpper;
+            
+            for (let bloco of blocosContrato) {
+                try {
+                    bloco = bloco.trim(); 
+                    if (bloco === "") continue;
+                    
+                    let codCliente = "N/D", nomeCliente = "";
+                    const matchNome = bloco.match(/^(\d+)\s*(?:-)?\s*(.+?)(?=\s+Vendedor:|\s+Fatura|\s+Proposta|\s+Data|\s+Qtd|\s+Forma|\s+\d{2}\/\d{4})/i);
+                    if (matchNome) { 
+                        codCliente = matchNome[1].trim(); 
+                        nomeCliente = matchNome[2].trim(); 
+                        nomeCliente = nomeCliente.replace(/(?:\s+[\d\/\.\-,]+)+$/, '').trim().toUpperCase(); 
+                    }
+                    if(!nomeCliente) continue;
+
+                    let inicioVigenciaDetectada = ""; 
+                    const regexDataVigencia = /\b(\d{2}\/\d{2}\/\d{4})\b/; 
+                    let matchVigencia = regexDataVigencia.exec(bloco);
+                    if (matchVigencia) { 
+                        const partes = matchVigencia[1].split('/'); 
+                        inicioVigenciaDetectada = `${partes[2]}-${partes[1]}-${partes[0]}`; 
+                    }
+                    
+                    const rows = bloco.split(/(?=\b\d{5,12}\s+\S+\s+\d{1,3}\s+\d{2}\/\d{4})/);
+                    
+                    let addedAny = false;
+                    for (let r of rows) {
+                        r = r.trim();
+                        if (!/^\d{5,12}\s+\S+\s+\d{1,3}/.test(r)) continue;
+                        
+                        let matchBase = r.match(/^(\d{5,12})\s+(\S+)\s+(\d{1,3})/);
+                        let mDate = r.match(/(\d{1,4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})/);
+                        let mValue = r.match(/([\d.,]+)\s+([\d.,]+)(?:\s+([\d.,]+))?$/);
+
+                        if (matchBase && mValue) {
+                            addedAny = true;
+                            
+                            let parcelaDetectada = matchBase[3];
+                            let vidasDetectadas = mDate ? mDate[1] : "1";
+                            let dataMovimentoDetectada = dataDeHojeInterna();
+                            
+                            if (mDate) {
+                                let vencimentoRaw = mDate[2];
+                                const partesVencimento = vencimentoRaw.split('/');
+                                dataMovimentoDetectada = `${partesVencimento[2]}-${partesVencimento[1]}-${partesVencimento[0]}`;
+                            } else if (inicioVigenciaDetectada) {
+                                dataMovimentoDetectada = inicioVigenciaDetectada;
+                            }
+                            
+                            let baseRaw = mValue[3] ? mValue[2] : mValue[1];
+                            let comissaoRaw = mValue[3] ? mValue[3] : mValue[2];
+                            
+                            let valorTotal = parseFloat(baseRaw.replace(/\./g, '').replace(',', '.')); // Base cálculo
+                            let comissao = parseFloat(comissaoRaw.replace(/\./g, '').replace(',', '.'));
+
+                            currentMaxVendaCodigo++;
+                            let faturaDetectada = matchBase[1];
+                            let codRegistro = faturaDetectada || String(currentMaxVendaCodigo).padStart(5, '0');
+                            let contratoDetectado = codCliente !== "N/D" ? codCliente : "";
+
+                            if(!nomesClientesExistem.has(nomeCliente.toLowerCase())) {
+                                nomesClientesExistem.add(nomeCliente.toLowerCase());
+                                currentMaxCodigo++;
+                                let newCodigo = String(currentMaxCodigo).padStart(5, '0');
+                                clientesParaInserir.push({ 
+                                    codigo: contratoDetectado || newCodigo, 
+                                    nome: nomeCliente, 
+                                    tipo: 'Pessoa jurídica', 
+                                    documento: '', 
+                                    telefone: '', 
+                                    celular: '', 
+                                    email: '', 
+                                    situacao: true,
+                                    operadora: extratoOperadora,
+                                    empresa: empresaBloco
+                                });
+                            } else {
+                                let existingCli = clientes.find(c => c.nome.toLowerCase() === nomeCliente.toLowerCase());
+                                if (existingCli && (!existingCli.operadora || existingCli.operadora.trim() === '' || existingCli.operadora === '-')) {
+                                    if (!clientesParaAtualizar.has(existingCli.id)) {
+                                        clientesParaAtualizar.set(existingCli.id, { operadora: extratoOperadora });
+                                    }
+                                }
+                            }
+                            
+                            let vendedorDetectado = empresaBloco; 
+                            const historicoVendasCliente = vendasList.filter(v => 
+                                (v.cliente && v.cliente.toLowerCase() === nomeCliente.toLowerCase()) || 
+                                (codCliente !== "N/D" && v.numero === codCliente)
+                            );
+                            
+                            if (historicoVendasCliente.length > 0) {
+                                const ultimaVenda = historicoVendasCliente.sort((a,b) => new Date(b.dataVenda) - new Date(a.dataVenda))[0];
+                                if (ultimaVenda.corretor && ultimaVenda.corretor !== "Todos") vendedorDetectado = ultimaVenda.corretor;
+                                if (!inicioVigenciaDetectada && ultimaVenda.inicioVigencia) inicioVigenciaDetectada = ultimaVenda.inicioVigencia;
+                            }
+
+                            let calcParcela = calcularParcelaDaVigencia(inicioVigenciaDetectada, dataMovimentoDetectada);
+                            if (!calcParcela && !inicioVigenciaDetectada && historicoVendasCliente && historicoVendasCliente.length > 0) {
+                                const primeiraVenda = historicoVendasCliente.sort((a,b) => new Date(a.dataVenda) - new Date(b.dataVenda))[0];
+                                if (primeiraVenda && primeiraVenda.dataVenda) {
+                                    let diff = calcularParcelaDaVigencia(primeiraVenda.dataVenda, dataMovimentoDetectada);
+                                    let diffNum = parseInt(diff, 10);
+                                    let baseParcela = parseInt(primeiraVenda.parcela || "1", 10);
+                                    if (!isNaN(diffNum) && !isNaN(baseParcela)) {
+                                        calcParcela = String(Math.max(1, baseParcela + (diffNum - 1)));
+                                    }
+                                }
+                            }
+                            if (calcParcela) {
+                                parcelaDetectada = calcParcela;
+                            }
+                            
+                            novosRegistos.push({ 
+                                cod: codRegistro, 
+                                contrato: contratoDetectado, 
+                                codOperadora: codRegistro,
+                                codigoOperadora: 'MED SENIOR', 
+                                vidas: vidasDetectadas,
+                                cliente: nomeCliente, 
+                                data: dataMovimentoDetectada, 
+                                situacao: `FATURADO ${empresaBlocoUpper} NF`, 
+                                loja: empresaBlocoUpper, 
+                                valorTotal, 
+                                comissao, 
+                                vendedor: vendedorDetectado, 
+                                parcela: parcelaDetectada,
+                                inicioVigencia: inicioVigenciaDetectada, 
+                                notaFiscal: faturaDetectada || reportDoc?.notaFiscal || (reportDoc?.parceiro?.match(/\(NF:\s*([^)]+)\)/)?.[1] || ''), 
+                                vitalicio: 'Sim', 
+                                assessoria: empresaBloco, 
+                                formaPagamento: empresaBlocoUpper === 'PROPER' ? 'Dinheiro à vista' : 'Crédito em conta',
+                                servico: '', 
+                                desconto: '', 
+                                selected: true
+                            });
+                        }
+                    }
+                    
+                    if (!addedAny) {
+                        parseBlocosExtrato([bloco]);
+                    }
+
+                } catch(e) {
+                     console.warn("Erro no parseMedSeniorExtrato:", e);
                 }
             }
         };
@@ -3785,7 +3956,7 @@ export default function App() {
             const blocosContrato = textoSemFalsoContrato.split(/Contrato\s*:/i); 
             if (blocosContrato.length > 0) blocosContrato.shift();
             
-            parseBlocosExtrato(blocosContrato);
+            parseMedSeniorExtrato(blocosContrato);
         } else {
             const processGenericRegex = (regex, texto, mapMatchToData) => {
                 let match;
