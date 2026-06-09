@@ -9125,24 +9125,6 @@ export default function App() {
                                   <td className="py-3 px-4 text-center">
                                     <div className="flex flex-col gap-2">
                                       <button
-                                        onClick={() => {
-                                          setVendaForm({
-                                            ...initialVendaForm,
-                                            cliente: inc.cliente,
-                                            contrato: inc.contrato || "",
-                                            parcela:
-                                              inc.faltantes[0]?.toString() ||
-                                              "1",
-                                          });
-                                          setIsAdminEdit(false);
-                                          setModalVendaOpen(true);
-                                        }}
-                                        className="text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-800/50 dark:text-indigo-400 px-3 py-1.5 rounded font-bold transition-colors flex items-center justify-center shadow-sm"
-                                      >
-                                        <Plus size={14} className="mr-1" /> Add
-                                        Venda
-                                      </button>
-                                      <button
                                         onClick={() =>
                                           updateInconsistenciaMeta(
                                             inc.id,
