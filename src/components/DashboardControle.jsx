@@ -91,7 +91,9 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
 
     const data = processedData[selectedEntity] || Array(12).fill(0);
     const total = data.reduce((a,b)=>a+b,0);
-    const avg = total/12;
+    const lastMonthWithData = data.reduce((lastIdx, val, idx) => val !== 0 ? Math.max(lastIdx, idx) : lastIdx, -1);
+    const divisor = lastMonthWithData >= 0 ? lastMonthWithData + 1 : 1;
+    const avg = total / divisor;
     const maxVal = Math.max(...data, 0);
     const maxIdx = data.indexOf(maxVal);
 
@@ -280,7 +282,17 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
                             {data.map((val, idx) => (
                                 <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                     <td className="px-6 py-4 font-medium">{months[idx]}</td>
-                                    <td className="px-6 py-4"><span className={`px-2 py-1 rounded-full text-xs font-medium ${val >= avg ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-yellow-100 text-yellow-800 dark:bg-amber-900/30 dark:text-amber-400'}`}>{val >= avg ? 'Acima da Média' : 'Abaixo da Média'}</span></td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                            val === 0 
+                                                ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' 
+                                                : val >= avg 
+                                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' 
+                                                    : 'bg-yellow-100 text-yellow-800 dark:bg-amber-900/30 dark:text-amber-400'
+                                        }`}>
+                                            {val === 0 ? 'Sem Movimento' : val >= avg ? 'Acima da Média' : 'Abaixo da Média'}
+                                        </span>
+                                    </td>
                                     <td className="px-6 py-4 text-right">{total > 0 ? formatPercent(val/total) : '0%'}</td>
                                     <td className="px-6 py-4 text-right font-bold">{formatCurrency(val)}</td>
                                 </tr>

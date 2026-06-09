@@ -258,6 +258,9 @@ import {
   Maximize,
   Minimize,
   FilePlus,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 
 import * as XLSX from "xlsx";
@@ -436,7 +439,6 @@ export default function App() {
   const combinedOperadoras = Array.from(
     new Set([
       ...LISTA_OPERADORAS,
-      "ODONTOPREV",
       "METLIFE",
       "PET LOVE",
       ...(customOpSeg?.operadoras || []).filter(
@@ -451,7 +453,6 @@ export default function App() {
       ...LISTA_SEGURADORAS,
       "ALLIANZ",
       "SUHAI",
-      "TOKIO",
       "MONGERAL",
       "MAPFRE",
       "CASSI PASI",
@@ -636,6 +637,9 @@ export default function App() {
     mes: MESES[0],
     categoria: CATEGORIAS[0],
     empresa: "PROTETTA",
+    codigoOperadora: "",
+    codOperadora: "",
+    codigoOperadoraOutra: "",
   });
   const [modalEditarExtratoOpen, setModalEditarExtratoOpen] = useState(false);
   const [editarExtratoForm, setEditarExtratoForm] = useState({
@@ -678,6 +682,8 @@ export default function App() {
     useState(false);
   const [savedReportsPeriodLabel, setSavedReportsPeriodLabel] =
     useState("Todo o período");
+  const [savedReportsSortField, setSavedReportsSortField] = useState("dataCriacao");
+  const [savedReportsSortDirection, setSavedReportsSortDirection] = useState("desc");
   const [gestorReportsDateStart, setGestorReportsDateStart] = useState("");
   const [gestorReportsDateEnd, setGestorReportsDateEnd] = useState("");
   const [showGestorPeriodMenu, setShowGestorPeriodMenu] = useState(false);
@@ -2110,6 +2116,26 @@ export default function App() {
     }
   };
 
+  const handleSavedReportsSort = (field) => {
+    if (savedReportsSortField === field) {
+      setSavedReportsSortDirection(savedReportsSortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSavedReportsSortField(field);
+      setSavedReportsSortDirection("asc");
+    }
+  };
+
+  const getSavedReportsSortIcon = (field) => {
+    if (savedReportsSortField !== field) {
+      return <ArrowUpDown size={12} className="inline opacity-30 ml-1" />;
+    }
+    return savedReportsSortDirection === "asc" ? (
+      <ArrowUp size={12} className="inline ml-1 text-indigo-500" />
+    ) : (
+      <ArrowDown size={12} className="inline ml-1 text-indigo-500" />
+    );
+  };
+
   const applyModalArquivosDatePreset = (preset) => {
     let start = "";
     let end = "";
@@ -3190,6 +3216,14 @@ export default function App() {
     return "text-slate-400";
   };
 
+  const getDisplayFileName = (f) => {
+    let name = (f.parceiro && f.parceiro.replace(/^\[.*?\]\s*/, "")) || f.fileName || "";
+    if (f.notaFiscal && !name.includes(`(NF: ${f.notaFiscal})`)) {
+      name += ` (NF: ${f.notaFiscal})`;
+    }
+    return name;
+  };
+
   const getModalItemsAtCurrentPath = () => {
     const hasSearch = modalArquivosSearch.trim() !== "";
     const hasDateFilter = modalArquivosDateStart || modalArquivosDateEnd;
@@ -3224,9 +3258,7 @@ export default function App() {
           return {
             ...f,
             type: "file",
-            name:
-              (f.parceiro && f.parceiro.replace(/^\[.*?\]\s*/, "")) ||
-              f.fileName,
+            name: getDisplayFileName(f),
             pathInfo: `${f.ano} / ${f.mes} / ${f.empresa}${dateStr}`,
           };
         });
@@ -3293,8 +3325,7 @@ export default function App() {
         list.push({
           ...f,
           type: "file",
-          name:
-            (f.parceiro && f.parceiro.replace(/^\[.*?\]\s*/, "")) || f.fileName,
+          name: getDisplayFileName(f),
         }),
       );
 
@@ -3316,8 +3347,7 @@ export default function App() {
         .map((f) => ({
           ...f,
           type: "file",
-          name:
-            (f.parceiro && f.parceiro.replace(/^\[.*?\]\s*/, "")) || f.fileName,
+          name: getDisplayFileName(f),
         }));
     }
 
@@ -3366,9 +3396,7 @@ export default function App() {
           return {
             ...f,
             type: "file",
-            name:
-              (f.parceiro && f.parceiro.replace(/^\[.*?\]\s*/, "")) ||
-              f.fileName,
+            name: getDisplayFileName(f),
             pathInfo: `${f.ano} / ${f.mes} / ${f.empresa}${dateStr}`,
           };
         });
@@ -3433,8 +3461,7 @@ export default function App() {
         list.push({
           ...f,
           type: "file",
-          name:
-            (f.parceiro && f.parceiro.replace(/^\[.*?\]\s*/, "")) || f.fileName,
+          name: getDisplayFileName(f),
         }),
       );
 
@@ -3455,8 +3482,7 @@ export default function App() {
         .map((f) => ({
           ...f,
           type: "file",
-          name:
-            (f.parceiro && f.parceiro.replace(/^\[.*?\]\s*/, "")) || f.fileName,
+          name: getDisplayFileName(f),
         }));
     }
     return [];
@@ -3466,12 +3492,17 @@ export default function App() {
     e.preventDefault();
     if (!formData.codigoOperadora)
       return setFormError("ERRO: Selecione a Op. | Seg.");
-    if (!formData.notaFiscal || !formData.notaFiscal.trim())
-      return setFormError("ERRO: Nota Fiscal obrigatória.");
-    if (!formData.parceiro.trim())
-      return setFormError("ERRO: Nome do arquivo obrigatório.");
     if (formData.arquivos.length === 0)
       return setFormError("ERRO: Anexos obrigatórios.");
+    
+    for (let i = 0; i < formData.arquivos.length; i++) {
+        if (!formData.arquivos[i].notaFiscal || !formData.arquivos[i].notaFiscal.trim()) {
+            return setFormError(`ERRO: Nota Fiscal obrigatória para o anexo ${i + 1}.`);
+        }
+        if (!formData.arquivos[i].parceiro || !formData.arquivos[i].parceiro.trim()) {
+            return setFormError(`ERRO: Nome do Arquivo obrigatório para o anexo ${i + 1}.`);
+        }
+    }
 
     setLoading(true);
     setLoadingMsg("Fazendo upload para a nuvem...");
@@ -3499,7 +3530,8 @@ export default function App() {
         }
       }
 
-      for (const file of formData.arquivos) {
+      for (const arq of formData.arquivos) {
+        const file = arq.file;
         const saveOperadora = (finalOperadora || "").trim();
         const saveCodOperadora = (formData.codOperadora || "").trim();
         const safeFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
@@ -3509,7 +3541,7 @@ export default function App() {
           .upload(filePath, file);
         if (uploadErr) throw uploadErr;
 
-        const saveParceiro = `[${saveOperadora}|${saveCodOperadora}] ${formData.parceiro}${formData.notaFiscal ? ` (NF: ${formData.notaFiscal})` : ""}`;
+        const saveParceiro = `[${saveOperadora}|${saveCodOperadora}] ${arq.parceiro}${arq.notaFiscal ? ` (NF: ${arq.notaFiscal})` : ""}`;
         let reportDataToSave = {
           ano: formData.ano,
           mes: formData.mes,
@@ -3518,7 +3550,7 @@ export default function App() {
           parceiro: saveParceiro,
           codigoOperadora: saveOperadora || null,
           codOperadora: saveCodOperadora || null,
-          notaFiscal: formData.notaFiscal || null,
+          notaFiscal: arq.notaFiscal || null,
           date: new Date().toISOString(),
           fileName: file.name,
           filePath: filePath,
@@ -3648,7 +3680,51 @@ export default function App() {
     setLoading(true);
     setLoadingMsg("A mover extratos...");
     try {
+      let finalOperadora = moverExtratosForm.codigoOperadora;
+      if (finalOperadora === "OUTRA") {
+        finalOperadora = (moverExtratosForm.codigoOperadoraOutra || "")
+          .trim()
+          .toUpperCase();
+        if (
+          finalOperadora &&
+          !combinedOperadoras.includes(finalOperadora) &&
+          !combinedSeguradoras.includes(finalOperadora)
+        ) {
+          let newCustom = {
+            operadoras: [...(customOpSeg?.operadoras || [])],
+            seguradoras: [...(customOpSeg?.seguradoras || [])],
+          };
+          if (moverExtratosForm.categoria === "Seguradoras") {
+            newCustom.seguradoras.push(finalOperadora);
+          } else {
+            newCustom.operadoras.push(finalOperadora);
+          }
+          setCustomOpSegAction(newCustom);
+        }
+      }
+
+      const saveOperadora = (finalOperadora || "").trim();
+      const saveCodOperadora = (moverExtratosForm.codOperadora || "").trim();
+
       for (let id of selectedExtratos) {
+        const record = dbReports.find((r) => String(r.id) === String(id));
+        if (!record) continue;
+
+        let plainParceiro = record.parceiro || "";
+        plainParceiro = plainParceiro.replace(/^\[.*?\]\s*/, ""); // remove existing prefix
+        
+        let existingNF = "";
+        const nfMatch = plainParceiro.match(/\s*\(NF:\s*(.*?)\)$/);
+        if (nfMatch) {
+            existingNF = nfMatch[1];
+            plainParceiro = plainParceiro.replace(/\s*\(NF:\s*(.*?)\)$/, "");
+        } else if (record.notaFiscal) {
+            existingNF = record.notaFiscal;
+            plainParceiro = plainParceiro.replace(new RegExp(`\\s*\\(NF: ${record.notaFiscal}\\)$`), "");
+        }
+        
+        const saveParceiro = `[${saveOperadora}|${saveCodOperadora}] ${plainParceiro}${existingNF ? ` (NF: ${existingNF})` : ""}`;
+
         await safeSupabaseUpdate(
           "reports",
           {
@@ -3656,6 +3732,9 @@ export default function App() {
             mes: moverExtratosForm.mes,
             categoria: moverExtratosForm.categoria,
             empresa: moverExtratosForm.empresa,
+            codigoOperadora: saveOperadora || null,
+            codOperadora: saveCodOperadora || null,
+            parceiro: saveParceiro,
           },
           "id",
           id,
@@ -4333,10 +4412,10 @@ export default function App() {
     if (!reportDoc?.codigoOperadora) {
       if (
         textoUpper.includes("ODONTOPREV") ||
-        (textoUpper.includes("BENEFICIÁRIO") &&
-          textoUpper.includes("OSCILAÇÃO") &&
+        ((textoUpper.includes("BENEFICIÁRIO") || textoUpper.includes("BENEFICIARIO")) &&
+          (textoUpper.includes("OSCILAÇÃO") || textoUpper.includes("OSCILACAO")) &&
           textoUpper.includes("CUSTO") &&
-          textoUpper.includes("COMISSÃO"))
+          (textoUpper.includes("COMISSÃO") || textoUpper.includes("COMISSAO")))
       )
         extratoOperadora = "ODONTOPREV";
       else if (textoUpper.includes("BRADESCO")) extratoOperadora = "BRADESCO";
@@ -4478,10 +4557,10 @@ export default function App() {
     const isOdontoprevExtrato =
       operadoraNormalizada.includes("ODONTOPREV") ||
       textoUpper.includes("ODONTOPREV") ||
-      (textoUpper.includes("BENEFICIÁRIO") &&
-        textoUpper.includes("OSCILAÇÃO") &&
+      ((textoUpper.includes("BENEFICIÁRIO") || textoUpper.includes("BENEFICIARIO")) &&
+        (textoUpper.includes("OSCILAÇÃO") || textoUpper.includes("OSCILACAO")) &&
         textoUpper.includes("CUSTO") &&
-        textoUpper.includes("COMISSÃO"));
+        (textoUpper.includes("COMISSÃO") || textoUpper.includes("COMISSAO")));
     const isMetlifeExtrato =
       operadoraNormalizada.includes("METLIFE") ||
       textoUpper.includes("METLIFE") ||
@@ -5389,6 +5468,96 @@ export default function App() {
       return count > 0;
     };
 
+    const ODONTOPREV_CONTRACT_MAPPING = {};
+    const BRADESCO_CONTRACT_MAPPING = {
+      244740: "FLORIANO PEREIRA ABINADER",
+      288392: "BPF ENGENHARIA E INSTALACOES LTDA",
+      654616: "ALEXANDRE MIRANDA SERVICOS MEDICOS LTDA",
+      658402: "ETICA - SERVICOS MEDICOS LTDA",
+      672143: "DAZIL RIO DISTRIBUIDORA DE COSMETICOS LTDA",
+      859277: "EMANUEL PEDRO GEFE DA ROSA MESQUITA 09055814741",
+      859278: "EMANUEL PEDRO GEFE (ODONTO- BRADESCO)",
+      892870: "HDE INSTALACOES E MONTAGENS LTDA",
+      892871: "HDE INSTALACOES E MONTAGENS LTDA",
+      915444: "A PRIMORDIAL - BRADESCO",
+      975126: "M.D. SERVICOS MEDICOS LTDA (bradesco)",
+      975127: "M.D. SERVICOS MEDICOS LTDA S/C",
+      979157: "META DE RESENDE IMOBILIARIA LTDA",
+      996020: "VIRTUALL VA LTDA-EPP",
+      996021: "VIRTUALL (ODONTO - BRADESCO)",
+      1010073: "DROGARIA E PERFUMARIA EMANUEL LTDA",
+      1016539: "JB CONSULTING LTDA",
+      1016540: "JB CONSULTING LTDA",
+      1036920: "GERMAX ENGENHARIA LTDA",
+      1037087: "MMV ESTATE EMPREENDIMENTOS IMOBILIARIOS LTDA",
+      1044318: "36.338.710 PABLO MENDES BARROSO",
+      1045378: "PARTEC LOCACAO DE BENS IMOVEIS LTDA",
+      1047450: "VARGAS PEREIRA SERVICOS MEDICOS (BRADESCO)",
+      1051750: "GUSTAVO ALMEIDA SOCIEDADE DE ADVOGADOS",
+      1059635: "MEDFISIO MPPHC CLINICA MEDICA LTDA",
+      1059636: "MEDFISIO MPPHC CLINICA MEDICA LTDA (ODONTO BRADESCO)",
+      1061978: "PATAMAR LOCADORA DE EQUIPAMENTOS LTDA",
+      1082355: "ENDOPED RIO SERVICOS MEDICOS LTDA",
+      1082459: "ENDOPED RIO SERVICOS MEDICOS LTDA",
+      1089680: "FC CONSULTORIA, TREINAMENTOS E COMERCIO LTDA",
+      1099282: "SETEMBRINO E DOURADO DE GUSMAO ADVOGADOS ASSOCIADOS",
+      1102918: "GMA IMOBILIARIA LTDA",
+      1122567: "FLIU COMERCIO DE ALIMENTOS LTDA",
+      1131767:
+        "CAIXA DE ASSISTENCIA AOS MEMBROS DA DEFENSORIA PUBLICA DO ESTADO DO RIO DE JANEIRO -CAMARJ",
+      1135119: "FERREIRA MACHADO GESTAO EMPRESARIAL LTDA",
+      1137060: "PROTETTA CORRETORA DE SEGUROS LTDA",
+      1137061: "PROTETTA CORRETORA DE SEGUROS LTDA - DENTAL",
+      1163760: "FNS COMERCIO E IMPORTACAO LTDA",
+      1163761: "FNS COMERCIO E IMPORTACAO LTDA - DENTAL",
+      6424981: "MONTEIRO MENDONCA SOCIEDADE INDIVIDUAL DE ADVOCACIA",
+      10896791: "FC CONSULTORIA, TREINAMENTOS E COMERCIO LTDA",
+      11737481: "JC TEIXEIRA JARDINS",
+      "000244740": "FLORIANO PEREIRA ABINADER",
+      "010896791": "FC CONSULTORIA, TREINAMENTOS E COMERCIO LTDA",
+      "001137060": "PROTETTA CORRETORA DE SEGUROS LTDA",
+      "001047450": "VARGAS PEREIRA SERVICOS MEDICOS (BRADESCO)",
+      "000915444": "A PRIMORDIAL - BRADESCO",
+      "000892870": "HDE INSTALACOES E MONTAGENS LTDA",
+      "001051750": "GUSTAVO ALMEIDA SOCIEDADE DE ADVOGADOS",
+      "000672143": "DAZIL RIO DISTRIBUIDORA DE COSMETICOS LTDA",
+      "000975126": "M.D. SERVICOS MEDICOS LTDA (bradesco)",
+      "000996020": "VIRTUALL VA LTDA-EPP",
+      "001163760": "FNS COMERCIO E IMPORTACAO LTDA",
+      "000892871": "HDE INSTALACOES E MONTAGENS LTDA",
+      "001089680": "FC CONSULTORIA, TREINAMENTOS E COMERCIO LTDA",
+      "001163761": "FNS COMERCIO E IMPORTACAO LTDA - DENTAL",
+      "000975127": "M.D. SERVICOS MEDICOS LTDA S/C",
+      "000859278": "EMANUEL PEDRO GEFE (ODONTO- BRADESCO)",
+      "001061978": "PATAMAR LOCADORA DE EQUIPAMENTOS LTDA",
+      "001082355": "ENDOPED RIO SERVICOS MEDICOS LTDA",
+      "001102918": "GMA IMOBILIARIA LTDA",
+      "001045378": "PARTEC LOCACAO DE BENS IMOVEIS LTDA",
+      "000859277": "EMANUEL PEDRO GEFE DA ROSA MESQUITA 09055814741",
+      "000654616": "ALEXANDRE MIRANDA SERVICOS MEDICOS LTDA",
+      "001122567": "FLIU COMERCIO DE ALIMENTOS LTDA",
+      "001059635": "MEDFISIO MPPHC CLINICA MEDICA LTDA",
+      "001044318": "36.338.710 PABLO MENDES BARROSO",
+      "001131767":
+        "CAIXA DE ASSISTENCIA AOS MEMBROS DA DEFENSORIA PUBLICA DO ESTADO DO RIO DE JANEIRO -CAMARJ",
+      "001037087": "MMV ESTATE EMPREENDIMENTOS IMOBILIARIOS LTDA",
+      "001036920": "GERMAX ENGENHARIA LTDA",
+      "000979157": "META DE RESENDE IMOBILIARIA LTDA",
+      "000658402": "ETICA - SERVICOS MEDICOS LTDA",
+      "001082459": "ENDOPED RIO SERVICOS MEDICOS LTDA",
+      "001135119": "FERREIRA MACHADO GESTAO EMPRESARIAL LTDA",
+      "006424981": "MONTEIRO MENDONCA SOCIEDADE INDIVIDUAL DE ADVOCACIA",
+      "001016540": "JB CONSULTING LTDA",
+      "001059636": "MEDFISIO MPPHC CLINICA MEDICA LTDA (ODONTO BRADESCO)",
+      "000996021": "VIRTUALL (ODONTO - BRADESCO)",
+      "001137061": "PROTETTA CORRETORA DE SEGUROS LTDA - DENTAL",
+      "001016539": "JB CONSULTING LTDA",
+      "011737481": "JC TEIXEIRA JARDINS",
+      "000288392": "BPF ENGENHARIA E INSTALACOES LTDA",
+      "001099282": "SETEMBRINO E DOURADO DE GUSMAO ADVOGADOS ASSOCIADOS",
+      "001010073": "DROGARIA E PERFUMARIA EMANUEL LTDA",
+    };
+
     const extractOdontoprevDataExtrato = (origem) => {
       const raw = String(origem || "")
         .replace(/\s+/g, " ")
@@ -5410,9 +5579,11 @@ export default function App() {
         dataGlobalExtratoDetectada ||
         formatDateForInput(reportDoc?.date);
       const odontoRegex =
-        /(?:^|\s)(\d{1,6})\s+([A-ZÀ-ÿ][A-ZÀ-ÿ0-9 .&'\/-]+?)\s+(\d{2,5})\s+(\d{4,})\s+(\d{4,})\s+(\d{1,3})\s+(\d{1,4})\s+(-?[\d.,]+)\s+(-?[\d.]+,\d{2})\s+(-?[\d.]+,\d{2})(?=\s+\d{1,6}\s+[A-ZÀ-ÿ]|\s+Total\s+do\s+Ramo|\s+Total\s+da\s+Fatura|\s+Valores\s+acumulados|\s+Dados\s+de\s+Pagamento|\s+Segunda-feira|\s*$)/gi;
+        /(?:^|\s)(\d+)\s+([A-ZÀ-ÿ0-9][A-ZÀ-ÿ0-9 .&'\/-]*?)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(-?[\d.,]+)\s+(-?[\d.]+,\d{2})\s+(-?[\d.]+,\d{2})(?=\s+\d+\s+[A-ZÀ-ÿ0-9]|\s+Total\s+do\s+Ramo|\s+Total\s+da\s+Fatura|\s+Valores\s+acumulados|\s+Dados\s+de\s+Pagamento|\s+(?:Segunda|Terça|Quarta|Quinta|Sexta|Sábado|Domingo)-feira|\s*$)/gi;
       let match;
       let count = 0;
+      let rawItems = [];
+
       while ((match = odontoRegex.exec(textoNormalizado)) !== null) {
         const proposta = match[1];
         const cliente = cleanExtractedName(match[2]);
@@ -5421,7 +5592,8 @@ export default function App() {
         const endosso = match[5];
         const prestacao = match[6];
         const item = match[7];
-        const percentual = parseCurrencyValue(match[8]);
+        const percentualStr = match[8];
+        const percentual = parseCurrencyValue(percentualStr);
         const custo = parseCurrencyValue(match[9]);
         const comissao = parseCurrencyValue(match[10]);
         if (
@@ -5431,23 +5603,78 @@ export default function App() {
           continue;
         if (comissao === 0 || percentual === 0) continue;
 
+        rawItems.push({
+          contratoVal: contratoOdonto,
+          nomeReal: cliente,
+          parcela: prestacao,
+          pctA: percentualStr.trim(),
+          comissaoVal: comissao,
+          percentualNum: percentual,
+          custoVal: custo,
+          proposta: proposta,
+        });
+      }
+
+      let groupedContracts = {};
+      for (const item of rawItems) {
+        let baseContrato = (item.contratoVal || "").split("/")[0].trim();
+        let strippedContrato = baseContrato.replace(/^0+/, "");
+
+        let mappedName =
+          ODONTOPREV_CONTRACT_MAPPING[baseContrato] ||
+          ODONTOPREV_CONTRACT_MAPPING[strippedContrato];
+        let finalContrato = baseContrato.padStart(9, "0");
+        let finalNome = mappedName || item.nomeReal || "Cliente Desconhecido";
+
+        // Regra: se o número do contrato for o mesmo e a porcentagem (%) também, somar em 1 única venda
+        let groupKey = `${finalContrato}_${item.pctA || ""}`;
+
+        if (!groupedContracts[groupKey]) {
+          groupedContracts[groupKey] = {
+            proposta: item.proposta,
+            contrato: finalContrato,
+            cliente: finalNome,
+            parcela: item.parcela,
+            pct: item.pctA,
+            valorTotal: 0,
+            comissao: 0,
+            percentual: item.percentualNum,
+            vidas: 0,
+            custo: 0,
+            vitalicio: "Não",
+            servico: "Plano Dental",
+          };
+        }
+        groupedContracts[groupKey].comissao += item.comissaoVal;
+        groupedContracts[groupKey].custo += item.custoVal;
+        groupedContracts[groupKey].vidas += 1;
+      }
+
+      for (const groupKey in groupedContracts) {
+        const dataExt = groupedContracts[groupKey];
+        if (!dataExt.cliente) continue;
+
         // OdontoPrev não informa Valor Total/Valor Base no detalhe.
-        // Regra: Valor Total = Comissão ÷ (% Comissão / 100).
+        // Regra: Valor Total = sum(Comissão) ÷ (% Comissão / 100).
+        const pctNum = dataExt.percentual;
         const valorTotalCalculado =
           Math.round(
-            (Math.abs(comissao) / (Math.abs(percentual) / 100)) * 100,
+            (Math.abs(dataExt.comissao) / (Math.abs(pctNum) / 100)) * 100,
           ) / 100;
+
         const inserted = pushRegistroExtraido({
-          contrato: proposta, // Nº Proposta
-          cliente,
-          parcela: prestacao,
+          contrato: dataExt.contrato,
+          cliente: dataExt.cliente,
+          parcela: dataExt.parcela,
           data: dataPagamentoOdonto,
-          valorTotal: valorTotalCalculado || custo,
-          comissao,
+          valorTotal: valorTotalCalculado || dataExt.custo,
+          comissao: dataExt.comissao,
+          comissaoPorcentagem: dataExt.pct || "",
           codigoOperadora: "ODONTOPREV",
           vitalicio: "Não",
           servico: "Plano Dental",
           desconto: "",
+          vidas: dataExt.vidas,
         });
         if (inserted) count++;
       }
@@ -5860,10 +6087,15 @@ export default function App() {
                 (isAmilExtrato ? "" : dataDeHojeInterna());
 
             if (extratoOperadora === "MED SENIOR") {
+              const matchRef = bloco.match(/Refer[eê]ncia\s*(\d{2}\/\d{4})/i);
               const matchVencimento = bloco.match(
                 /(?:Vencimento|Venc\.?|Data da Venda|Data Venda)\s*:?\s*(\d{2}\/\d{2}\/\d{4})/i,
               );
-              if (matchVencimento) {
+              
+              if (matchRef) {
+                 const partes = matchRef[1].split("/");
+                 dataMovimentoDetectada = `${partes[1]}-${partes[0]}-01`;
+              } else if (matchVencimento) {
                 const partes = matchVencimento[1].split("/");
                 dataMovimentoDetectada = `${partes[2]}-${partes[1]}-${partes[0]}`;
               } else {
@@ -5919,31 +6151,36 @@ export default function App() {
               inicioVigenciaDetectada,
               dataMovimentoDetectada,
             );
-            if (
-              !calcParcela &&
-              !inicioVigenciaDetectada &&
-              historicoVendasCliente &&
-              historicoVendasCliente.length > 0
-            ) {
-              const primeiraVenda = historicoVendasCliente.sort(
-                (a, b) => new Date(a.dataVenda) - new Date(b.dataVenda),
-              )[0];
-              if (primeiraVenda && primeiraVenda.dataVenda) {
-                let diff = calcularParcelaDaVigencia(
-                  primeiraVenda.dataVenda,
-                  dataMovimentoDetectada,
-                );
-                let diffNum = parseInt(diff, 10);
-                let baseParcela = parseInt(primeiraVenda.parcela || "1", 10);
-                if (!isNaN(diffNum) && !isNaN(baseParcela)) {
-                  calcParcela = String(
-                    Math.max(1, baseParcela + (diffNum - 1)),
+            
+            if (extratoOperadora === "MED SENIOR") {
+              parcelaDetectada = calcParcela || "1";
+            } else {
+              if (
+                !calcParcela &&
+                !inicioVigenciaDetectada &&
+                historicoVendasCliente &&
+                historicoVendasCliente.length > 0
+              ) {
+                const primeiraVenda = historicoVendasCliente.sort(
+                  (a, b) => new Date(a.dataVenda) - new Date(b.dataVenda),
+                )[0];
+                if (primeiraVenda && primeiraVenda.dataVenda) {
+                  let diff = calcularParcelaDaVigencia(
+                    primeiraVenda.dataVenda,
+                    dataMovimentoDetectada,
                   );
+                  let diffNum = parseInt(diff, 10);
+                  let baseParcela = parseInt(primeiraVenda.parcela || "1", 10);
+                  if (!isNaN(diffNum) && !isNaN(baseParcela)) {
+                    calcParcela = String(
+                      Math.max(1, baseParcela + (diffNum - 1)),
+                    );
+                  }
                 }
               }
-            }
-            if (calcParcela) {
-              parcelaDetectada = calcParcela;
+              if (calcParcela) {
+                parcelaDetectada = calcParcela;
+              }
             }
 
             novosRegistos.push({
@@ -6020,33 +6257,52 @@ export default function App() {
             inicioVigenciaDetectada = `${partes[2]}-${partes[1]}-${partes[0]}`;
           }
 
-          const rows = bloco.split(
-            /(?=\b\d{5,12}\s+\S+\s+\d{1,3}\s+\d{2}\/\d{4})/,
-          );
+          let referenciaGlobal = "";
+          const matchRefGlob = bloco.match(/Refer[eê]ncia\s*:?\s*(\d{2}\/\d{4})/i);
+          if (matchRefGlob) {
+             const parts = matchRefGlob[1].split("/");
+             referenciaGlobal = `${parts[1]}-${parts[0]}-01`;
+          }
+
+          const rows = bloco.split(/(?=\b\d{5,12}\s+\S+\s+(?:\d{1,4}\s+)?\d{2}\/\d{2}\/\d{4})/);
 
           let addedAny = false;
           for (let r of rows) {
             r = r.trim();
-            if (!/^\d{5,12}\s+\S+\s+\d{1,3}/.test(r)) continue;
+            if (!/^\d{5,12}\s+\S+/.test(r)) continue;
 
-            let matchBase = r.match(/^(\d{5,12})\s+(\S+)\s+(\d{1,3})/);
+            let matchBase = r.match(/^(\d{5,12})\s+(\S+)/);
+            let matchRefRow = r.match(/^(\d{5,12})\s+(\S+)\s+(\d{1,4})?\s+(\d{2}\/\d{4})/);
             let mDate = r.match(
-              /(\d{1,4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})/,
+              /(\d{1,4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{4}|\d{2}\/\d{2}\/\d{4})/,
             );
+            
             let mValue = r.match(/([\d.,]+)\s+([\d.,]+)(?:\s+([\d.,]+))?$/);
 
             if (matchBase && mValue) {
               addedAny = true;
-
-              let parcelaDetectada = matchBase[3];
+              
+              let parcelaSugerida = matchRefRow ? matchRefRow[3] : undefined;
+              let referenciaSugerida = matchRefRow ? matchRefRow[4] : undefined;
+              
               let vidasDetectadas = mDate ? mDate[1] : "1";
-              let dataMovimentoDetectada = dataDeHojeInterna();
+              let dataMovimentoDetectada = referenciaGlobal || dataDeHojeInterna();
 
-              if (mDate) {
-                let vencimentoRaw = mDate[2];
-                const partesVencimento = vencimentoRaw.split("/");
-                dataMovimentoDetectada = `${partesVencimento[2]}-${partesVencimento[1]}-${partesVencimento[0]}`;
-              } else if (inicioVigenciaDetectada) {
+              if (referenciaSugerida) {
+                const partesReferencia = referenciaSugerida.split("/");
+                dataMovimentoDetectada = `${partesReferencia[1]}-${partesReferencia[0]}-01`;
+              } else if (mDate) {
+                let vigenciaRaw = mDate[2];
+                let referenciaRaw = mDate[3];
+                // Do not overwrite inicioVigenciaDetectada here!
+                // Med Senior's row date is actually Vencimento and Data Op.
+                const partesReferencia = referenciaRaw.split("/");
+                if (partesReferencia.length === 2) {
+                   dataMovimentoDetectada = `${partesReferencia[1]}-${partesReferencia[0]}-01`;
+                } else if (partesReferencia.length === 3) {
+                   dataMovimentoDetectada = `${partesReferencia[2]}-${partesReferencia[1]}-${partesReferencia[0]}`;
+                }
+              } else if (!referenciaGlobal && !referenciaSugerida && inicioVigenciaDetectada) {
                 dataMovimentoDetectada = inicioVigenciaDetectada;
               }
 
@@ -6123,32 +6379,8 @@ export default function App() {
                 inicioVigenciaDetectada,
                 dataMovimentoDetectada,
               );
-              if (
-                !calcParcela &&
-                !inicioVigenciaDetectada &&
-                historicoVendasCliente &&
-                historicoVendasCliente.length > 0
-              ) {
-                const primeiraVenda = historicoVendasCliente.sort(
-                  (a, b) => new Date(a.dataVenda) - new Date(b.dataVenda),
-                )[0];
-                if (primeiraVenda && primeiraVenda.dataVenda) {
-                  let diff = calcularParcelaDaVigencia(
-                    primeiraVenda.dataVenda,
-                    dataMovimentoDetectada,
-                  );
-                  let diffNum = parseInt(diff, 10);
-                  let baseParcela = parseInt(primeiraVenda.parcela || "1", 10);
-                  if (!isNaN(diffNum) && !isNaN(baseParcela)) {
-                    calcParcela = String(
-                      Math.max(1, baseParcela + (diffNum - 1)),
-                    );
-                  }
-                }
-              }
-              if (calcParcela) {
-                parcelaDetectada = calcParcela;
-              }
+              
+              let parcelaDetectada = calcParcela || parcelaSugerida || "1";
 
               novosRegistos.push({
                 cod: codRegistro,
@@ -6679,94 +6911,6 @@ export default function App() {
 
       // Bradesco Saúde - Detalhes do Pagamento
       if (!isMatched && textoUpper.includes("BRADESCO")) {
-        const BRADESCO_CONTRACT_MAPPING = {
-          244740: "FLORIANO PEREIRA ABINADER",
-          288392: "BPF ENGENHARIA E INSTALACOES LTDA",
-          654616: "ALEXANDRE MIRANDA SERVICOS MEDICOS LTDA",
-          658402: "ETICA - SERVICOS MEDICOS LTDA",
-          672143: "DAZIL RIO DISTRIBUIDORA DE COSMETICOS LTDA",
-          859277: "EMANUEL PEDRO GEFE DA ROSA MESQUITA 09055814741",
-          859278: "EMANUEL PEDRO GEFE (ODONTO- BRADESCO)",
-          892870: "HDE INSTALACOES E MONTAGENS LTDA",
-          892871: "HDE INSTALACOES E MONTAGENS LTDA",
-          915444: "A PRIMORDIAL - BRADESCO",
-          975126: "M.D. SERVICOS MEDICOS LTDA (bradesco)",
-          975127: "M.D. SERVICOS MEDICOS LTDA S/C",
-          979157: "META DE RESENDE IMOBILIARIA LTDA",
-          996020: "VIRTUALL VA LTDA-EPP",
-          996021: "VIRTUALL (ODONTO - BRADESCO)",
-          1010073: "DROGARIA E PERFUMARIA EMANUEL LTDA",
-          1016539: "JB CONSULTING LTDA",
-          1016540: "JB CONSULTING LTDA",
-          1036920: "GERMAX ENGENHARIA LTDA",
-          1037087: "MMV ESTATE EMPREENDIMENTOS IMOBILIARIOS LTDA",
-          1044318: "36.338.710 PABLO MENDES BARROSO",
-          1045378: "PARTEC LOCACAO DE BENS IMOVEIS LTDA",
-          1047450: "VARGAS PEREIRA SERVICOS MEDICOS (BRADESCO)",
-          1051750: "GUSTAVO ALMEIDA SOCIEDADE DE ADVOGADOS",
-          1059635: "MEDFISIO MPPHC CLINICA MEDICA LTDA",
-          1059636: "MEDFISIO MPPHC CLINICA MEDICA LTDA (ODONTO BRADESCO)",
-          1061978: "PATAMAR LOCADORA DE EQUIPAMENTOS LTDA",
-          1082355: "ENDOPED RIO SERVICOS MEDICOS LTDA",
-          1082459: "ENDOPED RIO SERVICOS MEDICOS LTDA",
-          1089680: "FC CONSULTORIA, TREINAMENTOS E COMERCIO LTDA",
-          1099282: "SETEMBRINO E DOURADO DE GUSMAO ADVOGADOS ASSOCIADOS",
-          1102918: "GMA IMOBILIARIA LTDA",
-          1122567: "FLIU COMERCIO DE ALIMENTOS LTDA",
-          1131767:
-            "CAIXA DE ASSISTENCIA AOS MEMBROS DA DEFENSORIA PUBLICA DO ESTADO DO RIO DE JANEIRO -CAMARJ",
-          1135119: "FERREIRA MACHADO GESTAO EMPRESARIAL LTDA",
-          1137060: "PROTETTA CORRETORA DE SEGUROS LTDA",
-          1137061: "PROTETTA CORRETORA DE SEGUROS LTDA - DENTAL",
-          1163760: "FNS COMERCIO E IMPORTACAO LTDA",
-          1163761: "FNS COMERCIO E IMPORTACAO LTDA - DENTAL",
-          6424981: "MONTEIRO MENDONCA SOCIEDADE INDIVIDUAL DE ADVOCACIA",
-          10896791: "FC CONSULTORIA, TREINAMENTOS E COMERCIO LTDA",
-          11737481: "JC TEIXEIRA JARDINS",
-          "000244740": "FLORIANO PEREIRA ABINADER",
-          "010896791": "FC CONSULTORIA, TREINAMENTOS E COMERCIO LTDA",
-          "001137060": "PROTETTA CORRETORA DE SEGUROS LTDA",
-          "001047450": "VARGAS PEREIRA SERVICOS MEDICOS (BRADESCO)",
-          "000915444": "A PRIMORDIAL - BRADESCO",
-          "000892870": "HDE INSTALACOES E MONTAGENS LTDA",
-          "001051750": "GUSTAVO ALMEIDA SOCIEDADE DE ADVOGADOS",
-          "000672143": "DAZIL RIO DISTRIBUIDORA DE COSMETICOS LTDA",
-          "000975126": "M.D. SERVICOS MEDICOS LTDA (bradesco)",
-          "000996020": "VIRTUALL VA LTDA-EPP",
-          "001163760": "FNS COMERCIO E IMPORTACAO LTDA",
-          "000892871": "HDE INSTALACOES E MONTAGENS LTDA",
-          "001089680": "FC CONSULTORIA, TREINAMENTOS E COMERCIO LTDA",
-          "001163761": "FNS COMERCIO E IMPORTACAO LTDA - DENTAL",
-          "000975127": "M.D. SERVICOS MEDICOS LTDA S/C",
-          "000859278": "EMANUEL PEDRO GEFE (ODONTO- BRADESCO)",
-          "001061978": "PATAMAR LOCADORA DE EQUIPAMENTOS LTDA",
-          "001082355": "ENDOPED RIO SERVICOS MEDICOS LTDA",
-          "001102918": "GMA IMOBILIARIA LTDA",
-          "001045378": "PARTEC LOCACAO DE BENS IMOVEIS LTDA",
-          "000859277": "EMANUEL PEDRO GEFE DA ROSA MESQUITA 09055814741",
-          "000654616": "ALEXANDRE MIRANDA SERVICOS MEDICOS LTDA",
-          "001122567": "FLIU COMERCIO DE ALIMENTOS LTDA",
-          "001059635": "MEDFISIO MPPHC CLINICA MEDICA LTDA",
-          "001044318": "36.338.710 PABLO MENDES BARROSO",
-          "001131767":
-            "CAIXA DE ASSISTENCIA AOS MEMBROS DA DEFENSORIA PUBLICA DO ESTADO DO RIO DE JANEIRO -CAMARJ",
-          "001037087": "MMV ESTATE EMPREENDIMENTOS IMOBILIARIOS LTDA",
-          "001036920": "GERMAX ENGENHARIA LTDA",
-          "000979157": "META DE RESENDE IMOBILIARIA LTDA",
-          "000658402": "ETICA - SERVICOS MEDICOS LTDA",
-          "001082459": "ENDOPED RIO SERVICOS MEDICOS LTDA",
-          "001135119": "FERREIRA MACHADO GESTAO EMPRESARIAL LTDA",
-          "006424981": "MONTEIRO MENDONCA SOCIEDADE INDIVIDUAL DE ADVOCACIA",
-          "001016540": "JB CONSULTING LTDA",
-          "001059636": "MEDFISIO MPPHC CLINICA MEDICA LTDA (ODONTO BRADESCO)",
-          "000996021": "VIRTUALL (ODONTO - BRADESCO)",
-          "001137061": "PROTETTA CORRETORA DE SEGUROS LTDA - DENTAL",
-          "001016539": "JB CONSULTING LTDA",
-          "011737481": "JC TEIXEIRA JARDINS",
-          "000288392": "BPF ENGENHARIA E INSTALACOES LTDA",
-          "001099282": "SETEMBRINO E DOURADO DE GUSMAO ADVOGADOS ASSOCIADOS",
-          "001010073": "DROGARIA E PERFUMARIA EMANUEL LTDA",
-        };
         const matchTotal = textoUpper.match(
           /VALOR\s+BRUTO\s*\(D\+E\)\s*-\s*F\s*(?:R\$)?\s*([\d.]+,\d{2})/,
         );
@@ -6926,7 +7070,7 @@ export default function App() {
           let mappedName =
             BRADESCO_CONTRACT_MAPPING[baseContrato] ||
             BRADESCO_CONTRACT_MAPPING[strippedContrato];
-          let finalContrato = baseContrato;
+          let finalContrato = baseContrato.padStart(9, "0");
           let finalNome = mappedName || item.nomeReal || "Cliente Desconhecido";
 
           let groupKey = `${finalContrato}_${item.pctA || ""}`;
@@ -11887,7 +12031,6 @@ export default function App() {
                         <option value="LEVE SAUDE">LEVE SAUDE</option>
                         <option value="NOTRE DAME">NOTRE DAME</option>
                         <option value="PREVENT">PREVENT</option>
-                        <option value="ODONTOPREV">ODONTOPREV</option>
                         <option value="METLIFE">METLIFE</option>
                         <option value="PET LOVE">PET LOVE</option>
                         <option value="QUALICORP">QUALICORP</option>
@@ -11905,7 +12048,7 @@ export default function App() {
                         <option value="MONGERAL">MONGERAL</option>
                         <option value="MAPFRE">MAPFRE</option>
                         <option value="SULAMERICA">SULAMERICA</option>
-                        <option value="TOKIO">TOKIO</option>
+                        <option value="TOKIO MARINE">TOKIO MARINE</option>
                       </optgroup>
                       <option value={importNfPdfForm.cliente}>
                         Manter: {importNfPdfForm.cliente}
@@ -12523,7 +12666,7 @@ export default function App() {
 
           {/* ECRÃ 5: HISTÓRICO DE RELATÓRIOS SALVOS */}
           {currentView === "historico" && hasAccess("historico") && (
-            <div className="max-w-6xl mx-auto animate-in fade-in duration-500 pb-20">
+            <div className="w-full px-4 xl:px-8 mx-auto animate-in fade-in duration-500 pb-20">
               <header className="mb-6 border-b border-slate-200 dark:border-slate-700 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center">
@@ -12622,26 +12765,61 @@ export default function App() {
                 <table className="w-full text-left border-collapse text-sm whitespace-nowrap">
                   <thead>
                     <tr className="border-b-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750/50 transition-colors duration-200">
-                      <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">
-                        Data de Emissão
+                      <th 
+                        className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                        onClick={() => handleSavedReportsSort("dataCriacao")}
+                      >
+                        <div className="flex items-center">
+                          Data de Emissão {getSavedReportsSortIcon("dataCriacao")}
+                        </div>
                       </th>
-                      <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">
-                        Nome do Relatório
+                      <th 
+                        className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                        onClick={() => handleSavedReportsSort("nome")}
+                      >
+                        <div className="flex items-center">
+                          Nome do Relatório {getSavedReportsSortIcon("nome")}
+                        </div>
                       </th>
-                      <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">
-                        Período Referência
+                      <th 
+                        className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                        onClick={() => handleSavedReportsSort("periodo")}
+                      >
+                        <div className="flex items-center">
+                          Período Referência {getSavedReportsSortIcon("periodo")}
+                        </div>
                       </th>
-                      <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-indigo-600 dark:text-indigo-400">
-                        Responsável (Emissão)
+                      <th 
+                        className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-indigo-600 dark:text-indigo-400 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                        onClick={() => handleSavedReportsSort("criadoPor")}
+                      >
+                        <div className="flex items-center">
+                          Responsável (Emissão) {getSavedReportsSortIcon("criadoPor")}
+                        </div>
                       </th>
-                      <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center">
-                        NF
+                      <th 
+                        className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                        onClick={() => handleSavedReportsSort("notaFiscal")}
+                      >
+                        <div className="flex items-center justify-center">
+                          NF {getSavedReportsSortIcon("notaFiscal")}
+                        </div>
                       </th>
-                      <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center">
-                        Op. | Seg.
+                      <th 
+                        className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                        onClick={() => handleSavedReportsSort("operadora")}
+                      >
+                        <div className="flex items-center justify-center">
+                          Op. | Seg. {getSavedReportsSortIcon("operadora")}
+                        </div>
                       </th>
-                      <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center">
-                        Registros
+                      <th 
+                        className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                        onClick={() => handleSavedReportsSort("registos")}
+                      >
+                        <div className="flex items-center justify-center">
+                          Registros {getSavedReportsSortIcon("registos")}
+                        </div>
                       </th>
                       <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center">
                         Ações
@@ -12650,7 +12828,7 @@ export default function App() {
                   </thead>
                   <tbody>
                     {(() => {
-                      const filteredReports = savedReportsList.filter((rep) => {
+                      let filteredReports = savedReportsList.filter((rep) => {
                         let textMatch = true;
                         if (savedReportsSearchTerm) {
                           const term = savedReportsSearchTerm.toLowerCase();
@@ -12694,6 +12872,40 @@ export default function App() {
                         return textMatch && startMatch && endMatch;
                       });
 
+                      filteredReports.sort((a, b) => {
+                        let valA;
+                        let valB;
+
+                        if (savedReportsSortField === 'notaFiscal') {
+                          valA = Array.from(new Set((a.dados || []).map(d => d.notaFiscal).filter(Boolean))).join(", ");
+                          valB = Array.from(new Set((b.dados || []).map(d => d.notaFiscal).filter(Boolean))).join(", ");
+                        } else if (savedReportsSortField === 'operadora') {
+                          valA = Array.from(new Set((a.dados || []).map(d => d.codigoOperadora).filter(Boolean))).join(", ");
+                          valB = Array.from(new Set((b.dados || []).map(d => d.codigoOperadora).filter(Boolean))).join(", ");
+                        } else if (savedReportsSortField === 'registos') {
+                          valA = (a.dados || []).length;
+                          valB = (b.dados || []).length;
+                        } else {
+                          valA = a[savedReportsSortField];
+                          valB = b[savedReportsSortField];
+                        }
+
+                        // Configura fallback para não dar erro se null
+                        valA = valA || "";
+                        valB = valB || "";
+
+                        let comparison = 0;
+                        if (savedReportsSortField === "dataCriacao") {
+                          comparison = new Date(valA).getTime() - new Date(valB).getTime();
+                        } else if (savedReportsSortField === "registos") {
+                           comparison = Number(valA) - Number(valB);
+                        } else {
+                          comparison = String(valA).localeCompare(String(valB));
+                        }
+
+                        return savedReportsSortDirection === "asc" ? comparison : -comparison;
+                      });
+
                       if (filteredReports.length === 0) {
                         return (
                           <tr>
@@ -12708,8 +12920,6 @@ export default function App() {
                       }
 
                       return filteredReports
-                        .slice()
-                        .reverse()
                         .map((rep) => {
                           const nfsStr =
                             Array.from(
@@ -13656,20 +13866,24 @@ export default function App() {
                       }}
                     >
                       <option value="">Selecione uma Op. | Seg.</option>
-                      <optgroup label="Operadoras">
-                        {combinedOperadoras.map((op) => (
-                          <option key={op} value={op}>
-                            {op}
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Seguradoras">
-                        {combinedSeguradoras.map((seg) => (
-                          <option key={seg} value={seg}>
-                            {seg}
-                          </option>
-                        ))}
-                      </optgroup>
+                      {(!formData.categoria || formData.categoria === "Operadoras") && (
+                        <optgroup label="Operadoras">
+                          {combinedOperadoras.map((op) => (
+                            <option key={op} value={op}>
+                              {op}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {(!formData.categoria || formData.categoria === "Seguradoras") && (
+                        <optgroup label="Seguradoras">
+                          {combinedSeguradoras.map((seg) => (
+                            <option key={seg} value={seg}>
+                              {seg}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
                       <option value="OUTRA" className="font-bold text-blue-600">
                         Outra Op. | Seg.
                       </option>
@@ -13697,63 +13911,13 @@ export default function App() {
                     )}
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-200 dark:border-slate-700">
-                  <div className="space-y-2 md:col-span-1">
-                    <label className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                      Nota Fiscal Vinculada
-                    </label>
-                    <input
-                      type="text"
-                      list="historico-notas-list"
-                      value={formData.notaFiscal || ""}
-                      onChange={(e) => {
-                        setFormData({
-                          ...formData,
-                          notaFiscal: e.target.value,
-                        });
-                        setFormError("");
-                      }}
-                      className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-3 text-slate-900 dark:text-white outline-none focus:border-blue-500"
-                      placeholder="Selecione ou digite a NF..."
-                    />
-                    <datalist id="historico-notas-list">
-                      {nfeHistorico.map((nf) => {
-                        const displayVal =
-                          nf.numero || nf.chaveNacional || nf.protocolo;
-                        const displayStr = nf.numero
-                          ? `NF Nº ${nf.numero}`
-                          : `Chave: ${nf.chaveNacional || nf.protocolo}`;
-                        return (
-                          <option key={nf.id} value={displayVal}>
-                            {displayStr} - {nf.cliente}
-                          </option>
-                        );
-                      })}
-                    </datalist>
-                  </div>
-                  <div className="space-y-2 md:col-span-1">
-                    <label className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                      Nome do Arquivo
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.parceiro}
-                      onChange={(e) => {
-                        setFormData({ ...formData, parceiro: e.target.value });
-                        setFormError("");
-                      }}
-                      className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-3 text-slate-900 dark:text-white outline-none focus:border-blue-500"
-                      placeholder="Ex: Extrato Amil Mensal..."
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
+                <div className="space-y-2 pt-4 border-t border-slate-200 dark:border-slate-700">
                   <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
                     Ficheiros Anexos
                   </label>
                   <div
                     onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 hover:border-blue-500 transition-colors"
+                    className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 hover:border-blue-500 transition-colors mb-4"
                   >
                     <Layers size={24} className="text-slate-400 mb-2" />
                     <p className="text-sm text-slate-500 dark:text-slate-300">
@@ -13764,7 +13928,11 @@ export default function App() {
                     type="file"
                     ref={fileInputRef}
                     onChange={(e) => {
-                      const newFiles = Array.from(e.target.files);
+                      const newFiles = Array.from(e.target.files).map(file => ({
+                        file,
+                        notaFiscal: "",
+                        parceiro: ""
+                      }));
                       if (newFiles.length > 0) {
                         setFormData((prev) => ({
                           ...prev,
@@ -13779,33 +13947,86 @@ export default function App() {
                     accept=".pdf,.txt,.csv,.xlsx,.xls"
                   />
                   {formData.arquivos.length > 0 && (
-                    <div className="mt-2 space-y-2">
-                      {formData.arquivos.map((f, i) => (
+                    <div className="mt-4 space-y-4">
+                      {formData.arquivos.map((arq, i) => (
                         <div
                           key={i}
-                          className="bg-slate-50 dark:bg-slate-900 p-2 rounded border border-slate-200 dark:border-slate-700 flex justify-between items-center"
+                          className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-700 space-y-4"
                         >
-                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-                            {f.name}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                arquivos: prev.arquivos.filter(
-                                  (_, idx) => idx !== i,
-                                ),
-                              }))
-                            }
-                            className="text-rose-500 dark:text-rose-400"
-                          >
-                            <X size={14} />
-                          </button>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-bold block text-slate-700 dark:text-slate-300 truncate">
+                              Anexo {i + 1}: {arq.file.name}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  arquivos: prev.arquivos.filter((_, idx) => idx !== i),
+                                }))
+                              }
+                              className="text-rose-500 dark:text-rose-400 hover:text-rose-700 p-1"
+                            >
+                              <X size={18} />
+                            </button>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                                Nota Fiscal Vinculada
+                              </label>
+                              <input
+                                type="text"
+                                list="historico-notas-list"
+                                value={arq.notaFiscal}
+                                onChange={(e) => {
+                                  let newArqs = [...formData.arquivos];
+                                  newArqs[i] = { ...newArqs[i], notaFiscal: e.target.value };
+                                  setFormData({ ...formData, arquivos: newArqs });
+                                  setFormError("");
+                                }}
+                                className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500"
+                                placeholder="Selecione ou digite a NF..."
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                                Nome do Arquivo
+                              </label>
+                              <input
+                                type="text"
+                                value={arq.parceiro}
+                                onChange={(e) => {
+                                  let newArqs = [...formData.arquivos];
+                                  newArqs[i] = { ...newArqs[i], parceiro: e.target.value };
+                                  setFormData({ ...formData, arquivos: newArqs });
+                                  setFormError("");
+                                }}
+                                className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500"
+                                placeholder="Ex: Extrato Amil Mensal..."
+                              />
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
+
+                  <datalist id="historico-notas-list">
+                    {nfeHistorico.map((nf) => {
+                      const displayVal = nf.numero || nf.chaveNacional || nf.protocolo;
+                      const displayStr = nf.numero
+                        ? `NF Nº ${nf.numero}`
+                        : `Chave: ${nf.chaveNacional || nf.protocolo}`;
+                      return (
+                        <option key={nf.id} value={displayVal}>
+                          {displayStr} - {nf.cliente}
+                        </option>
+                      );
+                    })}
+                  </datalist>
+
                 </div>
                 {formError && (
                   <p className="text-rose-500 dark:text-rose-400 text-sm font-medium">
@@ -13830,7 +14051,7 @@ export default function App() {
 
           {/* ECRÃ 8: GESTOR DE EXTRATOS (EXPLORAR) */}
           {currentView === "gestor-browse" && hasAccess("gestor") && (
-            <div className="max-w-6xl mx-auto animate-in fade-in duration-500 pb-20">
+            <div className="w-full px-4 xl:px-8 mx-auto animate-in fade-in duration-500 pb-20">
               <header className="mb-6 flex flex-col gap-4 border-b border-slate-200 dark:border-slate-700 pb-4">
                 <div className="flex justify-between items-start">
                   <div>
@@ -14484,6 +14705,104 @@ export default function App() {
                       ))}
                     </select>
                   </div>
+                  <div className="md:col-span-2">
+                    <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                      Op. | Seg.
+                    </label>
+                    <select
+                      className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      value={moverExtratosForm.codigoOperadora || ""}
+                      onChange={(e) => {
+                        setMoverExtratosForm({
+                          ...moverExtratosForm,
+                          codigoOperadora: e.target.value,
+                        });
+                      }}
+                    >
+                      <option value="">Selecione uma Op. | Seg.</option>
+                      {(!moverExtratosForm.categoria || moverExtratosForm.categoria === "Operadoras") && (
+                        <optgroup label="Operadoras">
+                          {combinedOperadoras.map((op) => (
+                            <option key={op} value={op}>
+                              {op}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {(!moverExtratosForm.categoria || moverExtratosForm.categoria === "Seguradoras") && (
+                        <optgroup label="Seguradoras">
+                          {combinedSeguradoras.map((seg) => (
+                            <option key={seg} value={seg}>
+                              {seg}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      <option value="OUTRA" className="font-bold text-blue-600">
+                        Outra Op. | Seg.
+                      </option>
+                    </select>
+
+                    {moverExtratosForm.codigoOperadora === "OUTRA" && (
+                      <div className="mt-2 text-sm text-slate-500">
+                        Aviso: Será salva automaticamente na lista para uso
+                        futuro.
+                        <input
+                          type="text"
+                          placeholder="Digite o nome da Op. | Seg."
+                          className="uppercase w-full mt-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                          value={moverExtratosForm.codigoOperadoraOutra || ""}
+                          onChange={(e) => {
+                            setMoverExtratosForm({
+                              ...moverExtratosForm,
+                              codigoOperadoraOutra:
+                                e.target.value.toUpperCase(),
+                            });
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                      Cód. Operadora
+                    </label>
+                    {moverExtratosForm.codigoOperadora === "AMIL" ? (
+                      <select
+                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        value={moverExtratosForm.codOperadora || ""}
+                        onChange={(e) => {
+                          setMoverExtratosForm({
+                            ...moverExtratosForm,
+                            codOperadora: e.target.value,
+                          });
+                        }}
+                      >
+                        <option value="">Selecione código AMS</option>
+                        <option value="139491">139491</option>
+                        <option value="162191">162191</option>
+                        <option value="224138">224138</option>
+                        {customOpSeg?.codigosAmil?.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        placeholder="Módulo opcional"
+                        value={moverExtratosForm.codOperadora || ""}
+                        onChange={(e) => {
+                          setMoverExtratosForm({
+                            ...moverExtratosForm,
+                            codOperadora: e.target.value,
+                          });
+                        }}
+                      />
+                    )}
+                  </div>
                 </div>
                 <div className="flex justify-end mt-6 gap-3">
                   <button
@@ -14545,20 +14864,24 @@ export default function App() {
                       }}
                     >
                       <option value="">Selecione uma Op. | Seg.</option>
-                      <optgroup label="Operadoras">
-                        {combinedOperadoras.map((op) => (
-                          <option key={op} value={op}>
-                            {op}
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Seguradoras">
-                        {combinedSeguradoras.map((seg) => (
-                          <option key={seg} value={seg}>
-                            {seg}
-                          </option>
-                        ))}
-                      </optgroup>
+                      {(!editarExtratoForm.categoria || editarExtratoForm.categoria === "Operadoras") && (
+                        <optgroup label="Operadoras">
+                          {combinedOperadoras.map((op) => (
+                            <option key={op} value={op}>
+                              {op}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {(!editarExtratoForm.categoria || editarExtratoForm.categoria === "Seguradoras") && (
+                        <optgroup label="Seguradoras">
+                          {combinedSeguradoras.map((seg) => (
+                            <option key={seg} value={seg}>
+                              {seg}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
                       <option value="OUTRA" className="font-bold text-blue-600">
                         Outra Op. | Seg.
                       </option>
@@ -15271,7 +15594,6 @@ export default function App() {
                           <option value="LEVE SAUDE">LEVE SAUDE</option>
                           <option value="NOTRE DAME">NOTRE DAME</option>
                           <option value="PREVENT">PREVENT</option>
-                          <option value="ODONTOPREV">ODONTOPREV</option>
                           <option value="METLIFE">METLIFE</option>
                           <option value="PET LOVE">PET LOVE</option>
                           <option value="QUALICORP">QUALICORP</option>
@@ -15288,7 +15610,7 @@ export default function App() {
                           <option value="ICATU">ICATU</option>
                           <option value="MONGERAL">MONGERAL</option>
                           <option value="MAPFRE">MAPFRE</option>
-                          <option value="TOKIO">TOKIO</option>
+                          <option value="TOKIO MARINE">TOKIO MARINE</option>
                         </optgroup>
                       </select>
                     </div>
