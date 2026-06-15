@@ -311,6 +311,148 @@ export const getNextSequenceNumber = (list, fieldSelector) => {
 };
 
 export default function App() {
+  useEffect(() => {
+    const handleCorrigirSulamAmerica = async () => {
+      if (window.__MIGRATED_SULAMERICA__) return;
+      window.__MIGRATED_SULAMERICA__ = true;
+      console.log("Running one-time Sulamérica migration...");
+
+      let atualizacoesRealizadas = 0;
+
+      try {
+        const { data: allV, error: fetchErr } = await supabase.from('vendas').select('*');
+        if (fetchErr || !allV) throw fetchErr;
+
+        const formatDateForInputLocal = (value) => {
+          if (!value && value !== 0) return "";
+          if (value instanceof Date && !isNaN(value)) {
+            return value.toISOString().slice(0, 10);
+          }
+          if (typeof value === "number" && !isNaN(value)) {
+            if (value > 25569) {
+              return new Date(Math.round((value - 25569) * 86400 * 1000))
+                .toISOString()
+                .slice(0, 10);
+            }
+          }
+          const str = String(value).trim();
+          if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10);
+          if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) {
+            const [d, m, y] = str.split("/");
+            return `${y}-${m}-${d}`;
+          }
+          const dt = new Date(value);
+          if (!isNaN(dt)) return dt.toISOString().slice(0, 10);
+          return "";
+        };
+
+        const diffMesesSulAmericaLocal = (dataAnterior, dataAtual) => {
+          const ini = formatDateForInputLocal(dataAnterior);
+          const fim = formatDateForInputLocal(dataAtual);
+          if (!ini || !fim) return 0;
+          const a = new Date(`${ini}T00:00:00`);
+          const b = new Date(`${fim}T00:00:00`);
+          if (a >= b) return 0;
+          return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+        };
+
+        const sulamericaVendas = allV
+          .filter(
+            (v) =>
+              (v.operadora && v.operadora.includes("SULAMERICA")) ||
+              (v.codigoOperadora && v.codigoOperadora.includes("SULAMERICA")),
+          )
+          .sort(
+            (a, b) =>
+              new Date(a.dataVenda || a.data || 0) -
+              new Date(b.dataVenda || b.data || 0),
+          );
+
+        const mapped = sulamericaVendas.map((v, i) => ({ ...v, _index: i }));
+        const vendasParaSalvar = [];
+
+        for (const vendaAtual of mapped) {
+          let calcParcela = null;
+          const inicioVig = vendaAtual.inicioVigencia;
+          const dataVenda = vendaAtual.dataVenda || vendaAtual.data;
+
+          const historicalSales = mapped.filter(
+            (v) =>
+              v.id !== vendaAtual.id &&
+              new Date(v.dataVenda || v.data || 0).getTime() <=
+                new Date(dataVenda).getTime() && v._index < vendaAtual._index &&
+              ((v.contrato && v.contrato === vendaAtual.contrato) ||
+                (!v.contrato &&
+                  v.cliente &&
+                  vendaAtual.cliente &&
+                  v.cliente.toLowerCase() === vendaAtual.cliente.toLowerCase())),
+          );
+
+          if (historicalSales.length === 0 && inicioVig) {
+            const meses = diffMesesSulAmericaLocal(inicioVig, dataVenda);
+            calcParcela = String(Math.max(1, meses || 1));
+          } else if (historicalSales.length > 0) {
+            const ultimaVenda = historicalSales.sort(
+              (a, b) =>
+                new Date(b.dataVenda || b.data || 0) -
+                new Date(a.dataVenda || a.data || 0),
+            )[0];
+            const ultimaParcela = parseInt(
+              String(ultimaVenda?.parcela || "").replace(/\D/g, ""),
+              10,
+            );
+            const meses = diffMesesSulAmericaLocal(
+              ultimaVenda?.dataVenda || ultimaVenda?.data,
+              dataVenda,
+            );
+            if (!isNaN(ultimaParcela) && ultimaParcela > 0) {
+              calcParcela = String(
+                Math.max(1, ultimaParcela + Math.max(1, meses || 1)),
+              );
+            }
+          }
+
+          if (!calcParcela) continue;
+
+          if (
+            calcParcela !== String(vendaAtual.parcela).replace(/\D/g, "")
+          ) {
+            vendaAtual.parcela = calcParcela;
+            vendasParaSalvar.push({ ...vendaAtual, parcela: calcParcela });
+          }
+        }
+
+        if (vendasParaSalvar.length === 0) {
+          console.log("Nenhuma correção de parcela necessária para a Sulamerica.");
+          return;
+        }
+
+        const total = vendasParaSalvar.length;
+        console.log(`Corrigindo ${total} parcelas da Sulamerica...`);
+        let madeChanges = false;
+        
+        for (let i = 0; i < total; i++) {
+          const v = vendasParaSalvar[i];
+          const sanitized = { parcela: v.parcela };
+          try {
+            await supabase.from('vendas').update(sanitized).eq('id', v.id);
+            madeChanges = true;
+          } catch(err) {
+            console.error("Failed to update " + v.id, err);
+          }
+        }
+
+        console.log("Correção concluída.");
+        if (madeChanges) {
+           window.location.reload();
+        }
+      } catch (e) {
+        console.error("Erro na migração sulamerica", e);
+      }
+    };
+
+    handleCorrigirSulamAmerica();
+  }, []);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem("protetta_theme");
     return saved ? saved === "dark" : true;
@@ -443,8 +585,6 @@ export default function App() {
   const combinedOperadoras = Array.from(
     new Set([
       ...LISTA_OPERADORAS,
-      "SULAMERICA PROPER",
-      "SULAMERICA PROTETTA",
       "METLIFE",
       "PET LOVE",
       ...(customOpSeg?.operadoras || []).filter(
@@ -2219,6 +2359,9 @@ export default function App() {
             isFromReport: true,
             reportId: report.id,
             reportRowIndex: idx,
+            reportNome: report.nome || "",
+            reportPeriodo: report.periodo || "",
+            reportDataCriacao: report.dataCriacao || "",
             numero: dado.cod,
             cliente: dado.cliente,
             dataVenda:
@@ -2382,6 +2525,7 @@ export default function App() {
             groups[key] = {
               cliente: v.cliente,
               contrato: v.contrato,
+              operadora: v.codigoOperadora || v.operadora,
               parcelasUnicas: new Set(),
               parcelasData: {},
               inicioVigencia: v.inicioVigencia,
@@ -2411,7 +2555,29 @@ export default function App() {
       if (uniqueParcelas.length === 0) return;
 
       let startParcel = 1;
-      if (param.inicioVigencia && param.inicioVigencia < dataLimite) {
+      const isSulamerica = param.operadora && param.operadora.toUpperCase().includes("SULAMERICA");
+
+      if (isSulamerica) {
+        if (param.inicioVigencia && param.inicioVigencia >= dataLimite) {
+          startParcel = 1;
+        } else {
+          let minData = null;
+          let firstParcel = null;
+          Object.keys(param.parcelasData).forEach((p) => {
+            const num = parseInt(p, 10);
+            const dataObj = param.parcelasData[p];
+            if (dataObj && dataObj >= dataLimite && (!minData || dataObj < minData)) {
+              minData = dataObj;
+              firstParcel = num;
+            }
+          });
+          if (minData && firstParcel !== null) {
+            startParcel = firstParcel;
+          } else {
+            startParcel = max + 1;
+          }
+        }
+      } else if (param.inicioVigencia && param.inicioVigencia < dataLimite) {
         const iy = parseInt(param.inicioVigencia.substring(0, 4));
         const im = parseInt(param.inicioVigencia.substring(5, 7));
         if (!isNaN(iy) && !isNaN(im)) {
@@ -2443,6 +2609,7 @@ export default function App() {
           id: key,
           cliente: param.cliente,
           contrato: param.contrato,
+          operadora: param.operadora,
           faltantes: missing,
         });
       }
@@ -2494,6 +2661,7 @@ export default function App() {
       return showAlert("Nenhuma inconsistência para exportar.");
     const dadosTratados = toExport.map((inc) => ({
       Cliente: inc.cliente,
+      "Op. | Seg.": inc.operadora || "-",
       Contrato: inc.contrato || "-",
       "Parcelas Faltantes": inc.faltantes.join(", "),
     }));
@@ -2539,6 +2707,7 @@ export default function App() {
                     <thead>
                         <tr>
                             <th>Cliente</th>
+                            <th>Op. | Seg.</th>
                             <th>Contrato</th>
                             <th>Parcelas Faltantes</th>
                         </tr>
@@ -2549,6 +2718,7 @@ export default function App() {
                             (inc) => `
                             <tr>
                                 <td>${inc.cliente}</td>
+                                <td>${inc.operadora || "-"}</td>
                                 <td>${inc.contrato || "-"}</td>
                                 <td>${inc.faltantes.map((f) => `P: ${f}`).join(", ")}</td>
                             </tr>
@@ -2839,6 +3009,9 @@ export default function App() {
         delete dataToSave.isFromReport;
         delete dataToSave.reportId;
         delete dataToSave.reportRowIndex;
+        delete dataToSave.reportNome;
+        delete dataToSave.reportPeriodo;
+        delete dataToSave.reportDataCriacao;
         delete dataToSave.created_at;
 
         Object.keys(dataToSave).forEach((k) => {
@@ -2857,9 +3030,12 @@ export default function App() {
               ...dadosAtualizados[vendaForm.reportRowIndex],
               cod: dataToSave.numero,
               cliente: dataToSave.cliente,
+              data: dataToSave.dataVenda,
+              empresa: dataToSave.empresa,
               situacao: dataToSave.situacao,
               loja: dataToSave.loja,
               valorTotal: dataToSave.valor,
+              valor: dataToSave.valor,
               vendedor: dataToSave.corretor,
               parcela: dataToSave.parcela,
               inicioVigencia: dataToSave.inicioVigencia,
@@ -4971,6 +5147,7 @@ export default function App() {
             : "Crédito em conta"),
         servico: data.servico || "Saúde",
         desconto: data.desconto || "",
+        comissaoPorcentagem: data.comissaoPorcentagem || "",
         selected: true,
       });
       return true;
@@ -6524,19 +6701,27 @@ export default function App() {
       );
 
       const historico = Array.isArray(historicoVendasCliente)
-        ? [...historicoVendasCliente]
+        ? historicoVendasCliente.map((v, i) => ({ ...v, _index: i }))
         : [];
       if (historico.length > 0) {
-        const ultimaVenda = historico.sort(
-          (a, b) => new Date(b.dataVenda) - new Date(a.dataVenda),
-        )[0];
+        // Sort specifically using `dataVenda` or `data` to handle items from both `vendasList` and `novosRegistos`
+        const ultimaVenda = historico.sort((a, b) => {
+          const db = new Date(b.dataVenda || b.data || 0);
+          const da = new Date(a.dataVenda || a.data || 0);
+          if (db.getTime() === da.getTime()) {
+             return b._index - a._index;
+          }
+          return db - da; 
+        })[0];
+        
         const ultimaParcela = parseInt(
           String(ultimaVenda?.parcela || "").replace(/\D/g, ""),
           10,
         );
-        const meses = diffMesesSulAmerica(ultimaVenda?.dataVenda, dataRef);
+        const meses = diffMesesSulAmerica(ultimaVenda?.dataVenda || ultimaVenda?.data, dataRef);
 
         if (!isNaN(ultimaParcela) && ultimaParcela > 0) {
+          // If we are importing the same month/date (meses == 0), it will append Math.max(1, 0) == 1 to the parcel.
           return String(Math.max(1, ultimaParcela + Math.max(1, meses || 1)));
         }
       }
@@ -6637,6 +6822,14 @@ export default function App() {
             formatDateForInput(reportDoc?.date) ||
             dataDeHojeInterna();
 
+          let isAcordoAssessorias = false;
+          if (bloco.toUpperCase().includes("ACORDO ASSESSORIAS")) {
+            isAcordoAssessorias = true;
+            if (comissao !== 0) {
+              valorTotal = comissao;
+            }
+          }
+
           if (valorTotal === 0 && comissao === 0) continue;
 
           const metaVigencia = findSulAmericaVigencia(
@@ -6656,16 +6849,25 @@ export default function App() {
             );
           }
 
-          const historicoVendasCliente = vendasList.filter(
+          const historicoVendasCliente = [...vendasList, ...novosRegistos].filter(
             (v) =>
               (v.cliente &&
                 v.cliente.toLowerCase() === nomeCliente.toLowerCase()) ||
               (contratoDetectado && v.contrato === contratoDetectado),
           );
 
+          const isSeguroViagemVida = /Produto\s*:\s*(Viagem|Vida)/i.test(bloco);
           const vendedorDetectado = metaVigencia?.corretor || padraoEmpresa;
           const vidasDetectadas = metaVigencia?.vidas || "1";
-          const vitalicioDetectado = metaVigencia?.vitalicio || "Sim";
+          let vitalicioDetectado = isAcordoAssessorias ? "Não" : (metaVigencia?.vitalicio || "Sim");
+          const pctComissao = isAcordoAssessorias ? "100" : "";
+          let servicoSulAmerica = "Plano de Saúde";
+          
+          if (isSeguroViagemVida) {
+            servicoSulAmerica = "Seguro";
+            vitalicioDetectado = "Não";
+          }
+
           const parcelaDetectada = calcularParcelaSulAmerica({
             inicioVigencia: inicioVigenciaDetectada,
             dataMovimento: dataMovimentoSul,
@@ -6682,7 +6884,8 @@ export default function App() {
             inicioVigencia: inicioVigenciaDetectada,
             valorTotal,
             comissao,
-            codigoOperadora: `SULAMERICA ${padraoEmpresa}`,
+            comissaoPorcentagem: pctComissao,
+            codigoOperadora: "SULAMERICA",
             vidas: vidasDetectadas,
             vitalicio: vitalicioDetectado,
             vendedor: vendedorDetectado,
@@ -6694,7 +6897,7 @@ export default function App() {
               padraoEmpresa === "PROPER"
                 ? "Dinheiro à vista"
                 : "Crédito em conta",
-            servico: "Plano de Saúde",
+            servico: servicoSulAmerica,
             desconto: "",
           });
         } catch (e) {
@@ -9045,6 +9248,9 @@ export default function App() {
                               <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">
                                 Cliente
                               </th>
+                              <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">
+                                Op. | Seg.
+                              </th>
                               <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 text-center">
                                 Contrato
                               </th>
@@ -9091,6 +9297,12 @@ export default function App() {
                                     title={inc.cliente}
                                   >
                                     {inc.cliente}
+                                  </td>
+                                  <td
+                                    className="py-3 px-4 font-medium text-slate-900 dark:text-white max-w-[150px] truncate"
+                                    title={inc.operadora}
+                                  >
+                                    {inc.operadora || "-"}
                                   </td>
                                   <td className="py-3 px-4 text-center text-slate-600 dark:text-slate-400 font-mono">
                                     {inc.contrato || "-"}
@@ -12105,8 +12317,6 @@ export default function App() {
                         <option value="MONGERAL">MONGERAL</option>
                         <option value="MAPFRE">MAPFRE</option>
                         <option value="SULAMERICA">SULAMERICA</option>
-                        <option value="SULAMERICA PROPER">SULAMERICA PROPER</option>
-                        <option value="SULAMERICA PROTETTA">SULAMERICA PROTETTA</option>
                         <option value="TOKIO MARINE">TOKIO MARINE</option>
                       </optgroup>
                       <option value={importNfPdfForm.cliente}>
@@ -13987,11 +14197,21 @@ export default function App() {
                     type="file"
                     ref={fileInputRef}
                     onChange={(e) => {
-                      const newFiles = Array.from(e.target.files).map(file => ({
-                        file,
-                        notaFiscal: "",
-                        parceiro: ""
-                      }));
+                      const newFiles = Array.from(e.target.files).map((file, idx) => {
+                        const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+                        let parceiroStr = nameWithoutExt;
+                        let notaFiscalStr = "";
+                        if (nameWithoutExt.includes(",")) {
+                          const parts = nameWithoutExt.split(",");
+                          parceiroStr = parts[0].trim();
+                          notaFiscalStr = parts.slice(1).join(",").replace(/\D/g, "");
+                        }
+                        return {
+                          file,
+                          notaFiscal: notaFiscalStr,
+                          parceiro: parceiroStr
+                        };
+                      });
                       if (newFiles.length > 0) {
                         setFormData((prev) => ({
                           ...prev,
@@ -14014,7 +14234,7 @@ export default function App() {
                         >
                           <div className="flex justify-between items-center">
                             <span className="text-sm font-bold block text-slate-700 dark:text-slate-300 truncate">
-                              Anexo {i + 1}: {arq.file.name}
+                              <span className="text-emerald-500 font-extrabold">Anexo {i + 1}:</span> {arq.file.name}
                             </span>
                             <button
                               type="button"
@@ -14041,7 +14261,7 @@ export default function App() {
                                 value={arq.notaFiscal}
                                 onChange={(e) => {
                                   let newArqs = [...formData.arquivos];
-                                  newArqs[i] = { ...newArqs[i], notaFiscal: e.target.value };
+                                  newArqs[i] = { ...newArqs[i], notaFiscal: e.target.value.replace(/\D/g, "") };
                                   setFormData({ ...formData, arquivos: newArqs });
                                   setFormError("");
                                 }}

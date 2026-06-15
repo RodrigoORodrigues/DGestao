@@ -1,32 +1,201 @@
-85:    const [empresasList, setEmpresasList] = useState(() => {
-87:            const saved = localStorage.getItem('protetta_empresas');
-96:    const defaultEmpresa = empresasList.find(e => e.isDefault) || empresasList[0] || { nome: 'PROTETTA' };
-210:    const [formData, setFormData] = useState({ ano: new Date().getFullYear().toString(), mes: MESES[0], categoria: CATEGORIAS[0], empresa: nomeEmpresa, parceiro: '', codOperadora: '', codigoOperadora: '', codigoOperadoraOutra: '', arquivos: [] });
-218:                    setCurrentPath([formData.ano.toString(), formData.mes, formData.categoria, formData.empresa, opPath, formData.codOperadora]);
-220:                    setCurrentPath([formData.ano.toString(), formData.mes, formData.categoria, formData.empresa, opPath]);
-223:                setCurrentPath([formData.ano.toString(), formData.mes, formData.categoria, formData.empresa]);
-226:    }, [formData.ano, formData.mes, formData.categoria, formData.empresa, formData.codigoOperadora, formData.codigoOperadoraOutra, formData.codOperadora, currentView]);
-235:                empresa: currentPath[3] || prev.empresa,
-280:                    return { ...r, parceiro, codigoOperadora, codOperadora, id: r.id, ano: r.ano, mes: r.mes, categoria: r.categoria, empresa: r.empresa, date: r.date, fileName: r.fileName, filePath: r.filePath };
-855:        if (searchTerm.trim() !== '') { const term = searchTerm.toLowerCase(); return dbReports.filter(r => r.parceiro.toLowerCase().includes(term) || (r.fileName || '').toLowerCase().includes(term) || r.empresa.toLowerCase().includes(term)).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro, pathInfo: `${f.ano} / ${f.mes} / ${f.empresa}` })); }
-859:        if (currentPath.length === 3) return empresasList.map(e => ({ id: e.nome, name: e.nome, type: 'folder' }));
-862:            const empresa = currentPath[3];
-865:            if (empresa.toLowerCase() === 'proper') {
-873:            const existingOps = dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3])).map(r => (r.codigoOperadora || '').trim());
-876:            if (empresa.toLowerCase() === 'proper') {
-888:            const reports = dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && (r.codigoOperadora || '').trim().toLowerCase() === String(currentPath[4]).toLowerCase());
-906:            return dbReports.filter(r => String(r.ano) === String(currentPath[0]) && String(r.mes) === String(currentPath[1]) && String(r.categoria) === String(currentPath[2]) && String(r.empresa) === String(currentPath[3]) && (r.codigoOperadora || '').trim().toLowerCase() === String(currentPath[4]).toLowerCase() && String(r.codOperadora || '').trim() === String(currentPath[5])).map(f => ({ ...f, type: 'file', name: f.fileName || f.parceiro }));
-929:                const { error: insertErr } = await supabase.from('reports').insert([{ ano: formData.ano, mes: formData.mes, categoria: formData.categoria, empresa: formData.empresa, parceiro: saveParceiro, date: new Date().toISOString(), fileName: file.name, filePath: filePath }]);
-1130:        const empresaContexto = reportDoc?.empresa || nomeEmpresa;
-1131:        const empresaContextoUpper = empresaContexto.toUpperCase();
-1264:                        situacao: `FATURADO ${empresaContextoUpper} NF`, 
-1265:                        loja: empresaContextoUpper, 
-1268:                        vendedor: vendedorDetectado || empresaContexto, 
-1273:                        assessoria: empresaContexto, 
-1760:                {currentView === 'empresas' && hasAccess('empresas') && (
-1762:                        empresasList={empresasList} 
-2077:                                            {empresasList.filter(e => e.nome.toUpperCase() !== nomeEmpresaUpper).map(e => (
-2834:                                        <p className={`text-slate-500 ${extratosModalViewMode === 'cards' ? 'text-xs' : 'text-sm whitespace-nowrap'}`}>{report.ano} / {report.mes} / {report.empresa}</p>
-3279:                                <div className="space-y-2"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">Empresa (Pasta)</label><select value={formData.empresa} onChange={(e) => setFormData({...formData, empresa: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-900 dark:text-white outline-none focus:border-blue-500">{empresasList.map(e => <option key={e.nome} value={e.nome}>{e.nome}</option>)}</select></div>
-3739:                                            {empresasList.map(e => <option key={`${e.id}_1`} value={`${e.nome.toUpperCase()} SEGUROS`} />)}
-3740:                                            {empresasList.map(e => <option key={`${e.id}_2`} value={e.nome.toUpperCase()} />)}
+2344-    setVendasFilterForm(defaultVendasFilters);
+2345-    setAppliedVendasFilters(null);
+2346-    setVendasPeriodLabel("Todo o período");
+2347-  };
+2348-
+2349:  const getAllVendas = (
+2350-    vendasBase = vendasList,
+2351-    reportsBase = savedReportsList,
+2352-  ) => {
+2353-    let todasAsVendas = [...(vendasBase || [])];
+2354-    (reportsBase || []).forEach((report) => {
+--
+2399-    });
+2400-    return todasAsVendas;
+2401-  };
+2402-
+2403-  const getFilteredVendas = () => {
+2404:    let todasAsVendas = getAllVendas();
+2405-
+2406-    if (appliedVendasFilters) {
+2407-      const f = appliedVendasFilters;
+2408-      if (f.loja !== "Todos")
+2409-        todasAsVendas = todasAsVendas.filter((v) => v.loja === f.loja);
+--
+2505-  ) => {
+2506-    const groups = {};
+2507-    const dataLimite = "2026-01-01";
+2508-    const hoje = dataDeHojeInterna();
+2509-
+2510:    getAllVendas(vendasBase, reportsBase)
+2511-      .filter((v) => {
+2512-        const dv = v.dataVenda || v.dataCadastro || v.data || "";
+2513-        return !dv || dv <= hoje;
+2514-      })
+2515-      .forEach((v) => {
+--
+2869-      });
+2870-      setVendaForm(safeVenda);
+2871-    } else
+2872-      setVendaForm({
+2873-        id: null,
+2874:        numero: getNextSequenceNumber(getAllVendas(), (v) => v.numero),
+2875-        cliente: "",
+2876-        dataVenda: dataDeHojeInterna(),
+2877-        situacao: `FATURADO ${nomeEmpresaUpper} NF`,
+2878-        loja: `${nomeEmpresaUpper} SEGUROS`,
+2879-        valor: 0,
+--
+2900-
+2901-  const duplicarVenda = (venda) => {
+2902-    const copia = {
+2903-      ...venda,
+2904-      id: null,
+2905:      numero: getNextSequenceNumber(getAllVendas(), (v) => v.numero),
+2906-      isFromReport: false,
+2907-      reportId: null,
+2908-      reportRowIndex: null,
+2909-    };
+2910-    setVendaForm(copia);
+--
+4780-    const clientesParaAtualizar = new Map();
+4781-    const nomesClientesExistem = new Set(
+4782-      clientes.map((c) => c.nome.toLowerCase()),
+4783-    );
+4784-
+4785:    let currentMaxVendaCodigo = getAllVendas().reduce((max, v) => {
+4786-      let num = parseInt(v.numero, 10);
+4787-      return !isNaN(num) && num > max ? num : max;
+4788-    }, 0);
+4789-
+4790-    let currentMaxCodigo = clientes.reduce((max, c) => {
+--
+7926-        setEditRowIndex(editRowIndex + 1);
+7927-      }
+7928-    });
+7929-  };
+7930-  const iniciarRelatorioManual = () => {
+7931:    let currentMaxVendaCodigo = getAllVendas().reduce((max, v) => {
+7932-      let num = parseInt(v.numero, 10);
+7933-      return !isNaN(num) && num > max ? num : max;
+7934-    }, 0);
+7935-    let maxCod = currentMaxVendaCodigo + 1;
+7936-
+--
+7971-    setEditRowData(novaLinha);
+7972-  };
+7973-
+7974-  const confirmarVendasRelatorio = () => {
+7975-    try {
+7976:      const vendasParaAdicionar = getAllVendas().filter((v) =>
+7977-        relatorioVendasSelected.has(v.id),
+7978-      );
+7979-      if (vendasParaAdicionar.length === 0) {
+7980-        showAlert("Selecione pelo menos uma venda.");
+7981-        return;
+7982-      }
+7983-
+7984:      let currentMaxVendaCodigo = getAllVendas().reduce((max, v) => {
+7985-        let num = parseInt(v.numero, 10);
+7986-        return !isNaN(num) && num > max ? num : max;
+7987-      }, 0);
+7988-      let currentPdfMax = pdfData.reduce((max, v) => {
+7989-        let num = parseInt(v.cod, 10);
+--
+8047-      setShowModalVendasRelatorio(false);
+8048-    }
+8049-  };
+8050-
+8051-  const addManualRow = () => {
+8052:    let currentMaxVendaCodigo = getAllVendas().reduce((max, v) => {
+8053-      let num = parseInt(v.numero, 10);
+8054-      return !isNaN(num) && num > max ? num : max;
+8055-    }, 0);
+8056-    let currentPdfMax = pdfData.reduce((max, v) => {
+8057-      let num = parseInt(v.cod, 10);
+--
+9345-          )}
+9346-
+9347-          {/* NOVO DASHBOARD */}
+9348-          {currentView === "dashboard" && hasAccess("dashboard") && (
+9349-            <DashboardControle
+9350:              vendasList={getAllVendas()}
+9351-              defaultEmpresa={defaultEmpresa}
+9352-            />
+9353-          )}
+9354-
+9355-          {/* ECRÃ 12: PAINEL DE CONTROLE (ANTIGO DASHBOARD) */}
+--
+9414-                  )}
+9415-                </div>
+9416-              </div>
+9417-
+9418-              {/* ULTIMAS VENDAS */}
+9419:              {hasAccess("vendas") && getAllVendas().length > 0 && (
+9423-                      <ShoppingCart
+9424-                        size={20}
+--
+9448-                          </th>
+9450-                        </tr>
+9451-                      </thead>
+9452-                      <tbody>
+9453:                        {getAllVendas()
+9454-                          .reverse()
+9455-                          .slice(0, 5)
+9456-                          .map((venda, idx) => (
+9457-                            <tr
+9458-                              key={idx}
+--
+9497-                    </table>
+9498-                  </div>
+9499-                </div>
+9500-              )}
+9501-
+9502:              {hasAccess("vendas") && getAllVendas().length === 0 && (
+9504-                  <ShoppingCart
+9505-                    size={48}
+9507-                  />
+--
+12026-                          <input
+12027-                            type="checkbox"
+12029-                            onChange={(e) => {
+12030-                              const isChecked = e.target.checked;
+12031:                              const visibleVendas = getAllVendas().filter(
+12032-                                (v) => {
+12033-                                  const matches = [
+12034-                                    v.numero,
+12035-                                    v.cliente,
+12036-                                    v.codigoOperadora,
+--
+12071-                      </tr>
+12072-                    </thead>
+12073-                    <tbody>
+12074:                      {getAllVendas().filter((v) => {
+12075-                        const matches = [
+12076-                          v.numero,
+12077-                          v.cliente,
+12078-                          v.codigoOperadora,
+12079-                          v.corretor,
+--
+12090-                          >
+12091-                            Nenhuma venda faturada encontrada.
+12092-                          </td>
+12093-                        </tr>
+12094-                      ) : (
+12095:                        getAllVendas()
+12096-                          .filter((v) => {
+12097-                            const matches = [
+12098-                              v.numero,
+12099-                              v.cliente,
+12100-                              v.codigoOperadora,
+--
+15626-                          Vendas
+15627-                        </h4>
+15628-                      </div>
+15630-                        {(() => {
+15631:                          const vendasDoCliente = getAllVendas().filter(
+15632-                            (v) =>
+15633-                              v.cliente &&
+15634-                              v.cliente.toLowerCase() ===
+15635-                                clienteToView.nome.toLowerCase(),
+15636-                          );

@@ -36,13 +36,72 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
     const operatorData = {};
     const recordedOperators = new Set();
 
+    const extractMesAnoFromText = (texto, dataCriacao) => {
+        if (!texto) return null;
+        const t = String(texto).toLowerCase();
+        const map = {"janeiro":0,"jan":0,"fevereiro":1,"fev":1,"março":2,"marco":2,"mar":2,"abril":3,"abr":3,"maio":4,"mai":4,"junho":5,"jun":5,"julho":6,"jul":6,"agosto":7,"ago":7,"setembro":8,"set":8,"outubro":9,"out":9,"novembro":10,"nov":10,"dezembro":11,"dez":11};
+        let foundMonth = null;
+        let foundYear = null;
+        
+        const mmYyyy = t.match(/(0[1-9]|1[0-2])\/([0-9]{4})/);
+        if (mmYyyy) {
+           return { m: parseInt(mmYyyy[1], 10) - 1, y: parseInt(mmYyyy[2], 10) };
+        }
+        
+        for (let key in map) {
+            if (t.includes(key)) {
+                foundMonth = map[key];
+                break;
+            }
+        }
+        const yr = t.match(/20[2-3][0-9]/);
+        if (yr) {
+            foundYear = parseInt(yr[0], 10);
+        } else {
+            const yr2 = t.match(/(?:^|[^0-9])(?:_|\b)([2-3][0-9])(?:_|\b|$)/);
+            if (yr2) {
+                 foundYear = 2000 + parseInt(yr2[1], 10);
+            }
+        }
+
+        if (foundMonth !== null && !foundYear) {
+            foundYear = 2026;
+        }
+        
+        if (foundMonth !== null) return { m: foundMonth, y: foundYear };
+        if (foundYear) return { m: null, y: foundYear };
+        return null;
+    };
+
     if (vendasList && vendasList.length > 0) {
         vendasList.forEach(v => {
-            const dateStr = v.dataVenda || v.inicioVigencia;
-            if (!dateStr) return;
-            const dateObj = new Date(dateStr);
-            if (dateObj.getFullYear() !== selectedYear) return;
-            const monthObj = dateObj.getMonth();
+            let itemYear = null;
+            let itemMonth = null;
+
+            if (v.isFromReport) {
+                const mesAnoNome = extractMesAnoFromText(v.reportNome, v.reportDataCriacao);
+                if (mesAnoNome && mesAnoNome.m !== null) {
+                    itemYear = mesAnoNome.y || 2026;
+                    itemMonth = mesAnoNome.m;
+                } else {
+                    itemYear = 2026;
+                    // Will fallback to dataVenda for month ONLY
+                }
+            }
+
+            if (itemYear === null || itemMonth === null) {
+                const dateStr = v.dataVenda || v.inicioVigencia;
+                if (!dateStr) return;
+                const dateObj = new Date(dateStr);
+                if (isNaN(dateObj)) return;
+                
+                if (itemYear === null) itemYear = dateObj.getFullYear();
+                if (itemMonth === null) itemMonth = dateObj.getMonth();
+            }
+
+            if (itemYear !== selectedYear) return;
+            const monthObj = itemMonth;
+            
             let val = calculoTipo === 'comissao' ? v.comissao : v.valor;
             if (typeof val === 'string') {
                 val = parseFloat(val.replace(/\./g, '').replace(',', '.')) || 0;
@@ -176,7 +235,7 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
             <div className="mb-8 flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 relative no-print">
                 <div className="flex items-center gap-3">
                     <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="bg-blue-50 text-blue-800 border-none font-bold rounded-lg px-4 py-2 outline-none">
-                        {[2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
+                        {[ 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                     <select value={calculoTipo} onChange={(e) => setCalculoTipo(e.target.value)} className="bg-emerald-50 text-emerald-800 border-none font-bold rounded-lg px-4 py-2 outline-none">
                         <option value="valor">Valor das Parcelas Base</option>
