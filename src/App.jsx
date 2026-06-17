@@ -764,6 +764,12 @@ export default function App() {
   const [clientesCurrentPage, setClientesCurrentPage] = useState(1);
   const [clientesPerPage, setClientesPerPage] = useState(20);
 
+  const [vendasCurrentPage, setVendasCurrentPage] = useState(1);
+  const [vendasPerPage, setVendasPerPage] = useState(20);
+
+  const [savedReportsCurrentPage, setSavedReportsCurrentPage] = useState(1);
+  const [savedReportsPerPage, setSavedReportsPerPage] = useState(20);
+
   const [modalArquivosOpen, setModalArquivosOpen] = useState(false);
   const [isModalArquivosFullscreen, setIsModalArquivosFullscreen] =
     useState(false);
@@ -821,6 +827,7 @@ export default function App() {
   const [editRowData, setEditRowData] = useState({});
 
   const [savedReportsList, setSavedReportsList] = useState([]);
+  const [selectedSavedReports, setSelectedSavedReports] = useState([]);
   const [savedReportsSearchTerm, setSavedReportsSearchTerm] = useState("");
   const [savedReportsDateStart, setSavedReportsDateStart] = useState("");
   const [savedReportsDateEnd, setSavedReportsDateEnd] = useState("");
@@ -1420,7 +1427,7 @@ export default function App() {
               v.comissaoPorcentagem === undefined ||
               v.comissaoPorcentagem === "")
           ) {
-            const pct = String(Number(((c / t) * 100).toFixed(2)));
+            const pct = String(Math.round((c / t) * 100));
             v.comissaoPorcentagem = pct;
             toUpdate.push({ id: v.id, comissaoPorcentagem: pct });
           }
@@ -1464,9 +1471,7 @@ export default function App() {
                   dado.comissaoPorcentagem === undefined ||
                   dado.comissaoPorcentagem === "")
               ) {
-                dado.comissaoPorcentagem = String(
-                  Number(((c / t) * 100).toFixed(2)),
-                );
+                dado.comissaoPorcentagem = String(Math.round((c / t) * 100));
                 changed = true;
               }
               return dado;
@@ -1760,7 +1765,50 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (currentUser) loadFromDB();
+    async function migrateHapvidaVitaclio() {
+      if (!supabase) return;
+      const key = "hapvida_vitalicio_migrated_v1";
+      if (localStorage.getItem(key)) return;
+
+      try {
+        const { data: savedReports, error } = await supabase.from('savedReports').select('*');
+        if (error) throw error;
+        
+        let anyModified = false;
+        
+        for (const report of savedReports) {
+          if (!report.dados || !Array.isArray(report.dados)) continue;
+          
+          let modified = false;
+          const novosDados = report.dados.map(record => {
+            const op = String(record.codigoOperadora || record.codOperadora || "").toUpperCase();
+            if (op === "HAPVIDA" && record.vitalicio !== "Sim") {
+              modified = true;
+              return { ...record, vitalicio: "Sim" };
+            }
+            return record;
+          });
+          
+          if (modified) {
+            await supabase.from('savedReports').update({ dados: novosDados }).eq('id', report.id);
+            anyModified = true;
+          }
+        }
+        
+        localStorage.setItem(key, "true");
+        if (anyModified) {
+          console.log("Hapvida records migrated to vitalicio='Sim'.");
+          loadFromDB(); // Trigger a reload since data changed
+        }
+      } catch (err) {
+        console.error("Migration error:", err);
+      }
+    }
+
+    if (currentUser) {
+      loadFromDB();
+      migrateHapvidaVitaclio();
+    }
   }, [currentUser, nomeEmpresaUpper]);
 
   // BACKUP AUTOMÁTICO
@@ -2741,6 +2789,22 @@ export default function App() {
   };
 
   const displayedVendas = getFilteredVendas();
+  
+  const isShowAllVendas = vendasPerPage === "Todos";
+  const totalPagesVendas = isShowAllVendas
+    ? 1
+    : Math.ceil(displayedVendas.length / vendasPerPage);
+  const indexOfLastVenda = isShowAllVendas
+    ? displayedVendas.length
+    : vendasCurrentPage * vendasPerPage;
+  const indexOfFirstVenda = isShowAllVendas
+    ? 0
+    : indexOfLastVenda - vendasPerPage;
+  const currentVendas = displayedVendas.slice(
+    indexOfFirstVenda,
+    indexOfLastVenda,
+  );
+  
   let displayPeriodLabel = vendasPeriodLabel;
   if (
     vendasPeriodLabel === "Escolha o período" &&
@@ -2776,6 +2840,120 @@ export default function App() {
     XLSX.writeFile(wb, `DonGestao_Vendas_${dataDeHojeInterna()}.xlsx`);
     setShowVendasAcoesMenu(false);
   };
+
+  const displayedReports = savedReportsList.filter((rep) => {
+    let textMatch = true;
+    if (savedReportsSearchTerm) {
+      const term = savedReportsSearchTerm.toLowerCase();
+      const nfs = Array.from(
+        new Set(
+          (rep.dados || [])
+            .map((d) => d.notaFiscal)
+            .filter(Boolean),
+        ),
+      ).join(" ").toLowerCase();
+      const ops = Array.from(
+        new Set(
+          (rep.dados || [])
+            .map((d) => d.codigoOperadora)
+            .filter(Boolean),
+        ),
+      ).join(" ").toLowerCase();
+      textMatch =
+        (rep.nome || "").toLowerCase().includes(term) ||
+        (rep.periodo || "").toLowerCase().includes(term) ||
+        (rep.criadoPor || "").toLowerCase().includes(term) ||
+        nfs.includes(term) ||
+        ops.includes(term);
+    }
+    let startMatch = true;
+    let endMatch = true;
+    if (savedReportsDateStart)
+      startMatch =
+        new Date(rep.dataCriacao) >=
+        new Date(savedReportsDateStart + "T00:00:00");
+    if (savedReportsDateEnd)
+      endMatch =
+        new Date(rep.dataCriacao) <=
+        new Date(savedReportsDateEnd + "T23:59:59");
+    return textMatch && startMatch && endMatch;
+  });
+
+  displayedReports.sort((a, b) => {
+    let valA;
+    let valB;
+
+    if (savedReportsSortField === "notaFiscal") {
+      valA = Array.from(new Set((a.dados || []).map(d => d.notaFiscal).filter(Boolean))).join(", ");
+      valB = Array.from(new Set((b.dados || []).map(d => d.notaFiscal).filter(Boolean))).join(", ");
+    } else if (savedReportsSortField === "operadora") {
+      valA = Array.from(new Set((a.dados || []).map(d => d.codigoOperadora).filter(Boolean))).join(", ");
+      valB = Array.from(new Set((b.dados || []).map(d => d.codigoOperadora).filter(Boolean))).join(", ");
+    } else if (savedReportsSortField === "registos") {
+      valA = (a.dados || []).length;
+      valB = (b.dados || []).length;
+    } else {
+      valA = a[savedReportsSortField];
+      valB = b[savedReportsSortField];
+    }
+
+    valA = valA || "";
+    valB = valB || "";
+
+    let comparison = 0;
+    if (savedReportsSortField === "dataCriacao") {
+      comparison = new Date(valA).getTime() - new Date(valB).getTime();
+    } else if (savedReportsSortField === "registos") {
+       comparison = Number(valA) - Number(valB);
+    } else {
+      comparison = String(valA).localeCompare(String(valB));
+    }
+
+    return savedReportsSortDirection === "asc" ? comparison : -comparison;
+  });
+
+  const isShowAllSavedReports = savedReportsPerPage === "Todos";
+  const totalPagesSavedReports = isShowAllSavedReports
+    ? 1
+    : Math.ceil(displayedReports.length / savedReportsPerPage);
+  const indexOfLastSavedReport = isShowAllSavedReports
+    ? displayedReports.length
+    : savedReportsCurrentPage * savedReportsPerPage;
+  const indexOfFirstSavedReport = isShowAllSavedReports
+    ? 0
+    : indexOfLastSavedReport - savedReportsPerPage;
+  const currentSavedReports = displayedReports.slice(
+    indexOfFirstSavedReport,
+    indexOfLastSavedReport,
+  );
+
+  const toggleAllSavedReports = () => {
+    const idsPagina = currentSavedReports.map((r) => r.id);
+    const allSelected = idsPagina.every((id) =>
+      selectedSavedReports.includes(id),
+    );
+    if (allSelected) {
+      setSelectedSavedReports(
+        selectedSavedReports.filter(
+          (id) => !idsPagina.includes(id),
+        ),
+      );
+    } else {
+      const onlyNewIds = idsPagina.filter(
+        (id) => !selectedSavedReports.includes(id),
+      );
+      setSelectedSavedReports([
+        ...selectedSavedReports,
+        ...onlyNewIds,
+      ]);
+    }
+  };
+
+  const isAllSavedReportsSelected =
+    currentSavedReports.length > 0 &&
+    currentSavedReports.every((r) =>
+      selectedSavedReports.includes(r.id),
+    );
 
   const reorganizarRegistosVendas = async () => {
     showConfirm(
@@ -2943,7 +3121,7 @@ export default function App() {
       const val = parseFloat(newForm.valor) || 0;
       const com = parseFloat(value) || 0;
       if (val > 0 && com > 0) {
-        newForm.comissaoPorcentagem = Number(((com / val) * 100).toFixed(2));
+        newForm.comissaoPorcentagem = Math.round((com / val) * 100);
       } else {
         newForm.comissaoPorcentagem = "";
       }
@@ -3197,7 +3375,7 @@ export default function App() {
   };
 
   const toggleAllVendas = () => {
-    const idsPagina = displayedVendas.map((v) => v.id);
+    const idsPagina = currentVendas.map((v) => v.id);
     const allSelected = idsPagina.every((id) => selectedVendas.includes(id));
     if (allSelected) {
       setSelectedVendas(selectedVendas.filter((id) => !idsPagina.includes(id)));
@@ -3207,9 +3385,7 @@ export default function App() {
     }
   };
 
-  const isAllVendasSelected =
-    displayedVendas.length > 0 &&
-    displayedVendas.every((v) => selectedVendas.includes(v.id));
+  const isAllVendasSelected = currentVendas.length > 0 && currentVendas.every((v) => selectedVendas.includes(v.id));
 
   const apagarVenda = (venda) => {
     showConfirm(
@@ -4709,6 +4885,8 @@ export default function App() {
             textoUpper.includes("VALOR ANGARIAÇÃO")))
       )
         extratoOperadora = "MONGERAL";
+      else if (textoUpper.includes("QUALICORP"))
+        extratoOperadora = "QUALICORP";
       setCurrentReportOperadora(extratoOperadora);
     }
 
@@ -7338,7 +7516,7 @@ export default function App() {
           }
         }
 
-        // Agrupar por Contrato + Porcentagem (Conforme nova regra Bradesco)
+        // Agrupar por Contrato + Parcela (Conforme nova regra Bradesco)
         let groupedContracts = {};
 
         for (const item of rawItems) {
@@ -7351,9 +7529,22 @@ export default function App() {
           let finalContrato = baseContrato.padStart(9, "0");
           let finalNome = mappedName || item.nomeReal || "Cliente Desconhecido";
 
-          let groupKey = `${finalContrato}_${item.pctA || ""}`;
+          let groupKey = `${finalContrato}_${item.parcela || ""}_${item.pctA || ""}`;
 
           if (!groupedContracts[groupKey]) {
+            let vitalicioVal = "Não";
+            const parcNum = parseInt(String(item.parcela).replace(/\D/g, ""), 10);
+            const pctValNum = parseFloat(String(item.pctA || "").replace(",", "."));
+            const isPct234 = (
+              pctValNum === 2 ||
+              pctValNum === 3 ||
+              pctValNum === 4
+            );
+            if (isPct234) {
+              vitalicioVal = "Sim";
+            } else {
+              vitalicioVal = "Não";
+            }
             groupedContracts[groupKey] = {
               contrato: finalContrato,
               cliente: finalNome,
@@ -7362,7 +7553,7 @@ export default function App() {
               valorTotal: 0,
               comissao: 0,
               vidas: 0,
-              vitalicio: "Não",
+              vitalicio: vitalicioVal,
               servico: "Plano de Saúde",
             };
           }
@@ -7595,7 +7786,7 @@ export default function App() {
               match[7].replace(/\./g, "").replace(",", "."),
             ),
             comissao: parseFloat(match[9].replace(/\./g, "").replace(",", ".")),
-            vitalicio: "Não",
+            vitalicio: "Sim",
           }),
         );
       }
@@ -7848,17 +8039,129 @@ export default function App() {
       registosParaProcessar = grouped;
     }
 
-    const comissaoPreenchida = registosParaProcessar.map((r) => {
+    let comissaoPreenchida = registosParaProcessar.map((r) => {
       let comissaoPorcentagem = "";
       const t = parseFloat(r.valorTotal) || 0;
       const c = parseFloat(r.comissao) || 0;
       if (t > 0 && c > 0 && !r.comissaoPorcentagem) {
-        comissaoPorcentagem = Number(((c / t) * 100).toFixed(2));
+        comissaoPorcentagem = Math.round((c / t) * 100);
       } else if (r.comissaoPorcentagem) {
-        comissaoPorcentagem = r.comissaoPorcentagem;
+        const parsed = parseFloat(String(r.comissaoPorcentagem).replace(/,/g, "."));
+        comissaoPorcentagem = !isNaN(parsed) ? Math.round(parsed) : r.comissaoPorcentagem;
       }
       return { ...r, comissaoPorcentagem };
     });
+
+    if (
+      extratoOperadora.includes("PORTO") ||
+      extratoOperadora === "PORTO SEGURO"
+    ) {
+      const fileNameStr = String(
+        reportDoc?.fileName ||
+          reportDoc?.nome ||
+          reportDoc?.name ||
+          reportDoc?.pathTarget ||
+          "",
+      ).toLowerCase();
+      // Remove accents for checking
+      const normalizedName = fileNameStr.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const hasSeg = normalizedName.includes("seg") || normalizedName.includes("seguro");
+
+      const grouped = [];
+      for (let reg of comissaoPreenchida) {
+        if (hasSeg) {
+          reg.vitalicio = "Não";
+          grouped.push({ ...reg });
+        } else {
+          const existing = grouped.find(
+            (r) =>
+              r.cliente === reg.cliente &&
+              r.parcela === reg.parcela &&
+              r.codigoOperadora === reg.codigoOperadora,
+          );
+
+          if (existing) {
+            existing.valorTotal =
+              (parseFloat(existing.valorTotal) || 0) +
+              (parseFloat(reg.valorTotal) || 0);
+            existing.comissao =
+              (parseFloat(existing.comissao) || 0) +
+              (parseFloat(reg.comissao) || 0);
+            const t = parseFloat(existing.valorTotal) || 0;
+            const c = parseFloat(existing.comissao) || 0;
+            if (t > 0 && c > 0) {
+              existing.comissaoPorcentagem = Math.round((c / t) * 100);
+            }
+          } else {
+            grouped.push({ ...reg });
+          }
+        }
+      }
+
+      for (let reg of grouped) {
+        if (!hasSeg) {
+          reg.vitalicio = "Sim";
+        } else {
+          reg.vitalicio = "Não";
+        }
+      }
+
+      comissaoPreenchida = grouped;
+    }
+
+    if (extratoOperadora.toUpperCase().includes("QUALICORP") || extratoOperadora.toUpperCase() === "QUALICORP") {
+      const grouped = [];
+      for (let reg of comissaoPreenchida) {
+        const existing = grouped.find(
+          (r) =>
+            String(r.contrato || "").trim().toLowerCase() === String(reg.contrato || "").trim().toLowerCase() &&
+            String(r.cliente || "").trim().toLowerCase() === String(reg.cliente || "").trim().toLowerCase()
+        );
+
+        if (existing) {
+          existing.valorTotal =
+            (parseFloat(existing.valorTotal) || 0) +
+            (parseFloat(reg.valorTotal) || 0);
+          existing.comissao =
+            (parseFloat(existing.comissao) || 0) +
+            (parseFloat(reg.comissao) || 0);
+            
+          const t = parseFloat(existing.valorTotal) || 0;
+          const c = parseFloat(existing.comissao) || 0;
+          if (t > 0 && c > 0) {
+            existing.comissaoPorcentagem = Math.round((c / t) * 100);
+          }
+        } else {
+          grouped.push({ ...reg });
+        }
+      }
+      comissaoPreenchida = grouped;
+    }
+
+    if (extratoOperadora.includes("ICATU") || extratoOperadora === "ICATU") {
+      const grouped = [];
+      for (let reg of comissaoPreenchida) {
+        const existing = grouped.find(
+          (r) =>
+            r.contrato === reg.contrato &&
+            r.parcela === reg.parcela &&
+            r.comissaoPorcentagem === reg.comissaoPorcentagem &&
+            r.codigoOperadora === reg.codigoOperadora
+        );
+
+        if (existing) {
+          existing.valorTotal =
+            (parseFloat(existing.valorTotal) || 0) +
+            (parseFloat(reg.valorTotal) || 0);
+          existing.comissao =
+            (parseFloat(existing.comissao) || 0) +
+            (parseFloat(reg.comissao) || 0);
+        } else {
+          grouped.push({ ...reg });
+        }
+      }
+      comissaoPreenchida = grouped;
+    }
 
     setPdfData(comissaoPreenchida);
     showAlert(
@@ -8354,6 +8657,30 @@ export default function App() {
           setCurrentReportId(null);
         }
         await loadFromDB();
+        setLoading(false);
+      },
+    );
+  };
+
+  const apagarRelatoriosSalvosSelecionados = () => {
+    if (selectedSavedReports.length === 0)
+      return showAlert("Selecione pelo menos um relatório para apagar.");
+    showConfirm(
+      `ATENÇÃO: Tem certeza que deseja apagar permanentemente os ${selectedSavedReports.length} relatórios selecionados da nuvem e do cache local? Esta ação é irreversível.`,
+      async () => {
+        setLoading(true);
+        setLoadingMsg("A apagar relatórios...");
+        try {
+          await supabase.from("savedReports").delete().in("id", selectedSavedReports);
+          if (selectedSavedReports.includes(currentReportId)) {
+            setPdfData([]);
+            setCurrentReportId(null);
+          }
+          setSelectedSavedReports([]);
+          await loadFromDB();
+        } catch (e) {
+          showAlert("Erro ao apagar relatórios: " + e.message);
+        }
         setLoading(false);
       },
     );
@@ -10461,7 +10788,7 @@ export default function App() {
                         </td>
                       </tr>
                     ) : (
-                      displayedVendas.map((venda) => (
+                      currentVendas.map((venda) => (
                         <tr
                           key={venda.id}
                           className="border-b border-slate-200 dark:border-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-750 transition-colors cursor-default"
@@ -10695,6 +11022,85 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
+
+              {displayedVendas.length > 0 && (
+                <div className="mt-4 flex flex-col md:flex-row items-center justify-between bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm gap-4">
+                  <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+                    A mostrar {indexOfFirstVenda + 1} a{" "}
+                    {Math.min(indexOfLastVenda, displayedVendas.length)} de{" "}
+                    {displayedVendas.length} vendas
+                  </span>
+                  <div className="flex flex-wrap flex-col md:flex-row gap-4 items-center justify-center">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-slate-500 dark:text-slate-400">
+                        Mostrar:
+                      </span>
+                      <select
+                        value={vendasPerPage}
+                        onChange={(e) => {
+                          const val =
+                            e.target.value === "Todos"
+                              ? "Todos"
+                              : Number(e.target.value);
+                          setVendasPerPage(val);
+                          setVendasCurrentPage(1);
+                        }}
+                        className="bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white text-sm rounded-lg py-1 px-2 focus:border-emerald-500"
+                      >
+                        <option value={20}>20</option>
+                        <option value={40}>40</option>
+                        <option value={60}>60</option>
+                        <option value="Todos">Todos</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          if (isAllVendasSelected) {
+                            setSelectedVendas([]);
+                          } else {
+                            setSelectedVendas(
+                              currentVendas.map((v) => v.id),
+                            );
+                          }
+                        }}
+                        className="px-3 py-1.5 text-xs font-semibold rounded bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-800/40 transition-colors border border-sky-200 dark:border-sky-800/50"
+                      >
+                        {isAllVendasSelected
+                          ? "Desmarcar Todos"
+                          : "Marcar Todos (Visíveis)"}
+                      </button>
+                    </div>
+                    {totalPagesVendas > 1 && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() =>
+                            setVendasCurrentPage((p) => Math.max(1, p - 1))
+                          }
+                          disabled={vendasCurrentPage === 1}
+                          className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors font-medium text-sm"
+                        >
+                          Anterior
+                        </button>
+                        <span className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg font-bold text-sm border border-blue-200 dark:border-blue-800/50 flex items-center">
+                          {vendasCurrentPage} / {totalPagesVendas}
+                        </span>
+                        <button
+                          onClick={() =>
+                            setVendasCurrentPage((p) =>
+                              Math.min(totalPagesVendas, p + 1),
+                            )
+                          }
+                          disabled={vendasCurrentPage === totalPagesVendas}
+                          className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors font-medium text-sm"
+                        >
+                          Próxima
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -11094,32 +11500,21 @@ export default function App() {
                 <div className="flex flex-wrap gap-3 justify-start xl:justify-end w-full">
                   <button
                     onClick={() => setModalArquivosOpen(true)}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 px-6 rounded-lg font-bold flex items-center shadow-lg transition-colors"
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white py-2 px-4 rounded font-bold flex items-center shadow transition-colors text-sm h-[38px]"
                   >
-                    {" "}
-                    <Database size={18} className="mr-2" /> Buscar no Sistema
+                    <Database size={16} className="mr-2" /> Buscar
                   </button>
                   <button
                     onClick={iniciarRelatorioManual}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 px-6 rounded-lg font-bold flex items-center shadow-lg transition-colors"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white py-2 px-4 rounded font-bold flex items-center shadow transition-colors text-sm h-[38px]"
                   >
-                    <FilePlus size={18} className="mr-2" /> Novo Relatório
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setShowModalVendasRelatorio(true);
-                    }}
-                    className="bg-purple-600 hover:bg-purple-500 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"
-                  >
-                    <ShoppingCart size={18} className="mr-2" /> Adicionar Venda
+                    <FilePlus size={16} className="mr-2" /> Novo
                   </button>
                   <button
                     onClick={addManualRow}
-                    className="bg-amber-500 hover:bg-amber-400 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"
+                    className="bg-amber-500 hover:bg-amber-400 text-white py-2 px-4 rounded font-bold flex items-center shadow transition-colors text-sm h-[38px]"
                   >
-                    <Plus size={18} className="mr-2" /> Adicionar Linha
+                    <Plus size={16} className="mr-2" /> Linha
                   </button>
 
                   {pdfData.length > 0 && (
@@ -11128,75 +11523,23 @@ export default function App() {
                         <React.Fragment>
                           <button
                             onClick={prepararEmissaoNfLote}
-                            className="bg-blue-600 hover:bg-blue-500 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"
+                            className="bg-blue-600 hover:bg-blue-500 text-white py-2 px-4 rounded font-bold flex items-center shadow transition-colors text-sm h-[38px]"
                           >
-                            <Receipt size={18} className="mr-2" /> Gerar NF
+                            <Receipt size={16} className="mr-2" /> Gerar NF
                           </button>
                           <button
                             onClick={deleteSelectedRows}
-                            className="bg-rose-500 hover:bg-rose-400 text-white py-2.5 px-4 rounded-lg font-bold flex items-center shadow-lg transition-colors"
+                            className="bg-rose-500 hover:bg-rose-400 text-white py-2 px-4 rounded font-bold flex items-center shadow transition-colors text-sm h-[38px]"
                           >
-                            <Trash2 size={18} className="mr-2" /> Apagar Seleção
+                            <Trash2 size={16} className="mr-2" /> Apagar Seleção
                           </button>
                         </React.Fragment>
                       )}
-                      <div className="relative report-cols-menu">
-                        <button
-                          onClick={() =>
-                            setShowReportColsMenu(!showReportColsMenu)
-                          }
-                          className="bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 py-2.5 px-4 rounded-lg font-bold flex items-center transition-colors"
-                          title="Colunas"
-                        >
-                          <Layers size={18} />
-                        </button>
-                        {showReportColsMenu && (
-                          <div className="absolute top-full right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg overflow-hidden text-sm z-50 animate-in fade-in slide-in-from-top-2 p-3">
-                            <div className="flex justify-between items-center mb-2 border-b border-slate-200 dark:border-slate-700 pb-2">
-                              <span className="font-bold text-slate-700 dark:text-slate-200">
-                                Visibilidade das Colunas
-                              </span>
-                            </div>
-                            <div className="flex gap-2 mb-3">
-                              <button
-                                onClick={() => setAllReportCols(true)}
-                                className="flex-1 text-xs py-1 px-2 bg-slate-100 dark:bg-slate-700 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-                              >
-                                Marcar Todas
-                              </button>
-                              <button
-                                onClick={() => setAllReportCols(false)}
-                                className="flex-1 text-xs py-1 px-2 bg-slate-100 dark:bg-slate-700 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-                              >
-                                Desmarcar
-                              </button>
-                            </div>
-                            <div className="max-h-60 overflow-y-auto space-y-2 pr-1 text-left">
-                              {Object.keys(printColLabels).map((key) => (
-                                <label
-                                  key={key}
-                                  className="flex items-center space-x-2 cursor-pointer p-1 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={reportTableCols[key]}
-                                    onChange={() => toggleReportCol(key)}
-                                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer"
-                                  />
-                                  <span className="text-slate-700 dark:text-slate-300">
-                                    {printColLabels[key]}
-                                  </span>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
                       <button
                         onClick={() => setModalPrintOpen(true)}
-                        className="bg-emerald-50 dark:bg-emerald-600/20 hover:bg-emerald-100 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/50 py-2.5 px-6 rounded-lg font-bold flex items-center transition-colors"
+                        className="bg-emerald-50 dark:bg-emerald-600/20 hover:bg-emerald-100 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/50 py-2 px-4 rounded font-bold flex items-center transition-colors text-sm h-[38px] shadow-sm tracking-tight"
                       >
-                        <Printer size={18} className="mr-2" /> Imprimir
+                        <Printer size={16} className="mr-2" /> Imprimir
                         Relatório
                       </button>
                     </React.Fragment>
@@ -11229,6 +11572,149 @@ export default function App() {
                       className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm focus:border-blue-500 outline-none text-slate-900 dark:text-white transition-colors"
                     />
                   </div>
+                  <div className="relative report-cols-menu">
+                    <button
+                      onClick={() =>
+                        setShowReportColsMenu(!showReportColsMenu)
+                      }
+                      className="bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 h-[38px] px-3 py-2 rounded font-bold flex items-center transition-colors shadow-sm"
+                      title="Colunas"
+                    >
+                      <Layers size={18} />
+                    </button>
+                    {showReportColsMenu && (
+                      <div className="absolute top-full right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg overflow-hidden text-sm z-50 animate-in fade-in slide-in-from-top-2 p-3">
+                        <div className="flex justify-between items-center mb-2 border-b border-slate-200 dark:border-slate-700 pb-2">
+                          <span className="font-bold text-slate-700 dark:text-slate-200">
+                            Visibilidade das Colunas
+                          </span>
+                        </div>
+                        <div className="flex gap-2 mb-3">
+                          <button
+                            onClick={() => setAllReportCols(true)}
+                            className="flex-1 text-xs py-1 px-2 bg-slate-100 dark:bg-slate-700 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                          >
+                            Marcar Todas
+                          </button>
+                          <button
+                            onClick={() => setAllReportCols(false)}
+                            className="flex-1 text-xs py-1 px-2 bg-slate-100 dark:bg-slate-700 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                          >
+                            Desmarcar
+                          </button>
+                        </div>
+                        <div className="max-h-60 overflow-y-auto space-y-2 pr-1 text-left">
+                          {Object.keys(printColLabels).map((key) => (
+                            <label
+                              key={key}
+                              className="flex items-center space-x-2 cursor-pointer p-1 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={reportTableCols[key]}
+                                onChange={() => toggleReportCol(key)}
+                                className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer"
+                              />
+                              <span className="text-slate-700 dark:text-slate-300">
+                                {printColLabels[key]}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {(() => {
+                    const nfSet = Array.from(
+                      new Set(
+                        (pdfData || [])
+                          .map((d) => String(d.notaFiscal))
+                          .filter(Boolean),
+                      ),
+                    );
+                    const opSet = Array.from(
+                      new Set(
+                        (pdfData || [])
+                          .map(
+                            (d) =>
+                              String(d.codigoOperadora || d.codOperadora),
+                          )
+                          .filter(Boolean),
+                      ),
+                    );
+                    let matchingExtrato = null;
+                    if (nfSet.length > 0) {
+                      matchingExtrato = dbReports.find(
+                        (ext) =>
+                          ext.notaFiscal &&
+                          nfSet.includes(String(ext.notaFiscal)) &&
+                          ((ext.codigoOperadora &&
+                            opSet.includes(String(ext.codigoOperadora))) ||
+                            (ext.codOperadora &&
+                              opSet.includes(String(ext.codOperadora)))),
+                      );
+                    }
+                    if (!matchingExtrato && nfSet.length > 0) {
+                      matchingExtrato = dbReports.find(
+                        (ext) =>
+                          ext.notaFiscal &&
+                          nfSet.includes(String(ext.notaFiscal)),
+                      );
+                    }
+                    if (!matchingExtrato) {
+                      matchingExtrato = dbReports.find(
+                        (ext) =>
+                          ext.parceiro === reportName ||
+                          (reportName &&
+                            ext.fileName &&
+                            reportName.includes(ext.fileName.split(".")[0])),
+                      );
+                    }
+
+                    if (matchingExtrato) {
+                      return (
+                        <button
+                          onClick={() => {
+                            const pathTarget =
+                              matchingExtrato.filePath ||
+                              matchingExtrato.fileName;
+                            if (!pathTarget) {
+                              showAlert(
+                                "Caminho do ficheiro original ausente.",
+                              );
+                              return;
+                            }
+                            setLoading(true);
+                            setLoadingMsg("A descarregar ficheiro...");
+                            supabase.storage
+                              .from("arquivos_extratos")
+                              .download(pathTarget)
+                              .then(({ data, error }) => {
+                                setLoading(false);
+                                if (error || !data) {
+                                  showAlert(
+                                    "Ficheiro não encontrado na base de dados cloud.",
+                                  );
+                                } else {
+                                  const url = URL.createObjectURL(data);
+                                  window.open(url, "_blank");
+                                  setTimeout(
+                                    () => URL.revokeObjectURL(url),
+                                    1000,
+                                  );
+                                }
+                              });
+                          }}
+                          className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 bg-emerald-50 dark:bg-emerald-900/30 py-2 px-6 rounded font-bold flex items-center transition-colors h-[38px] shadow"
+                          title="Abrir Extrato de Referência"
+                        >
+                          <FileText size={16} className="mr-2" /> Abrir
+                          Extrato
+                        </button>
+                      );
+                    }
+                    return null;
+                  })()}
                   <button
                     onClick={salvarRelatorioComissao}
                     className="bg-blue-600 hover:bg-blue-500 text-white py-2 px-6 rounded font-bold flex items-center transition-colors h-[38px] shadow"
@@ -11717,9 +12203,7 @@ export default function App() {
                                     let newPct =
                                       editRowData.comissaoPorcentagem;
                                     if (t > 0 && c > 0) {
-                                      newPct = Number(
-                                        ((c / t) * 100).toFixed(2),
-                                      );
+                                      newPct = Math.round((c / t) * 100);
                                     } else {
                                       newPct = "";
                                     }
@@ -11796,9 +12280,7 @@ export default function App() {
                                     const t =
                                       parseFloat(editRowData.valorTotal) || 0;
                                     if (t > 0 && numVal > 0) {
-                                      newPct = Number(
-                                        ((numVal / t) * 100).toFixed(2),
-                                      );
+                                      newPct = Math.round((numVal / t) * 100);
                                     } else {
                                       newPct = "";
                                     }
@@ -13012,20 +13494,30 @@ export default function App() {
                       </>
                     )}
                   </div>
-                  <div className="relative">
-                    <Search
-                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"
-                      size={18}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Pesquisar relatórios, NF, Op..."
-                      value={savedReportsSearchTerm}
-                      onChange={(e) =>
-                        setSavedReportsSearchTerm(e.target.value)
-                      }
-                      className="w-full md:w-64 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500 transition-colors"
-                    />
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search
+                        className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"
+                        size={18}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Pesquisar relatórios, NF, Op..."
+                        value={savedReportsSearchTerm}
+                        onChange={(e) =>
+                          setSavedReportsSearchTerm(e.target.value)
+                        }
+                        className="w-full md:w-64 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500 transition-colors"
+                      />
+                    </div>
+                    {selectedSavedReports.length > 0 && (
+                      <button
+                        onClick={apagarRelatoriosSalvosSelecionados}
+                        className="bg-rose-500 hover:bg-rose-400 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center shadow transition-colors h-[38px] min-w-max"
+                      >
+                        <Trash2 size={16} className="mr-2" /> Eliminar ({selectedSavedReports.length})
+                      </button>
+                    )}
                   </div>
                 </div>
               </header>
@@ -13034,6 +13526,16 @@ export default function App() {
                 <table className="w-full text-left border-collapse text-sm whitespace-nowrap">
                   <thead>
                     <tr className="border-b-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750/50 transition-colors duration-200">
+                      <th className="py-3 px-4 w-10 text-center border-r border-slate-200 dark:border-slate-700">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 dark:bg-slate-700 dark:border-slate-600 dark:checked:bg-emerald-600 cursor-pointer"
+                          checked={isAllSavedReportsSelected}
+                          onChange={toggleAllSavedReports}
+                          disabled={displayedReports.length === 0}
+                          title="Selecionar Todos na Página"
+                        />
+                      </th>
                       <th 
                         className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
                         onClick={() => handleSavedReportsSort("dataCriacao")}
@@ -13096,123 +13598,65 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(() => {
-                      let filteredReports = savedReportsList.filter((rep) => {
-                        let textMatch = true;
-                        if (savedReportsSearchTerm) {
-                          const term = savedReportsSearchTerm.toLowerCase();
-                          const nfs = Array.from(
+                    {displayedReports.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan="9"
+                          className="py-8 text-center text-slate-500 italic"
+                        >
+                          Nenhum relatório encontrado.
+                        </td>
+                      </tr>
+                    ) : (
+                      currentSavedReports.map((rep) => {
+                        const nfsStr =
+                          Array.from(
                             new Set(
                               (rep.dados || [])
                                 .map((d) => d.notaFiscal)
                                 .filter(Boolean),
                             ),
-                          )
-                            .join(" ")
-                            .toLowerCase();
-                          const ops = Array.from(
+                          ).join(", ") || "-";
+                        const opsStr =
+                          Array.from(
                             new Set(
                               (rep.dados || [])
                                 .map((d) => d.codigoOperadora)
                                 .filter(Boolean),
                             ),
-                          )
-                            .join(" ")
-                            .toLowerCase();
-                          textMatch =
-                            (rep.nome || "").toLowerCase().includes(term) ||
-                            (rep.periodo || "").toLowerCase().includes(term) ||
-                            (rep.criadoPor || "")
-                              .toLowerCase()
-                              .includes(term) ||
-                            nfs.includes(term) ||
-                            ops.includes(term);
-                        }
-                        let startMatch = true;
-                        let endMatch = true;
-                        if (savedReportsDateStart)
-                          startMatch =
-                            new Date(rep.dataCriacao) >=
-                            new Date(savedReportsDateStart + "T00:00:00");
-                        if (savedReportsDateEnd)
-                          endMatch =
-                            new Date(rep.dataCriacao) <=
-                            new Date(savedReportsDateEnd + "T23:59:59");
-                        return textMatch && startMatch && endMatch;
-                      });
+                          ).join(", ") || "-";
 
-                      filteredReports.sort((a, b) => {
-                        let valA;
-                        let valB;
-
-                        if (savedReportsSortField === 'notaFiscal') {
-                          valA = Array.from(new Set((a.dados || []).map(d => d.notaFiscal).filter(Boolean))).join(", ");
-                          valB = Array.from(new Set((b.dados || []).map(d => d.notaFiscal).filter(Boolean))).join(", ");
-                        } else if (savedReportsSortField === 'operadora') {
-                          valA = Array.from(new Set((a.dados || []).map(d => d.codigoOperadora).filter(Boolean))).join(", ");
-                          valB = Array.from(new Set((b.dados || []).map(d => d.codigoOperadora).filter(Boolean))).join(", ");
-                        } else if (savedReportsSortField === 'registos') {
-                          valA = (a.dados || []).length;
-                          valB = (b.dados || []).length;
-                        } else {
-                          valA = a[savedReportsSortField];
-                          valB = b[savedReportsSortField];
-                        }
-
-                        // Configura fallback para não dar erro se null
-                        valA = valA || "";
-                        valB = valB || "";
-
-                        let comparison = 0;
-                        if (savedReportsSortField === "dataCriacao") {
-                          comparison = new Date(valA).getTime() - new Date(valB).getTime();
-                        } else if (savedReportsSortField === "registos") {
-                           comparison = Number(valA) - Number(valB);
-                        } else {
-                          comparison = String(valA).localeCompare(String(valB));
-                        }
-
-                        return savedReportsSortDirection === "asc" ? comparison : -comparison;
-                      });
-
-                      if (filteredReports.length === 0) {
                         return (
-                          <tr>
+                          <tr
+                            key={rep.id}
+                            className="border-b border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-750/50 transition-colors"
+                          >
                             <td
-                              colSpan="8"
-                              className="py-8 text-center text-slate-500 italic"
+                              className="py-3 px-4 text-center border-r border-slate-200 dark:border-slate-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (selectedSavedReports.includes(rep.id)) {
+                                  setSelectedSavedReports(selectedSavedReports.filter((id) => id !== rep.id));
+                                } else {
+                                  setSelectedSavedReports([...selectedSavedReports, rep.id]);
+                                }
+                              }}
                             >
-                              Nenhum relatório encontrado.
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 dark:bg-slate-700 dark:border-slate-600 dark:checked:bg-emerald-600 cursor-pointer"
+                                checked={selectedSavedReports.includes(rep.id)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  if (selectedSavedReports.includes(rep.id)) {
+                                    setSelectedSavedReports(selectedSavedReports.filter((id) => id !== rep.id));
+                                  } else {
+                                    setSelectedSavedReports([...selectedSavedReports, rep.id]);
+                                  }
+                                }}
+                              />
                             </td>
-                          </tr>
-                        );
-                      }
-
-                      return filteredReports
-                        .map((rep) => {
-                          const nfsStr =
-                            Array.from(
-                              new Set(
-                                (rep.dados || [])
-                                  .map((d) => d.notaFiscal)
-                                  .filter(Boolean),
-                              ),
-                            ).join(", ") || "-";
-                          const opsStr =
-                            Array.from(
-                              new Set(
-                                (rep.dados || [])
-                                  .map((d) => d.codigoOperadora)
-                                  .filter(Boolean),
-                              ),
-                            ).join(", ") || "-";
-
-                          return (
-                            <tr
-                              key={rep.id}
-                              className="border-b border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-750/50 transition-colors"
-                            >
-                              <td className="py-3 px-4 text-slate-500 dark:text-slate-400">
+                            <td className="py-3 px-4 text-slate-500 dark:text-slate-400">
                                 {new Date(rep.dataCriacao).toLocaleDateString(
                                   "pt-PT",
                                 )}{" "}
@@ -13251,13 +13695,58 @@ export default function App() {
                                 <div className="flex gap-2 justify-center">
                                   <button
                                     onClick={() => carregarRelatorioSalvo(rep)}
-                                    className="text-blue-600 dark:text-blue-400 hover:text-blue-700 bg-blue-50 dark:bg-blue-900/30 px-3 py-1.5 rounded transition-colors text-xs font-bold"
+                                    className="text-blue-600 dark:text-blue-400 hover:text-blue-700 bg-blue-50 dark:bg-blue-900/30 px-3 py-1.5 flex flex-col justify-center rounded transition-colors text-xs font-bold"
                                   >
                                     Abrir
                                   </button>
+                                  {(() => {
+                                    const nfSet = Array.from(new Set((rep.dados || []).map(d => String(d.notaFiscal)).filter(Boolean)));
+                                    const opSet = Array.from(new Set((rep.dados || []).map(d => String(d.codigoOperadora || d.codOperadora)).filter(Boolean)));
+                                    let matchingExtrato = null;
+                                    if (nfSet.length > 0) {
+                                      matchingExtrato = dbReports.find(ext => ext.notaFiscal && nfSet.includes(String(ext.notaFiscal)) && ((ext.codigoOperadora && opSet.includes(String(ext.codigoOperadora))) || (ext.codOperadora && opSet.includes(String(ext.codOperadora)))));
+                                    }
+                                    if (!matchingExtrato && nfSet.length > 0) {
+                                      matchingExtrato = dbReports.find(ext => ext.notaFiscal && nfSet.includes(String(ext.notaFiscal)));
+                                    }
+                                    if (!matchingExtrato) {
+                                      matchingExtrato = dbReports.find(ext => ext.parceiro === rep.nome || (rep.nome && ext.fileName && rep.nome.includes(ext.fileName.split('.')[0])));
+                                    }
+
+                                    if (matchingExtrato) {
+                                      return (
+                                        <button
+                                          onClick={() => {
+                                            const pathTarget = matchingExtrato.filePath || matchingExtrato.fileName;
+                                            if (!pathTarget) {
+                                              showAlert("Caminho do ficheiro original ausente.");
+                                              return;
+                                            }
+                                            setLoading(true);
+                                            setLoadingMsg("A descarregar ficheiro...");
+                                            supabase.storage.from("arquivos_extratos").download(pathTarget).then(({ data, error }) => {
+                                              setLoading(false);
+                                              if (error || !data) {
+                                                showAlert("Ficheiro não encontrado na base de dados cloud.");
+                                              } else {
+                                                const url = URL.createObjectURL(data);
+                                                window.open(url, "_blank");
+                                                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                                              }
+                                            });
+                                          }}
+                                          className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1.5 flex items-center gap-1.5 rounded transition-colors text-xs font-bold whitespace-nowrap"
+                                          title="Abrir Extrato de Referência"
+                                        >
+                                          <FileText size={14} /> Abrir Extrato
+                                        </button>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
                                   <button
                                     onClick={() => apagarRelatorioSalvo(rep.id)}
-                                    className="text-rose-600 dark:text-rose-400 hover:text-rose-700 bg-rose-50 dark:bg-rose-900/30 p-1.5 rounded transition-colors"
+                                    className="text-rose-600 dark:text-rose-400 hover:text-rose-700 bg-rose-50 dark:bg-rose-900/30 p-1.5 flex flex-col justify-center rounded transition-colors"
                                     title="Apagar Relatório"
                                   >
                                     <Trash2 size={16} />
@@ -13266,11 +13755,87 @@ export default function App() {
                               </td>
                             </tr>
                           );
-                        });
-                    })()}
+                        })
+                    )}
                   </tbody>
                 </table>
               </div>
+
+              {displayedReports.length > 0 && (
+                <div className="mt-4 flex flex-col md:flex-row items-center justify-between bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm gap-4">
+                  <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+                    A mostrar {indexOfFirstSavedReport + 1} a{" "}
+                    {Math.min(
+                      indexOfLastSavedReport,
+                      displayedReports.length,
+                    )}{" "}
+                    de {displayedReports.length} relatórios
+                  </span>
+                  <div className="flex flex-wrap flex-col md:flex-row gap-4 items-center justify-center">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-slate-500 dark:text-slate-400">
+                        Mostrar:
+                      </span>
+                      <select
+                        value={savedReportsPerPage}
+                        onChange={(e) => {
+                          const val =
+                            e.target.value === "Todos"
+                              ? "Todos"
+                              : Number(e.target.value);
+                          setSavedReportsPerPage(val);
+                          setSavedReportsCurrentPage(1);
+                        }}
+                        className="bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white text-sm rounded-lg py-1 px-2 focus:border-emerald-500"
+                      >
+                        <option value={20}>20</option>
+                        <option value={40}>40</option>
+                        <option value={60}>60</option>
+                        <option value="Todos">Todos</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={toggleAllSavedReports}
+                        className="px-3 py-1.5 text-xs font-semibold rounded bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-800/40 transition-colors border border-sky-200 dark:border-sky-800/50"
+                      >
+                        {isAllSavedReportsSelected
+                          ? "Desmarcar Todos"
+                          : "Marcar Todos (Visíveis)"}
+                      </button>
+                    </div>
+                    {totalPagesSavedReports > 1 && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() =>
+                            setSavedReportsCurrentPage((p) => Math.max(1, p - 1))
+                          }
+                          disabled={savedReportsCurrentPage === 1}
+                          className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors font-medium text-sm"
+                        >
+                          Anterior
+                        </button>
+                        <span className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg font-bold text-sm border border-blue-200 dark:border-blue-800/50 flex items-center">
+                          {savedReportsCurrentPage} / {totalPagesSavedReports}
+                        </span>
+                        <button
+                          onClick={() =>
+                            setSavedReportsCurrentPage((p) =>
+                              Math.min(totalPagesSavedReports, p + 1),
+                            )
+                          }
+                          disabled={
+                            savedReportsCurrentPage === totalPagesSavedReports
+                          }
+                          className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors font-medium text-sm"
+                        >
+                          Próxima
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -15678,12 +16243,19 @@ export default function App() {
                       </div>
                       <div className="p-0">
                         {(() => {
-                          const vendasDoCliente = getAllVendas().filter(
-                            (v) =>
-                              v.cliente &&
-                              v.cliente.toLowerCase() ===
-                                clienteToView.nome.toLowerCase(),
-                          );
+                          const vendasDoCliente = getAllVendas()
+                            .filter(
+                              (v) =>
+                                v.cliente &&
+                                v.cliente.toLowerCase() ===
+                                  clienteToView.nome.toLowerCase()
+                            )
+                            .sort((a, b) => {
+                              const dateA = a.dataVenda || "";
+                              const dateB = b.dataVenda || "";
+                              // Sort reverse chronologically (newest first)
+                              return dateB.localeCompare(dateA);
+                            });
                           if (vendasDoCliente.length === 0) {
                             return (
                               <p className="text-center py-6 text-slate-500 dark:text-slate-400">

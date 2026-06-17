@@ -147,8 +147,8 @@ export default function Sidebar({ currentUser, currentView, setCurrentView, hasA
                 <p className={`text-xs font-bold text-slate-400 dark:text-slate-500 uppercase pt-2 mb-2 truncate ${collapsed ? 'text-center' : ''}`}>
                     {collapsed ? '...' : 'Principal'}
                 </p>
-                {hasAccess('dashboard') && <SidebarItem collapsed={collapsed} icon={Layers} label="Painel" active={currentView === 'painel'} onClick={() => setCurrentView('painel')} />}
                 {hasAccess('dashboard') && <SidebarItem collapsed={collapsed} icon={Home} label="Dashboard" active={currentView === 'dashboard'} onClick={() => setCurrentView('dashboard')} />}
+                {hasAccess('dashboard') && <SidebarItem collapsed={collapsed} icon={Layers} label="Painel" active={currentView === 'painel'} onClick={() => setCurrentView('painel')} />}
                 {hasAccess('vendas') && <SidebarItem collapsed={collapsed} icon={ShoppingCart} label="Vendas de Serviços" active={currentView === 'vendas'} onClick={() => setCurrentView('vendas')} />}
                 {hasAccess('clientes') && <SidebarItem collapsed={collapsed} icon={Users} label="Clientes" active={currentView === 'clientes'} onClick={() => setCurrentView('clientes')} />}
                 {hasAccess('processar') && <SidebarItem collapsed={collapsed} icon={FileCheck} label="Relatório Comissão" active={currentView === 'processar'} onClick={() => setCurrentView('processar')} />}

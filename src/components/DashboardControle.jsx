@@ -36,29 +36,56 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
     const operatorData = {};
     const recordedOperators = new Set();
 
-    const extractMesAnoFromText = (texto, dataCriacao) => {
+    const extractMesAnoFromText = (texto) => {
         if (!texto) return null;
-        const t = String(texto).toLowerCase();
-        const map = {"janeiro":0,"jan":0,"fevereiro":1,"fev":1,"março":2,"marco":2,"mar":2,"abril":3,"abr":3,"maio":4,"mai":4,"junho":5,"jun":5,"julho":6,"jul":6,"agosto":7,"ago":7,"setembro":8,"set":8,"outubro":9,"out":9,"novembro":10,"nov":10,"dezembro":11,"dez":11};
+        let t = String(texto).toLowerCase();
+        
+        // Remove accents
+        t = t.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+        const map = {
+            "janeiro":0,"jan":0,"fevereiro":1,"fev":1,"marco":2,"mar":2,
+            "abril":3,"abr":3,"maio":4,"mai":4,"junho":5,"jun":5,
+            "julho":6,"jul":6,"agosto":7,"ago":7,"setembro":8,"set":8,
+            "outubro":9,"out":9,"novembro":10,"nov":10,"dezembro":11,"dez":11
+        };
+        
         let foundMonth = null;
         let foundYear = null;
         
-        const mmYyyy = t.match(/(0[1-9]|1[0-2])\/([0-9]{4})/);
+        // Match explicit MM/YYYY or MM-YYYY
+        const mmYyyy = t.match(/\b(0?[1-9]|1[0-2])[\/\-_\.](20[2-3][0-9])\b/);
         if (mmYyyy) {
            return { m: parseInt(mmYyyy[1], 10) - 1, y: parseInt(mmYyyy[2], 10) };
         }
         
+        // Try to find month names
         for (let key in map) {
-            if (t.includes(key)) {
+            // Match whole word if possible to avoid false positives like "amar" matching "mar"
+            let regex = new RegExp(`\\b${key}\\b`);
+            if (regex.test(t)) {
                 foundMonth = map[key];
                 break;
             }
         }
-        const yr = t.match(/20[2-3][0-9]/);
+        
+        // If not found with boundaries, allow substring matching
+        if (foundMonth === null) {
+            for (let key in map) {
+                if (t.includes(key)) {
+                    foundMonth = map[key];
+                    break;
+                }
+            }
+        }
+
+        // Match year yyyy
+        const yr = t.match(/\b(20[2-3][0-9])\b/);
         if (yr) {
-            foundYear = parseInt(yr[0], 10);
+            foundYear = parseInt(yr[1], 10);
         } else {
-            const yr2 = t.match(/(?:^|[^0-9])(?:_|\b)([2-3][0-9])(?:_|\b|$)/);
+            // Match yy
+            const yr2 = t.match(/[\/\-_\.]([2-3][0-9])\b/);
             if (yr2) {
                  foundYear = 2000 + parseInt(yr2[1], 10);
             }
@@ -79,7 +106,7 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
             let itemMonth = null;
 
             if (v.isFromReport) {
-                const mesAnoNome = extractMesAnoFromText(v.reportNome, v.reportDataCriacao);
+                const mesAnoNome = extractMesAnoFromText(v.reportNome);
                 if (mesAnoNome && mesAnoNome.m !== null) {
                     itemYear = mesAnoNome.y || 2026;
                     itemMonth = mesAnoNome.m;
@@ -210,24 +237,24 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
     return (
         <div ref={reportRef} className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20 w-full">
             <header className="mb-8">
-                <div className="bg-[#111827] dark:bg-slate-900 rounded-xl p-4 md:p-6 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden h-32">
-                    <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-blue-500 rounded-full opacity-10 blur-2xl"></div>
+                <div className="bg-[#111827] dark:bg-slate-900 rounded-xl p-4 md:px-6 md:py-0 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-4 relative overflow-hidden h-auto md:h-16">
+                    <div className="absolute top-0 right-0 -mt-4 -mr-4 w-16 h-16 bg-blue-500 rounded-full opacity-10 blur-xl"></div>
                     
-                    <div className="flex-1 flex items-center h-full z-10 w-full">
+                    <div className="flex-1 flex items-center h-full z-10 w-full py-2 md:py-0">
                         {logo ? (
-                            <div className="bg-white rounded p-2 h-20 w-auto flex items-center justify-center border border-slate-200 shrink-0">
+                            <div className="bg-white rounded p-1 h-10 w-auto flex items-center justify-center border border-slate-200 shrink-0 shadow-[0_0_15px_rgba(255,255,255,0.3)] ring-1 ring-white/20">
                                 <img src={logo} alt={nomeEmpresa} className="h-full object-contain" />
                             </div>
                         ) : (
                             <div className="text-left">
-                                <h2 className="text-2xl font-bold text-slate-100">{nomeEmpresaUpper}</h2>
+                                <h2 className="text-xl font-bold text-slate-100 drop-shadow-[0_0_12px_rgba(255,255,255,0.5)] tracking-wide">{nomeEmpresaUpper}</h2>
                             </div>
                         )}
                     </div>
 
                     <div className="text-right z-10 hidden md:block w-full">
-                        <h1 className="text-2xl font-bold tracking-tight text-white">{nomeEmpresa} Analytics</h1>
-                        <p className="text-slate-400 text-sm font-light mt-1">Gestão Estratégica e Evolução de Vitalícios</p>
+                        <h1 className="text-lg font-bold tracking-tight text-white leading-tight">{nomeEmpresa} Analytics</h1>
+                        <p className="text-slate-400 text-xs font-light mt-0.5">Gestão Estratégica e Evolução de Vitalícios</p>
                     </div>
                 </div>
             </header>
@@ -238,7 +265,7 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
                         {[ 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                     <select value={calculoTipo} onChange={(e) => setCalculoTipo(e.target.value)} className="bg-emerald-50 text-emerald-800 border-none font-bold rounded-lg px-4 py-2 outline-none">
-                        <option value="valor">Valor das Parcelas Base</option>
+                        <option value="valor">Valor Total</option>
                         <option value="comissao">Comissões</option>
                     </select>
                 </div>
@@ -277,7 +304,7 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
                 <div className="lg:col-span-3 bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-6"><span className="w-2 h-6 bg-blue-600 rounded-full"></span> Evolução Mensal</h3>
-                    <div className="aspect-[21/9]">
+                    <div className="aspect-[42/9]">
                         <Line
                             data={{ labels: months.map(m=>m.substring(0,3)), datasets: [{ label: 'Valor (R$)', data, borderColor: '#2563eb', backgroundColor: '#eff6ff', fill: true, tension: 0.3 }] }}
                             options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, align: 'top', formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v) } }, scales: { y: { title: { display: false, text: 'Valor (R$)' }, beginAtZero: true, grace: '10%' }, x: { title: { display: false, text: 'Mês' } } } }}
@@ -287,44 +314,46 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
                 
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4"><span className="w-2 h-6 bg-emerald-500 rounded-full"></span> Trimestral</h3>
-                    <div className="aspect-square"><Bar data={{ labels: ['1º T', '2º T', '3º T', '4º T'], datasets: [{ label: 'Valor (R$)', data: quarterData, backgroundColor: ['#60a5fa', '#34d399', '#facc15', '#f87171'], borderRadius: 6 }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, color: '#fff', font: { weight: 'bold' }, formatter: (v,c) => total>0 ? (v*100/total).toFixed(0)+'%' : '0%' } }, scales: { y: {display:false}, x: {grid:{display:false}} } }} /></div>
+                    <div className="aspect-[21/9]"><Bar data={{ labels: ['1º T', '2º T', '3º T', '4º T'], datasets: [{ label: 'Valor (R$)', data: quarterData, backgroundColor: ['#60a5fa', '#34d399', '#facc15', '#f87171'], borderRadius: 6 }] }} options={{ layout: { padding: { top: 30 } }, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, color: '#64748b', anchor: 'end', align: 'top', formatter: (v,c) => total>0 ? (v*100/total).toFixed(0)+'%' : '0%', font: {size: 11, weight: 'bold'} } }, scales: { y: {display:false}, x: {grid:{display:false}} } }} /></div>
                 </div>
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4"><span className="w-2 h-6 bg-teal-500 rounded-full"></span> Semestral</h3>
-                    <div className="aspect-square"><Pie data={{ labels: ['1º Sem', '2º Sem'], datasets: [{ label: 'Valor (R$)', data: semesterData, backgroundColor: ['#2dd4bf', '#0d9488'] }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, datalabels: { display: true, color: '#fff', font: { weight: 'bold' }, formatter: (v,c) => total>0 ? (v*100/total).toFixed(0)+'%' : '0%' } } }} /></div>
+                    <div className="aspect-[21/9]"><Pie data={{ labels: ['1º Sem', '2º Sem'], datasets: [{ label: 'Valor (R$)', data: semesterData, backgroundColor: ['#2dd4bf', '#0d9488'] }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } }, datalabels: { display: true, color: '#fff', font: { weight: 'bold' }, formatter: (v,c) => total>0 ? (v*100/total).toFixed(0)+'%' : '0%' } } }} /></div>
                 </div>
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4"><span className="w-2 h-6 bg-indigo-500 rounded-full"></span> Mix</h3>
-                    <div className="aspect-square"><Doughnut data={{ labels: ['Corretora', 'Assessoria'], datasets: [{ label: 'Valor (R$)', data: [totCorr, totAss], backgroundColor: ['#2563eb', '#a855f7'], borderWidth: 0 }] }} options={{ responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom' }, datalabels: { display: true, color: '#fff', font: { weight: 'bold' }, formatter: (v,c) => (v/(totCorr+totAss)*100 || 0).toFixed(0)+'%' } } }} /></div>
+                    <div className="aspect-[21/9]"><Doughnut data={{ labels: ['Corretora', 'Assessoria'], datasets: [{ label: 'Valor (R$)', data: [totCorr, totAss], backgroundColor: ['#2563eb', '#a855f7'], borderWidth: 0 }] }} options={{ responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } }, datalabels: { display: true, color: '#fff', font: { weight: 'bold' }, formatter: (v,c) => (v/(totCorr+totAss)*100 || 0).toFixed(0)+'%' } } }} /></div>
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 mb-8">
-                <div className="mb-6 flex justify-between items-start">
-                    <div>
-                        <h2 className="text-lg font-bold text-slate-800 dark:text-white">Desempenho por Operadora</h2>
-                        <p className="text-sm text-slate-500">Detalhamento Financeiro</p>
+            <div className={`grid grid-cols-1 ${nomeEmpresaUpper === 'PROTETTA' ? 'lg:grid-cols-2' : 'lg:grid-cols-3'} gap-8 mb-8`}>
+                <div className="lg:col-span-1 bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
+                    <div className="mb-6 flex justify-between items-start">
+                        <div>
+                            <h2 className="text-lg font-bold text-slate-800 dark:text-white">Desempenho por Operadora</h2>
+                            <p className="text-sm text-slate-500">Detalhamento Financeiro</p>
+                        </div>
+                        <select value={selectedOperatorMonth} onChange={e => setSelectedOperatorMonth(e.target.value)} className="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg p-2 text-sm text-slate-700 dark:text-slate-300">
+                            <option value="Todos">Todos os Meses</option>
+                            {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                        </select>
                     </div>
-                    <select value={selectedOperatorMonth} onChange={e => setSelectedOperatorMonth(e.target.value)} className="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg p-2 text-sm text-slate-700 dark:text-slate-300">
-                        <option value="Todos">Todos os Meses</option>
-                        {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
-                    </select>
+                    <div className="aspect-[4/3] lg:aspect-auto lg:h-[300px]">
+                        <Bar 
+                            data={{ labels: opChartLabels, datasets: [{ label: 'Valor (R$)', data: opChartDataValues, backgroundColor: opChartColors, borderRadius: 6, maxBarThickness: 48 }] }}
+                            options={{ layout: { padding: { top: 30 } }, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, color: '#64748b', anchor: 'end', align: 'top', formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v), font: {size: 11, weight: 'bold'} } }, scales: { y: { display: false }, x: { title: { display: true, text: 'Operadoras' }, grid: { display: false }, ticks: { font: {size: 9} } } } }}
+                        />
+                    </div>
                 </div>
-                <div className="aspect-[21/9]">
-                    <Bar 
-                        data={{ labels: opChartLabels, datasets: [{ label: 'Valor (R$)', data: opChartDataValues, backgroundColor: opChartColors, borderRadius: 6 }] }}
-                        options={{ layout: { padding: { top: 30 } }, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, color: '#64748b', anchor: 'end', align: 'top', formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v), font: {size: 11, weight: 'bold'} } }, scales: { y: { display: false }, x: { title: { display: true, text: 'Operadoras' }, grid: { display: false }, ticks: { font: {size: 9} } } } }}
-                    />
-                </div>
-            </div>
 
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 mb-8">
-                <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-6"><span className="w-2 h-6 bg-orange-400 rounded-full"></span> Composição Mensal</h3>
-                <div className="aspect-[21/9]">
-                    <Bar 
-                        data={{ labels: months.map(m=>m.substring(0,3)), datasets: [{ label: 'Corretora', data: cCorr, backgroundColor: '#2563eb', stack: '0' }, { label: 'Assessoria', data: cAss, backgroundColor: '#a855f7', stack: '0' }] }}
-                        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, datalabels: { display: c => c.dataset.data[c.dataIndex] > 5000, color: '#fff', font: {size:9}, formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v) } }, scales: { x: { title: { display: false, text: 'Mês' }, stacked: true, grid: {display:false} }, y: { title: { display: false, text: 'Valor (R$)' }, stacked: true, display: false } } }}
-                    />
+                <div className={`${nomeEmpresaUpper === 'PROTETTA' ? 'lg:col-span-1' : 'lg:col-span-2'} bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700`}>
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-6"><span className="w-2 h-6 bg-orange-400 rounded-full"></span> Composição Mensal</h3>
+                    <div className="aspect-[21/9] lg:aspect-auto lg:h-[300px]">
+                        <Bar 
+                            data={{ labels: months.map(m=>m.substring(0,3)), datasets: [{ label: 'Corretora', data: cCorr, backgroundColor: '#2563eb', borderRadius: 6, maxBarThickness: 48 }, { label: 'Assessoria', data: cAss, backgroundColor: '#a855f7', borderRadius: 6, maxBarThickness: 48 }] }}
+                            options={{ layout: { padding: { top: 30 } }, responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } }, datalabels: { display: true, color: '#64748b', anchor: 'end', align: 'top', formatter: v => v > 0 ? new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v) : '', font: {size: 11, weight: 'bold'} } }, scales: { y: { display: false }, x: { title: { display: false, text: 'Mês' }, grid: { display: false }, ticks: { font: {size: 9} } } } }}
+                        />
+                    </div>
                 </div>
             </div>
 

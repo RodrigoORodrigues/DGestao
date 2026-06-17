@@ -1,0 +1,355 @@
+558:  const [selectedExtratos, setSelectedExtratos] = useState([]);
+771:  const [extratosModalViewMode, setExtratosModalViewMode] = useState("grid");
+780:  const [modalMoverExtratosOpen, setModalMoverExtratosOpen] = useState(false);
+781:  const [moverExtratosForm, setMoverExtratosForm] = useState({
+790:  const [modalEditarExtratoOpen, setModalEditarExtratoOpen] = useState(false);
+791:  const [editarExtratoForm, setEditarExtratoForm] = useState({
+1060:  // Sincronizar Inclusão de Extrato com o Gestor de Extratos
+1121:    setSelectedExtratos([]);
+1164:        .from("arquivos_extratos")
+1182:            name: "ERRO: O Bucket 'arquivos_extratos' não existe ou está bloqueado no Supabase.",
+1818:            "arquivos_extratos.json",
+1831:              .from("arquivos_extratos")
+1866:            .from("arquivos_extratos")
+1877:          const extratosFile = unzipped.file("arquivos_extratos.json");
+1907:          if (extratosFile) {
+1908:            const parsedData = JSON.parse(await extratosFile.async("text"));
+3673:  const handleSubmitExtrato = async (e) => {
+3722:          .from("arquivos_extratos")
+3756:      setSuccessMsg(`${formData.arquivos.length} extratos guardados!`);
+3775:          "ATENÇÃO: O Supabase está a bloquear o envio. Para corrigir:\n1. Vá ao Supabase > Storage\n2. Crie um novo bucket chamado 'arquivos_extratos'\n3. Torne-o Público\n4. Em 'Policies', clique em 'New Policy' > 'For full customization' e permita TODAS as operações (SELECT, INSERT, UPDATE, DELETE) para 'public'.",
+3785:  const handleToggleSelectExtrato = (e, fileId) => {
+3787:    setSelectedExtratos((prev) =>
+3794:  const isAllExtratosSelected = () => {
+3799:    return filesOnly.every((item) => selectedExtratos.includes(item.id));
+3802:  const handleSelectAllExtratos = () => {
+3806:    if (isAllExtratosSelected()) {
+3807:      setSelectedExtratos((prev) =>
+3812:      const newSelection = [...new Set([...selectedExtratos, ...allIds])];
+3813:      setSelectedExtratos(newSelection);
+3817:  const handleExportSelectedExtratos = async () => {
+3818:    if (selectedExtratos.length === 0)
+3825:        selectedExtratos.includes(r.id),
+3834:            .from("arquivos_extratos")
+3846:      a.download = `ExtratosSelecionados_${dataDeHojeInterna()}.zip`;
+3851:      setSelectedExtratos([]);
+3859:  const saveMoverExtratos = async () => {
+3860:    if (selectedExtratos.length === 0)
+3863:    setLoadingMsg("A mover extratos...");
+3865:      let finalOperadora = moverExtratosForm.codigoOperadora;
+3867:        finalOperadora = (moverExtratosForm.codigoOperadoraOutra || "")
+3879:          if (moverExtratosForm.categoria === "Seguradoras") {
+3889:      const saveCodOperadora = (moverExtratosForm.codOperadora || "").trim();
+3891:      for (let id of selectedExtratos) {
+3913:            ano: moverExtratosForm.ano,
+3914:            mes: moverExtratosForm.mes,
+3915:            categoria: moverExtratosForm.categoria,
+3916:            empresa: moverExtratosForm.empresa,
+3925:      setSelectedExtratos([]);
+3926:      setModalMoverExtratosOpen(false);
+3928:      showAlert("Extratos movidos com sucesso!", "success");
+3936:  const handleEditSelectedExtrato = () => {
+3937:    if (selectedExtratos.length !== 1) return;
+3938:    const id = selectedExtratos[0];
+3963:    setEditarExtratoForm({
+3972:    setModalEditarExtratoOpen(true);
+3975:  const saveEditarExtrato = async (e) => {
+3981:      let finalOperadora = editarExtratoForm.codigoOperadora;
+3982:      if (editarExtratoForm.codigoOperadora === "OUTRA") {
+3983:        finalOperadora = (editarExtratoForm.codigoOperadoraOutra || "")
+3995:          if (editarExtratoForm.categoria === "Seguradoras") {
+4005:      const saveCodOperadora = (editarExtratoForm.codOperadora || "").trim();
+4006:      const saveParceiro = `[${saveOperadora}|${saveCodOperadora}] ${editarExtratoForm.parceiro}${editarExtratoForm.notaFiscal ? ` (NF: ${editarExtratoForm.notaFiscal})` : ""}`;
+4012:        notaFiscal: editarExtratoForm.notaFiscal || null,
+4019:        editarExtratoForm.id,
+4022:      setSelectedExtratos([]);
+4023:      setModalEditarExtratoOpen(false);
+4025:      showAlert("Extrato editado com sucesso!", "success");
+4033:  const handleDeleteSelectedExtratos = () => {
+4034:    if (selectedExtratos.length === 0)
+4037:      `Tem a certeza que deseja excluir ${selectedExtratos.length} arquivo(s)?`,
+4043:            selectedExtratos.includes(r.id),
+4049:                .from("arquivos_extratos")
+4054:          setSelectedExtratos([]);
+4080:          .from("arquivos_extratos")
+4092:  const handleDeleteExtrato = async (item) => {
+4095:      `Tem certeza que deseja apagar o extrato "${item.fileName}"? Esta ação removerá o arquivo da nuvem irreversivelmente.`,
+4098:        setLoadingMsg("A apagar extrato...");
+4103:              .from("arquivos_extratos")
+4111:          showAlert("Extrato apagado com sucesso.");
+4113:          showAlert("Erro ao apagar extrato: " + err.message);
+4500:        .from("arquivos_extratos")
+4574:    let extratoOperadora = reportDoc?.codigoOperadora || "AMIL";
+4575:    let extratoCodOperadora = reportDoc?.codOperadora || "";
+4580:        if (!reportDoc?.codigoOperadora) extratoOperadora = matchOp[1].trim();
+4581:        if (!reportDoc?.codOperadora) extratoCodOperadora = matchOp[2].trim();
+4587:    setCurrentReportOperadora(extratoOperadora);
+4602:        extratoOperadora = "ODONTOPREV";
+4603:      else if (textoUpper.includes("BRADESCO")) extratoOperadora = "BRADESCO";
+4606:        textoUpper.includes("EXTRATO DE COMISSÕES PAGAS POR SUSEP") ||
+4607:        textoUpper.includes("EXTRATO DE COMISSOES PAGAS POR SUSEP")
+4609:        extratoOperadora = "ALLIANZ";
+4616:        extratoOperadora = "SUHAI";
+4617:      else if (textoUpper.includes("KLINI")) extratoOperadora = "KLINI";
+4618:      else if (textoUpper.includes("OMINT")) extratoOperadora = "OMINT";
+4619:      else if (textoUpper.includes("SUPERMED")) extratoOperadora = "SUPERMED";
+4622:        (textoUpper.includes("EXTRATO DO CORRETOR") &&
+4629:        extratoOperadora = "TOKIO";
+4639:          extratoOperadora = "SULAMERICA PROPER";
+4645:          extratoOperadora = "SULAMERICA PROTETTA";
+4646:        else extratoOperadora = "SULAMERICA";
+4649:        textoUpper.includes("EXTRATO ANALÍTICO INDIVIDUAL") ||
+4652:        extratoOperadora = "ICATU";
+4657:        extratoOperadora = "ASSIM";
+4667:        extratoOperadora = "PREVENT";
+4670:        textoUpper.includes("EXTRATO COMISSÃO - MSG")
+4672:        extratoOperadora = "MAPFRE";
+4679:        extratoOperadora = "METLIFE";
+4683:        (textoUpper.includes("EXTRATO ANALÍTICO EMPRESARIAL") &&
+4687:        extratoOperadora = "CASSI PASI";
+4693:        extratoOperadora = "HDI";
+4701:        extratoOperadora = "PET LOVE";
+4711:        extratoOperadora = "MONGERAL";
+4712:      setCurrentReportOperadora(extratoOperadora);
+4718:    const operadoraNormalizada = (extratoOperadora || "")
+4723:    const isSulAmericaExtrato = operadoraNormalizada.includes("SULAMERICA");
+4724:    const isAmilExtrato = operadoraNormalizada.includes("AMIL");
+4725:    const isMongeralExtrato =
+4730:    const isPortoExtrato =
+4736:    const isMapfreExtrato =
+4738:      textoUpper.includes("EXTRATO COMISSÃO - MSG") ||
+4742:    const isAllianzExtrato =
+4745:      textoUpper.includes("EXTRATO DE COMISSÕES PAGAS POR SUSEP") ||
+4746:      textoUpper.includes("EXTRATO DE COMISSOES PAGAS POR SUSEP");
+4747:    const isSuhaiExtrato =
+4752:    const isOdontoprevExtrato =
+4759:    const isMetlifeExtrato =
+4766:    const isCassiPasiExtrato =
+4770:      (textoUpper.includes("EXTRATO ANALÍTICO EMPRESARIAL") &&
+4773:    const isHdiExtrato =
+4778:    const isPetLoveExtrato =
+4785:    const isTokioExtrato =
+4788:      (textoUpper.includes("EXTRATO DO CORRETOR") &&
+4794:    const isIcatuExtrato =
+4796:      textoUpper.includes("EXTRATO ANALÍTICO INDIVIDUAL") ||
+4797:      textoUpper.includes("EXTRATO ANALITICO INDIVIDUAL") ||
+4805:    if (isSulAmericaExtrato || isAmilExtrato) {
+4826:    const extractDataDoExtrato = (origem) => {
+4833:        new RegExp("Extrato\\s+de\\s+Pagamento\\s+de\\s*" + padraoData, "i"),
+4858:    const dataGlobalExtratoDetectada = extractDataDoExtrato(textoNormalizado);
+5020:        data.empresaRegistro || (isAmilExtrato ? empresaAmil : empresaContexto);
+5023:        (isAmilExtrato ? empresaAmilUpper : empresaContextoUpper);
+5025:      if (isAmilExtrato && typeof data.data === "string") {
+5035:        (isAmilExtrato
+5036:          ? dataGlobalExtratoDetectada || formatDateForInput(reportDoc?.date)
+5055:          operadora: extratoOperadora,
+5070:              operadora: extratoOperadora,
+5123:        cod: extratoCodOperadora || codRegistro,
+5125:        codOperadora: extratoCodOperadora || null,
+5126:        codigoOperadora: data.codigoOperadora || extratoOperadora,
+5553:    const processMetlifeExtrato = () => {
+5556:        dataGlobalExtratoDetectada ||
+5637:    const processCassiPasiExtrato = () => {
+5759:    const extractOdontoprevDataExtrato = (origem) => {
+5774:    const processOdontoprevExtrato = () => {
+5776:        extractOdontoprevDataExtrato(textoNormalizado) ||
+5777:        dataGlobalExtratoDetectada ||
+5894:    const processSuhaiExtrato = () => {
+5897:        dataGlobalExtratoDetectada ||
+5935:    const processAllianzExtrato = () => {
+6013:        /N[ºo]\s*Extrato\s+\d+\s+EXTRATO\s+DE\s+COMISS[ÕO]ES.*?DATA\s+DO\s+PAGAMENTO\s+(\d{1,2}\/\d{1,2}\/\d{4})/i,
+6022:    const processMapfreExtrato = () => {
+6025:        dataGlobalExtratoDetectada;
+6070:    const processTokioExtrato = () => {
+6073:        dataGlobalExtratoDetectada ||
+6125:    const parseBlocosExtrato = (blocosContrato) => {
+6126:      const empresaBloco = isAmilExtrato ? empresaAmil : empresaContexto;
+6127:      const empresaBlocoUpper = isAmilExtrato
+6168:              operadora: extratoOperadora,
+6183:                  operadora: extratoOperadora,
+6260:          if (extratoOperadora === "MED SENIOR") {
+6277:            let matchRefAmil = isAmilExtrato
+6282:              : extractDataDoExtrato(bloco) ||
+6283:                dataGlobalExtratoDetectada ||
+6285:                (isAmilExtrato ? "" : dataDeHojeInterna());
+6287:            if (extratoOperadora === "MED SENIOR") {
+6353:            if (extratoOperadora === "MED SENIOR") {
+6385:              cod: extratoCodOperadora || codRegistro,
+6387:              codOperadora: extratoCodOperadora || null,
+6388:              codigoOperadora: extratoOperadora,
+6409:              servico: isAmilExtrato
+6424:    const parseMedSeniorExtrato = (blocosContrato) => {
+6425:      const empresaBloco = isAmilExtrato ? empresaAmil : empresaContexto;
+6426:      const empresaBlocoUpper = isAmilExtrato
+6537:                  operadora: extratoOperadora,
+6552:                      operadora: extratoOperadora,
+6617:            parseBlocosExtrato([bloco]);
+6620:          console.warn("Erro no parseMedSeniorExtrato:", e);
+6683:      parcelaExtrato,
+6688:        dataGlobalExtratoDetectada ||
+6699:        String(parcelaBase || parcelaExtrato || "").replace(/\D/g, ""),
+6733:    const parseSulAmericaExtrato = (blocosSulAmerica) => {
+6757:          let parcelaExtrato = "1";
+6803:          if (matchParcela) parcelaExtrato = matchParcela[1];
+6821:            dataGlobalExtratoDetectada ||
+6875:            parcelaExtrato,
+6909:    const processIcatuExtrato = () => {
+6915:          /Extrato\s+Anal[ií]tico\s+Individual.*?Cliente\s+CPF.*?([A-ZÀ-ÿ][A-ZÀ-ÿa-zà-ÿ ]{5,})\s+(\d{11}|\d{3}\.\d{3}\.\d{3}-\d{2})/i,
+6968:    if (isIcatuExtrato && processIcatuExtrato()) {
+6970:    } else if (isMetlifeExtrato && processMetlifeExtrato()) {
+6972:    } else if (isCassiPasiExtrato && processCassiPasiExtrato()) {
+6974:    } else if (isHdiExtrato && processHdiRows(linhasPlanilha)) {
+6976:    } else if (isPetLoveExtrato && processPetLoveRows(linhasPlanilha)) {
+6978:    } else if (isOdontoprevExtrato && processOdontoprevExtrato()) {
+6980:    } else if (isSuhaiExtrato && processSuhaiExtrato()) {
+6982:    } else if (isAllianzExtrato && processAllianzExtrato()) {
+6984:    } else if (isMapfreExtrato && processMapfreExtrato()) {
+6986:    } else if (isTokioExtrato && processTokioExtrato()) {
+6988:    } else if (isPortoExtrato && processPortoRows(linhasPlanilha)) {
+6990:    } else if (isMongeralExtrato && processMongeralRows(linhasPlanilha)) {
+6998:    } else if (isSulAmericaExtrato) {
+7001:      parseSulAmericaExtrato(blocosSulAmerica);
+7002:    } else if (extratoOperadora === "MED SENIOR") {
+7010:      parseMedSeniorExtrato(blocosContrato);
+7024:            const empresaRegistro = isAmilExtrato
+7027:            const empresaRegistroUpper = isAmilExtrato
+7031:            if (isAmilExtrato && typeof data.data === "string") {
+7041:              (isAmilExtrato
+7042:                ? dataGlobalExtratoDetectada ||
+7059:                operadora: extratoOperadora,
+7074:                    operadora: extratoOperadora,
+7132:              cod: extratoCodOperadora || codRegistro,
+7134:              codOperadora: extratoCodOperadora || null,
+7135:              codigoOperadora: extratoOperadora,
+7381:          const empresaRegistro = isAmilExtrato ? empresaAmil : empresaContexto;
+7382:          const empresaRegistroUpper = isAmilExtrato
+7401:              operadora: extratoOperadora,
+7416:                  operadora: extratoOperadora,
+7448:            cod: extratoCodOperadora || codRegistro,
+7450:            codOperadora: extratoCodOperadora || null,
+7451:            codigoOperadora: extratoOperadora,
+7479:      // ICATU - Extrato Analítico Individual
+7482:        (textoUpper.includes("EXTRATO ANALÍTICO INDIVIDUAL") ||
+7493:            /Extrato\s+Anal[ií]tico\s+Individual.*?Cliente\s+CPF.*?([A-ZÀ-ÿ][A-ZÀ-ÿa-zà-ÿ ]{5,})\s+(\d{11}|\d{3}\.\d{3}\.\d{3}-\d{2})/i,
+7499:        // Cliente = cabeçalho do extrato; Proposta = 3º número após Apólice;
+7629:            const dataExtrato = match[6];
+7630:            let calcParc = calcularParcelaDaVigencia(vigencia, dataExtrato);
+7763:      if (!isMatched && isTokioExtrato) {
+7822:        parseBlocosExtrato(blocosContrato);
+7828:    if (extratoOperadora === "HAPVIDA") {
+7866:        ? `Extrato processado com sucesso! ${registosParaProcessar.length} lançamento(s) extraído(s).`
+7867:        : "Nenhum lançamento foi extraído. Verifique se o modelo e os campos do extrato estão corretos.",
+9444:                        Extratos Arquivados
+11088:                    Selecionar Extrato
+12700:                        Extratos no Sistema
+12703:                        Selecione um extrato para processar
+12708:                        onClick={() => setExtratosModalViewMode("cards")}
+12709:                        className={`p-1.5 rounded-md transition-colors ${extratosModalViewMode === "cards" ? "bg-white dark:bg-slate-600 shadow-sm text-blue-600 dark:text-blue-400" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}
+12715:                        onClick={() => setExtratosModalViewMode("lines")}
+12716:                        className={`p-1.5 rounded-md transition-colors ${extratosModalViewMode === "lines" ? "bg-white dark:bg-slate-600 shadow-sm text-blue-600 dark:text-blue-400" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}
+12771:                        placeholder="Pesquisar extrato por nome ou parceiro..."
+12838:                      Nenhum extrato encontrado. <br />
+12839:                      Vá em "Gestor de Extratos" &gt; "Incluir Extrato" para
+12845:                        extratosModalViewMode === "cards"
+12855:                            extratosModalViewMode === "cards"
+12861:                            className={`${extratosModalViewMode === "cards" ? "p-3 bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-100 dark:border-slate-700 group-hover:scale-110" : "p-2 bg-white dark:bg-slate-900 rounded-md shadow-sm border border-slate-100 dark:border-slate-700 group-hover:scale-105"} transition-transform`}
+12867:                                  extratosModalViewMode === "cards" ? 24 : 18
+12874:                                  extratosModalViewMode === "cards" ? 24 : 18
+12881:                              extratosModalViewMode === "cards"
+12887:                              className={`text-sm font-medium text-slate-800 dark:text-slate-200 truncate group-hover:text-slate-900 dark:group-hover:text-slate-900 ${extratosModalViewMode === "cards" ? "w-full" : ""}`}
+12902:                            extratosModalViewMode === "cards"
+13989:          {/* ECRÃ 7: GESTOR DE EXTRATOS (INCLUIR) */}
+13995:                  Arquivar Novo Extrato
+14002:                onSubmit={handleSubmitExtrato}
+14183:                      Clique para anexar os extratos (PDF, Excel, TXT)
+14276:                                placeholder="Ex: Extrato Amil Mensal..."
+14310:                  <span>Guardar Extrato no Banco</span>
+14321:          {/* ECRÃ 8: GESTOR DE EXTRATOS (EXPLORAR) */}
+14329:                      Gestor de Extratos
+14418:                      placeholder="Pesquisar extrato por nome ou parceiro..."
+14452:                        onClick={handleSelectAllExtratos}
+14456:                        {isAllExtratosSelected()
+14461:                        onClick={handleExportSelectedExtratos}
+14462:                        disabled={selectedExtratos.length === 0}
+14463:                        className={`text-xs px-3 py-1.5 rounded flex items-center transition-colors shadow-sm ${selectedExtratos.length === 0 ? "bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed border border-transparent" : "bg-blue-500 hover:bg-blue-600 text-white"}`}
+14466:                        Exportar selecionados ({selectedExtratos.length})
+14468:                      {selectedExtratos.length === 1 && (
+14470:                          onClick={handleEditSelectedExtrato}
+14478:                        onClick={() => setModalMoverExtratosOpen(true)}
+14479:                        disabled={selectedExtratos.length === 0}
+14480:                        className={`text-xs px-3 py-1.5 rounded flex items-center transition-colors shadow-sm ${selectedExtratos.length === 0 ? "bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed border border-transparent" : "bg-amber-500 hover:bg-amber-600 text-white"}`}
+14483:                        Mover selecionados ({selectedExtratos.length})
+14486:                        onClick={handleDeleteSelectedExtratos}
+14487:                        disabled={selectedExtratos.length === 0}
+14488:                        className={`text-xs px-3 py-1.5 rounded flex items-center transition-colors shadow-sm ${selectedExtratos.length === 0 ? "bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed border border-transparent" : "bg-rose-500 hover:bg-rose-600 text-white"}`}
+14491:                        Excluir selecionados ({selectedExtratos.length})
+14495:                      {selectedExtratos.length} extrato(s) selecionado(s) de{" "}
+14557:                          checked={selectedExtratos.includes(item.id)}
+14559:                            handleToggleSelectExtrato(e, item.id)
+14772:                            "arquivos_extratos.json",
+14876:          {modalMoverExtratosOpen && (
+14880:                  onClick={() => setModalMoverExtratosOpen(false)}
+14888:                    Extratos
+14892:                    {selectedExtratos.length} extrato(s).
+14901:                      value={moverExtratosForm.empresa}
+14903:                        setMoverExtratosForm({
+14904:                          ...moverExtratosForm,
+14925:                      value={moverExtratosForm.ano}
+14927:                        setMoverExtratosForm({
+14928:                          ...moverExtratosForm,
+14940:                      value={moverExtratosForm.mes}
+14942:                        setMoverExtratosForm({
+14943:                          ...moverExtratosForm,
+14961:                      value={moverExtratosForm.categoria}
+14963:                        setMoverExtratosForm({
+14964:                          ...moverExtratosForm,
+14983:                      value={moverExtratosForm.codigoOperadora || ""}
+14985:                        setMoverExtratosForm({
+14986:                          ...moverExtratosForm,
+14992:                      {(!moverExtratosForm.categoria || moverExtratosForm.categoria === "Operadoras") && (
+15001:                      {(!moverExtratosForm.categoria || moverExtratosForm.categoria === "Seguradoras") && (
+15015:                    {moverExtratosForm.codigoOperadora === "OUTRA" && (
+15023:                          value={moverExtratosForm.codigoOperadoraOutra || ""}
+15025:                            setMoverExtratosForm({
+15026:                              ...moverExtratosForm,
+15039:                    {moverExtratosForm.codigoOperadora === "AMIL" ? (
+15042:                        value={moverExtratosForm.codOperadora || ""}
+15044:                          setMoverExtratosForm({
+15045:                            ...moverExtratosForm,
+15065:                        value={moverExtratosForm.codOperadora || ""}
+15067:                          setMoverExtratosForm({
+15068:                            ...moverExtratosForm,
+15078:                    onClick={() => setModalMoverExtratosOpen(false)}
+15084:                    onClick={saveMoverExtratos}
+15095:          {modalEditarExtratoOpen && (
+15099:                  onClick={() => setModalEditarExtratoOpen(false)}
+15106:                    <Edit2 className="mr-2 text-indigo-500" /> Editar Extrato
+15109:                    Altere as informações salvas do extrato selecionado.
+15113:                  onSubmit={saveEditarExtrato}
+15126:                      value={editarExtratoForm.codigoOperadora || ""}
+15128:                        setEditarExtratoForm({
+15129:                          ...editarExtratoForm,
+15136:                      {(!editarExtratoForm.categoria || editarExtratoForm.categoria === "Operadoras") && (
+15145:                      {(!editarExtratoForm.categoria || editarExtratoForm.categoria === "Seguradoras") && (
+15159:                    {editarExtratoForm.codigoOperadora === "OUTRA" && (
+15168:                          value={editarExtratoForm.codigoOperadoraOutra || ""}
+15170:                            setEditarExtratoForm({
+15171:                              ...editarExtratoForm,
+15185:                    {editarExtratoForm.codigoOperadora === "AMIL" ? (
+15188:                        value={editarExtratoForm.codOperadora || ""}
+15190:                          setEditarExtratoForm({
+15191:                            ...editarExtratoForm,
+15206:                        value={editarExtratoForm.codOperadora || ""}
+15208:                          setEditarExtratoForm({
+15209:                            ...editarExtratoForm,
+15224:                      value={editarExtratoForm.notaFiscal || ""}
+15226:                        setEditarExtratoForm({
+15227:                          ...editarExtratoForm,
+15243:                      value={editarExtratoForm.parceiro}
+15245:                        setEditarExtratoForm({
+15246:                          ...editarExtratoForm,
+15252:                      placeholder="Ex: Extrato Amil Mensal..."
+15258:                      onClick={() => setModalEditarExtratoOpen(false)}
+16793:                    Extrato Associado
+16827:                    onClick={() => handleDeleteExtrato(selectedFile)}
+16831:                    <span>Apagar Extrato</span>
