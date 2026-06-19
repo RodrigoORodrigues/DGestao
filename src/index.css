@@ -39,8 +39,10 @@
   :where(html:not(.dark), .dark) thead th {
     color: #f8fafc;
     border-color: #1e293b !important;
-    resize: both;
-    overflow: auto;
+    resize: horizontal;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
   
   :where(html:not(.dark), .dark) thead th:hover {
