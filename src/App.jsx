@@ -806,6 +806,7 @@ export default function App() {
   });
   const [printCols, setPrintCols] = useState(defaultPrintCols);
   const [printPresets, setPrintPresets] = useState([]);
+  const [reportTitleSuffix, setReportTitleSuffix] = useState("");
   const [newPresetName, setNewPresetName] = useState("");
   const [selectedPreset, setSelectedPreset] = useState("");
 
@@ -843,7 +844,7 @@ export default function App() {
     useState(false);
   const [savedReportsPeriodLabel, setSavedReportsPeriodLabel] =
     useState("Todo o período");
-  const [savedReportsSortField, setSavedReportsSortField] = useState("dataCriacao");
+  const [savedReportsSortField, setSavedReportsSortField] = useState("nome");
   const [savedReportsSortDirection, setSavedReportsSortDirection] = useState("desc");
   const [gestorReportsDateStart, setGestorReportsDateStart] = useState("");
   const [gestorReportsDateEnd, setGestorReportsDateEnd] = useState("");
@@ -938,7 +939,8 @@ export default function App() {
     vidas: "",
     vitalicio: "Selecione",
     parcela: "",
-    inicioVigencia: "",
+    inicioVigenciaInicio: "",
+    inicioVigenciaFim: "",
     notaFiscal: "",
     corretor: "Todos",
   };
@@ -2492,9 +2494,13 @@ export default function App() {
             .toLowerCase()
             .includes(f.parcela.toLowerCase()),
         );
-      if (f.inicioVigencia)
+      if (f.inicioVigenciaInicio)
         todasAsVendas = todasAsVendas.filter(
-          (v) => v.inicioVigencia === f.inicioVigencia,
+          (v) => v.inicioVigencia >= f.inicioVigenciaInicio,
+        );
+      if (f.inicioVigenciaFim)
+        todasAsVendas = todasAsVendas.filter(
+          (v) => v.inicioVigencia <= f.inicioVigenciaFim,
         );
       if (f.vidas)
         todasAsVendas = todasAsVendas.filter((v) => v.vidas == f.vidas);
@@ -2674,6 +2680,86 @@ export default function App() {
     return textMatch && startMatch && endMatch && colMatch;
   });
 
+  const parsePeriodoDate = (periodoStr, fallbackDate) => {
+    if (!periodoStr) return fallbackDate ? new Date(fallbackDate) : new Date(0);
+    const normalized = String(periodoStr).toLowerCase().trim();
+
+    // Try parsing standard DD/MM/YYYY
+    const dmyMatch = normalized.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (dmyMatch) {
+      return new Date(parseInt(dmyMatch[3], 10), parseInt(dmyMatch[2], 10) - 1, parseInt(dmyMatch[1], 10));
+    }
+
+    // Try parsing MM/YYYY
+    const myMatch = normalized.match(/(\d{2})\/(\d{4})/);
+    if (myMatch) {
+      return new Date(parseInt(myMatch[2], 10), parseInt(myMatch[1], 10) - 1, 1);
+    }
+
+    // Month text parsing
+    const monthsPt = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+    const monthsShortPt = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+    const yearMatch = normalized.match(/\b(20\d{2})\b/);
+    const year = yearMatch ? parseInt(yearMatch[1], 10) : (fallbackDate ? new Date(fallbackDate).getFullYear() : new Date().getFullYear());
+
+    for (let i = 0; i < 12; i++) {
+      if (normalized.includes(monthsPt[i]) || normalized.includes(monthsShortPt[i])) {
+        return new Date(year, i, 1);
+      }
+    }
+
+    return fallbackDate ? new Date(fallbackDate) : new Date(0);
+  };
+
+  const parseDateFromName = (nameStr, fallbackDate) => {
+    if (!nameStr) return fallbackDate ? new Date(fallbackDate) : new Date(0);
+    const normalized = String(nameStr).toLowerCase().trim();
+
+    // Try parsing standard DD/MM/YYYY (e.g., 01/01/2026)
+    const dmyMatch = normalized.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (dmyMatch) {
+      return new Date(parseInt(dmyMatch[3], 10), parseInt(dmyMatch[2], 10) - 1, parseInt(dmyMatch[1], 10));
+    }
+
+    // Try parsing DD/MM/YY (e.g., 01/01/26)
+    const dmyShortMatch = normalized.match(/(\d{1,2})\/(\d{1,2})\/(\d{2})\b/);
+    if (dmyShortMatch) {
+      let year = parseInt(dmyShortMatch[3], 10);
+      year = year < 50 ? 2000 + year : 1900 + year; // handle standard 2-digit years
+      return new Date(year, parseInt(dmyShortMatch[2], 10) - 1, parseInt(dmyShortMatch[1], 10));
+    }
+
+    // Try parsing MM/YYYY
+    const myMatch = normalized.match(/(\d{1,2})\/(\d{4})/);
+    if (myMatch) {
+      return new Date(parseInt(myMatch[2], 10), parseInt(myMatch[1], 10) - 1, 1);
+    }
+
+    // Try parsing MM/YY
+    const myShortMatch = normalized.match(/\b(\d{1,2})\/(\d{2})\b/);
+    if (myShortMatch) {
+      let year = parseInt(myShortMatch[2], 10);
+      year = year < 50 ? 2000 + year : 1900 + year;
+      return new Date(year, parseInt(myShortMatch[1], 10) - 1, 1);
+    }
+
+    // Try portuguese months
+    const monthsPt = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+    const monthsShortPt = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+    const yearMatch = normalized.match(/\b(20\d{2})\b/);
+    const year = yearMatch ? parseInt(yearMatch[1], 10) : (fallbackDate ? new Date(fallbackDate).getFullYear() : new Date().getFullYear());
+
+    for (let i = 0; i < 12; i++) {
+      if (normalized.includes(monthsPt[i]) || normalized.includes(monthsShortPt[i])) {
+        return new Date(year, i, 1);
+      }
+    }
+
+    return fallbackDate ? new Date(fallbackDate) : new Date(0);
+  };
+
   displayedReports.sort((a, b) => {
     let valA;
     let valB;
@@ -2700,6 +2786,15 @@ export default function App() {
       comparison = new Date(valA).getTime() - new Date(valB).getTime();
     } else if (savedReportsSortField === "registos") {
        comparison = Number(valA) - Number(valB);
+    } else if (savedReportsSortField === "periodo") {
+       comparison = parsePeriodoDate(valA, a.dataCriacao).getTime() - parsePeriodoDate(valB, b.dataCriacao).getTime();
+    } else if (savedReportsSortField === "nome") {
+       const dateA = parseDateFromName(valA, a.dataCriacao);
+       const dateB = parseDateFromName(valB, b.dataCriacao);
+       comparison = dateA.getTime() - dateB.getTime();
+       if (comparison === 0) {
+         comparison = String(valA).localeCompare(String(valB));
+       }
     } else {
       comparison = String(valA).localeCompare(String(valB));
     }
@@ -2968,6 +3063,9 @@ export default function App() {
 
   const salvarVenda = async (e) => {
     if (e) e.preventDefault();
+    if (!vendaForm.codigoOperadora) {
+      return showAlert("Atenção: Selecione a Op. | Seg.", "error");
+    }
 
     const executarSalvamento = async () => {
       setLoading(true);
@@ -3731,8 +3829,10 @@ export default function App() {
 
   const handleSubmitExtrato = async (e) => {
     e.preventDefault();
-    if (!formData.codigoOperadora)
-      return setFormError("ERRO: Selecione a Op. | Seg.");
+    if (!formData.codigoOperadora) {
+      setFormError("ERRO: Selecione a Op. | Seg.");
+      return showAlert("Atenção: Selecione a Op. | Seg.", "error");
+    }
     if (formData.arquivos.length === 0)
       return setFormError("ERRO: Anexos obrigatórios.");
     
@@ -3918,6 +4018,9 @@ export default function App() {
   const saveMoverExtratos = async () => {
     if (selectedExtratos.length === 0)
       return showAlert("Selecione pelo menos um arquivo para mover.");
+    if (!moverExtratosForm.codigoOperadora) {
+      return showAlert("Atenção: Selecione a Op. | Seg.", "error");
+    }
     setLoading(true);
     setLoadingMsg("A mover extratos...");
     try {
@@ -4033,6 +4136,9 @@ export default function App() {
 
   const saveEditarExtrato = async (e) => {
     e.preventDefault();
+    if (!editarExtratoForm.codigoOperadora) {
+      return showAlert("Atenção: Selecione a Op. | Seg.", "error");
+    }
     setLoading(true);
     setLoadingMsg("Salvando...");
 
@@ -4315,6 +4421,9 @@ export default function App() {
 
   const salvarCliente = async (e) => {
     e.preventDefault();
+    if (!clienteForm.operadora) {
+      return showAlert("Atenção: Selecione a Op. | Seg.", "error");
+    }
 
     const nomeUpper = clienteForm.nome.trim().toUpperCase();
     const clienteExistente = clientes.find(
@@ -8881,6 +8990,9 @@ export default function App() {
 
   const salvarNotaPdfImportada = (e) => {
     e.preventDefault();
+    if (!importNfPdfForm.operadora) {
+      return showAlert("Atenção: Selecione a Op. | Seg.", "error");
+    }
     const newNota = {
       id: Date.now() + Math.random(),
       cliente:
@@ -9076,10 +9188,20 @@ export default function App() {
   };
 
   const handlePrintConfirm = () => {
-    const selectedRows = pdfData.filter((r) => r.selected);
-    const dataToPrint = selectedRows.length > 0 ? selectedRows : pdfData;
+    const isVendasView = currentView === "vendas";
+    const baseData = isVendasView ? getFilteredVendas() : pdfData;
+    let dataToPrint = [];
 
-    let tableHeader = "<table>";
+    if (isVendasView) {
+      dataToPrint = selectedVendas.length > 0
+        ? baseData.filter((v) => selectedVendas.includes(v.id))
+        : baseData;
+    } else {
+      const selectedRows = pdfData.filter((r) => r.selected);
+      dataToPrint = selectedRows.length > 0 ? selectedRows : pdfData;
+    }
+
+    let tableHeader = "<tr>";
     Object.keys(printColLabels).forEach((key) => {
       if (printCols[key]) tableHeader += `<th>${printColLabels[key]}</th>`;
     });
@@ -9088,18 +9210,22 @@ export default function App() {
     let tableRows = "";
     dataToPrint.forEach((linha) => {
       tableRows += "<tr>";
-      if (printCols.cod) tableRows += `<td>${linha.cod || "-"}</td>`;
+      const _cod = isVendasView ? linha.numero : linha.cod;
+      if (printCols.cod) tableRows += `<td>${_cod || "-"}</td>`;
       if (printCols.contrato) tableRows += `<td>${linha.contrato || "-"}</td>`;
+      const _codigoOperadora = isVendasView ? linha.codigoOperadora || linha.codOperadora : linha.codigoOperadora;
       if (printCols.op)
-        tableRows += `<td>${linha.codigoOperadora || "AMIL"}</td>`;
+        tableRows += `<td>${_codigoOperadora || (isVendasView ? "-" : "AMIL")}</td>`;
       if (printCols.vidas) tableRows += `<td>${linha.vidas || "-"}</td>`;
       if (printCols.cliente) tableRows += `<td>${linha.cliente || "-"}</td>`;
+      const _data = isVendasView ? linha.dataVenda : linha.data;
       if (printCols.data)
-        tableRows += `<td>${linha.data ? formatarDataVisivel(linha.data) : "-"}</td>`;
+        tableRows += `<td>${_data ? formatarDataVisivel(_data) : "-"}</td>`;
       if (printCols.loja) tableRows += `<td>${linha.loja || "-"}</td>`;
       if (printCols.servico) tableRows += `<td>${linha.servico || "-"}</td>`;
-      if (printCols.desconto) tableRows += `<td>${linha.desconto || "-"}</td>`;
-      if (printCols.corretor) tableRows += `<td>${linha.vendedor || "-"}</td>`;
+      if (printCols.desconto) tableRows += `<td>${linha.desconto || (linha.porcentagemCorretor ? linha.porcentagemCorretor + '%' : "-")}</td>`;
+      const _vendedor = isVendasView ? linha.corretor : linha.vendedor;
+      if (printCols.corretor) tableRows += `<td>${_vendedor || "-"}</td>`;
       if (printCols.parc) tableRows += `<td>${linha.parcela || "-"}</td>`;
       if (printCols.inicioVig)
         tableRows += `<td>${linha.inicioVigencia ? formatarDataVisivel(linha.inicioVigencia) : "--/--/----"}</td>`;
@@ -9108,8 +9234,11 @@ export default function App() {
         tableRows += `<td>${linha.vitalicio || "-"}</td>`;
       if (printCols.pagamento)
         tableRows += `<td>${linha.formaPagamento || "-"}</td>`;
+      const _valorTotal = isVendasView ? linha.valor : linha.valorTotal;
       if (printCols.valorTotal)
-        tableRows += `<td style="text-align: right;">${formatarMoeda(linha.valorTotal)}</td>`;
+        tableRows += `<td style="text-align: right;">${formatarMoeda(_valorTotal)}</td>`;
+      if (printCols.comissaoPorcentagem)
+        tableRows += `<td style="text-align: right;">${linha.comissaoPorcentagem || "-"}</td>`;
       if (printCols.comissao)
         tableRows += `<td style="text-align: right;">${formatarMoeda(linha.comissao)}</td>`;
       tableRows += "</tr>";
@@ -9125,17 +9254,20 @@ export default function App() {
 
     let footerCells = `<td colspan="${Math.max(1, spanCount)}" style="text-align: right; font-weight: bold;">TOTAIS APURADOS</td>`;
     if (valTotVisible)
-      footerCells += `<td style="font-weight: bold; text-align: right; color: #059669;">${formatarMoeda(dataToPrint.reduce((acc, l) => acc + (Number(l.valorTotal) || 0), 0))}</td>`;
+      footerCells += `<td style="font-weight: bold; text-align: right; color: #059669;">${formatarMoeda(dataToPrint.reduce((acc, l) => acc + (Number(isVendasView ? l.valor : l.valorTotal) || 0), 0))}</td>`;
     if (comVisible)
       footerCells += `<td style="font-weight: bold; text-align: right; color: #0284c7; font-size: 12px;">${formatarMoeda(dataToPrint.reduce((acc, l) => acc + (Number(l.comissao) || 0), 0))}</td>`;
 
     let tableFooter = `<tr>${footerCells}</tr>`;
 
+    const tituloBase = "Relatório";
+    const tituloRelatorio = reportTitleSuffix.trim() ? `${tituloBase} - ${reportTitleSuffix}` : tituloBase;
+
     const htmlContent = `
             <div id="print-header">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                     <div style="width: 32px; height: 32px; background: #d1fae5; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #059669; border: 1px solid #10b981;">D</div>
-                    <h2 style="margin: 0; font-size: 20px;">Relatório de comissão de vendedores</h2>
+                    <h2 style="margin: 0; font-size: 20px;">${tituloRelatorio}</h2>
                 </div>
                 <p style="margin: 4px 0; color: #475569;">Período: ${reportPeriod || "Não especificado"}</p>
                 <p style="margin: 4px 0; color: #475569;">Gerado em ${new Date().toLocaleDateString("pt-PT")} às ${new Date().toLocaleTimeString("pt-PT")} por ${currentUser?.username || "Sistema"}</p>
@@ -9147,35 +9279,62 @@ export default function App() {
             </table>
         `;
 
-    const printIframe = document.createElement("iframe");
-    printIframe.name = "print_iframe";
-    printIframe.style.position = "absolute";
-    printIframe.style.top = "-10000px";
-    document.body.appendChild(printIframe);
+    try {
+      const reportHtml = `
+          <!DOCTYPE html>
+          <html lang="pt-PT">
+          <head>
+              <title>${tituloRelatorio}</title>
+              <style>
+                  @page { size: ${printConfig.orientation}; margin: 10mm; }
+                  body { background-color: white !important; color: black !important; font-family: ui-sans-serif, system-ui, sans-serif; padding: 20px; }
+                  #print-header { margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; }
+                  .print-wrapper { transform: scale(${printConfig.scale / 100}); transform-origin: top left; width: ${100 / (printConfig.scale / 100)}%; }
+                  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10px; }
+                  th, td { border: 1px solid #94a3b8 !important; color: black !important; padding: 6px 8px; text-align: center; }
+                  th { background-color: #f1f5f9 !important; font-weight: bold; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              </style>
+          </head>
+          <body>
+              <div class="print-wrapper">${htmlContent}</div>
+              <script>
+                  window.onload = function() {
+                      setTimeout(function() {
+                          window.print();
+                      }, 500);
+                  };
+              </script>
+          </body>
+          </html>
+      `;
 
-    const printDoc = printIframe.contentWindow.document;
-    printDoc.open();
-    printDoc.write(`
-            <!DOCTYPE html><html lang="pt-PT"><head><title>Relatório de Comissão</title>
-                <style>
-                    @page { size: ${printConfig.orientation}; margin: 10mm; }
-                    body { background-color: white !important; color: black !important; font-family: ui-sans-serif, system-ui, sans-serif; padding: 20px; }
-                    #print-header { margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; }
-                    .print-wrapper { transform: scale(${printConfig.scale / 100}); transform-origin: top left; width: ${100 / (printConfig.scale / 100)}%; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10px; }
-                    th, td { border: 1px solid #94a3b8 !important; color: black !important; padding: 6px 8px; text-align: center; }
-                    th { background-color: #f1f5f9 !important; font-weight: bold; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                </style>
-            </head><body><div class="print-wrapper">${htmlContent}</div></body></html>
-        `);
-    printDoc.close();
-
-    setTimeout(() => {
-      printIframe.contentWindow.focus();
-      printIframe.contentWindow.print();
+      const blob = new Blob([reportHtml], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      
+      const newWin = window.open(url, "_blank");
+      if (!newWin) {
+          // Fallback se popup for bloqueado (muito comum em iframes)
+          const a = document.createElement("a");
+          a.href = url;
+          a.target = "_blank";
+          a.download = `${tituloRelatorio}.html`;
+          
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          
+          alert("O popup de impressão foi bloqueado. O relatório foi baixado como HTML. Abra o arquivo baixado para imprimir.");
+      }
+      
+      setTimeout(() => {
+          URL.revokeObjectURL(url);
+      }, 5000);
+      
       setModalPrintOpen(false);
-      setTimeout(() => document.body.removeChild(printIframe), 1000);
-    }, 500);
+    } catch (e) {
+      console.error("Print failed:", e);
+      alert("Houve um problema ao gerar a impressão. Abra o aplicativo em uma nova guia.");
+    }
   };
 
   if (!supabase) {
@@ -9739,21 +9898,44 @@ export default function App() {
                     {showVendasAcoesMenu && (
                       <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg overflow-hidden text-sm z-50 animate-in fade-in slide-in-from-top-2">
                         <button
-                          onClick={exportarVendasParaExcel}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowVendasAcoesMenu(false);
+                            setModalPrintOpen(true);
+                          }}
                           className="w-full text-left px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-600 dark:hover:text-emerald-400 text-slate-700 dark:text-slate-300 font-medium flex items-center transition-colors"
+                        >
+                          <Printer size={16} className="mr-2" /> Imprimir Relatório
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowVendasAcoesMenu(false);
+                            exportarVendasParaExcel();
+                          }}
+                          className="w-full text-left px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-600 dark:hover:text-emerald-400 text-slate-700 dark:text-slate-300 font-medium flex items-center transition-colors border-t border-slate-100 dark:border-slate-700"
                         >
                           <FileOutput size={16} className="mr-2" /> Exportar
                           para Excel
                         </button>
                         <button
-                          onClick={reorganizarRegistosVendas}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowVendasAcoesMenu(false);
+                            reorganizarRegistosVendas();
+                          }}
                           className="w-full text-left px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400 text-slate-700 dark:text-slate-300 font-medium flex items-center transition-colors border-t border-slate-100 dark:border-slate-700"
                         >
                           <ListFilter size={16} className="mr-2" /> Reordenar
                           Sequência
                         </button>
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
                             setShowVendasAcoesMenu(false);
                             setShowModalInconsistencias(true);
                           }}
@@ -10227,17 +10409,35 @@ export default function App() {
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">
                           Início Vigência
                         </label>
-                        <input
-                          type="date"
-                          value={vendasFilterForm.inicioVigencia}
-                          onChange={(e) =>
-                            setVendasFilterForm({
-                              ...vendasFilterForm,
-                              inicioVigencia: e.target.value,
-                            })
-                          }
-                          className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500"
-                        />
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="date"
+                            value={vendasFilterForm.inicioVigenciaInicio}
+                            onChange={(e) =>
+                              setVendasFilterForm({
+                                ...vendasFilterForm,
+                                inicioVigenciaInicio: e.target.value,
+                              })
+                            }
+                            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-2 text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500"
+                            placeholder="dd/mm/aaaa"
+                          />
+                          <span className="text-slate-400 font-medium">
+                            até
+                          </span>
+                          <input
+                            type="date"
+                            value={vendasFilterForm.inicioVigenciaFim}
+                            onChange={(e) =>
+                              setVendasFilterForm({
+                                ...vendasFilterForm,
+                                inicioVigenciaFim: e.target.value,
+                              })
+                            }
+                            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-2 text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500"
+                            placeholder="dd/mm/aaaa"
+                          />
+                        </div>
                       </div>
 
                       {/* Nota Fiscal */}
@@ -16344,6 +16544,24 @@ export default function App() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto pr-2 space-y-5">
+                  <div className="flex flex-col gap-2">
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
+                      Título do Relatório
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-500 whitespace-nowrap bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600">
+                        Relatório -
+                      </span>
+                      <input
+                        type="text"
+                        value={reportTitleSuffix}
+                        onChange={(e) => setReportTitleSuffix(e.target.value)}
+                        placeholder="Adicionar complemento..."
+                        className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500 text-slate-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
                   <div className="flex gap-6">
                     <div>
                       <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">

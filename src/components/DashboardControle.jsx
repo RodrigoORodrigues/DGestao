@@ -14,7 +14,7 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [selectedEntity, setSelectedEntity] = useState(`TOTAL ${nomeEmpresaUpper}`);
     const [selectedOperatorMonth, setSelectedOperatorMonth] = useState('Todos');
-    const [calculoTipo, setCalculoTipo] = useState('valor');
+    const [calculoTipo, setCalculoTipo] = useState('comissao');
     const reportRef = useRef();
 
     const BASE_COLORS = [
@@ -26,6 +26,9 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
 
     const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
+    const [selectedTableOperator, setSelectedTableOperator] = useState('Todas');
+    const [selectedTableGrouping, setSelectedTableGrouping] = useState('Mensal');
+
     // Calculando dados reais da vendasList (filtrando por Vitalícios=Sim e pelo Ano)
     const processedData = {
         [nomeEmpresaUpper]: Array(12).fill(0),
@@ -35,6 +38,7 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
 
     const operatorData = {};
     const recordedOperators = new Set();
+    const tableDataMensal = Array(12).fill(0);
 
     const extractMesAnoFromText = (texto) => {
         if (!texto) return null;
@@ -169,6 +173,10 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
                 recordedOperators.add(opName);
             }
             operatorData[opName][monthObj] += val;
+
+            if (selectedTableOperator === 'Todas' || opName === selectedTableOperator) {
+                tableDataMensal[monthObj] += val;
+            }
         });
     }
 
@@ -216,6 +224,57 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
             opChartDataValues.push(operatorData[opObj.name][parseInt(selectedOperatorMonth)]);
         }
     });
+
+    // Table Grouping Logic
+    const getTableRows = () => {
+        const baseData = tableDataMensal;
+        const totalBase = baseData.reduce((a, b) => a + b, 0);
+        
+        if (selectedTableGrouping === 'Mensal') {
+            const avgBase = totalBase / (baseData.reduce((lastIdx, val, idx) => val !== 0 ? Math.max(lastIdx, idx) : lastIdx, -1) + 1 || 1);
+            return baseData.map((val, idx) => ({
+                label: months[idx],
+                val,
+                avg: avgBase,
+                total: totalBase
+            }));
+        } else if (selectedTableGrouping === 'Trimestral') {
+            const qData = [
+                baseData.slice(0,3).reduce((a,b)=>a+b,0),
+                baseData.slice(3,6).reduce((a,b)=>a+b,0),
+                baseData.slice(6,9).reduce((a,b)=>a+b,0),
+                baseData.slice(9,12).reduce((a,b)=>a+b,0)
+            ];
+            const avgBase = totalBase / (qData.filter(v => v !== 0).length || 1);
+            return qData.map((val, idx) => ({
+                label: `${idx + 1}º Trimestre`,
+                val,
+                avg: avgBase,
+                total: totalBase
+            }));
+        } else if (selectedTableGrouping === 'Semestral') {
+            const sData = [
+                baseData.slice(0,6).reduce((a,b)=>a+b,0),
+                baseData.slice(6,12).reduce((a,b)=>a+b,0)
+            ];
+            const avgBase = totalBase / (sData.filter(v => v !== 0).length || 1);
+            return sData.map((val, idx) => ({
+                label: `${idx + 1}º Semestre`,
+                val,
+                avg: avgBase,
+                total: totalBase
+            }));
+        } else {
+            return [{
+                label: `Ano ${selectedYear}`,
+                val: totalBase,
+                avg: totalBase,
+                total: totalBase
+            }];
+        }
+    };
+
+    const tableRows = getTableRows();
 
     const handleExportPDF = () => {
         const element = reportRef.current;
@@ -307,22 +366,54 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
                     <div className="aspect-[42/9]">
                         <Line
                             data={{ labels: months.map(m=>m.substring(0,3)), datasets: [{ label: 'Valor (R$)', data, borderColor: '#2563eb', backgroundColor: '#eff6ff', fill: true, tension: 0.3 }] }}
-                            options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, align: 'top', formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v) } }, scales: { y: { title: { display: false, text: 'Valor (R$)' }, beginAtZero: true, grace: '10%' }, x: { title: { display: false, text: 'Mês' } } } }}
+                            options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, color: '#ffffff', align: 'top', font: { weight: 'bold' }, formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v) } }, scales: { y: { title: { display: false, text: 'Valor (R$)' }, beginAtZero: true, grace: '10%', ticks: { color: '#ffffff' } }, x: { title: { display: false, text: 'Mês' }, ticks: { color: '#ffffff' } } } }}
                         />
                     </div>
                 </div>
                 
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4"><span className="w-2 h-6 bg-teal-500 rounded-full"></span> Mensal</h3>
+                    <div className="aspect-[21/9]">
+                        <Bar 
+                            data={{ 
+                                labels: months.map(m => m.substring(0, 3)), 
+                                datasets: [{ 
+                                    label: 'Valor (R$)', 
+                                    data: data, 
+                                    backgroundColor: '#2dd4bf', 
+                                    borderRadius: 4 
+                                }] 
+                            }} 
+                            options={{ 
+                                layout: { padding: { top: 30 } }, 
+                                responsive: true, 
+                                maintainAspectRatio: false, 
+                                plugins: { 
+                                    legend: { display: false }, 
+                                    datalabels: { 
+                                        display: true, 
+                                        color: '#ffffff', 
+                                        anchor: 'end', 
+                                        align: 'top', 
+                                        formatter: v => v > 0 ? new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v) : '', 
+                                        font: { size: 9, weight: 'bold' } 
+                                    } 
+                                }, 
+                                scales: { 
+                                    y: { display: false }, 
+                                    x: { grid: { display: false }, ticks: { color: '#ffffff', font: { size: 8 } } } 
+                                } 
+                            }} 
+                        />
+                    </div>
+                </div>
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4"><span className="w-2 h-6 bg-emerald-500 rounded-full"></span> Trimestral</h3>
-                    <div className="aspect-[21/9]"><Bar data={{ labels: ['1º T', '2º T', '3º T', '4º T'], datasets: [{ label: 'Valor (R$)', data: quarterData, backgroundColor: ['#60a5fa', '#34d399', '#facc15', '#f87171'], borderRadius: 6 }] }} options={{ layout: { padding: { top: 30 } }, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, color: '#64748b', anchor: 'end', align: 'top', formatter: (v,c) => total>0 ? (v*100/total).toFixed(0)+'%' : '0%', font: {size: 11, weight: 'bold'} } }, scales: { y: {display:false}, x: {grid:{display:false}} } }} /></div>
+                    <div className="aspect-[21/9]"><Bar data={{ labels: ['1º T', '2º T', '3º T', '4º T'], datasets: [{ label: 'Valor (R$)', data: quarterData, backgroundColor: ['#60a5fa', '#34d399', '#facc15', '#f87171'], borderRadius: 6 }] }} options={{ layout: { padding: { top: 30 } }, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, color: '#ffffff', anchor: 'end', align: 'top', formatter: (v,c) => total>0 ? (v*100/total).toFixed(0)+'%' : '0%', font: {size: 11, weight: 'bold'} } }, scales: { y: {display:false}, x: {grid:{display:false}, ticks: { color: '#ffffff' }} } }} /></div>
                 </div>
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
-                    <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4"><span className="w-2 h-6 bg-teal-500 rounded-full"></span> Semestral</h3>
-                    <div className="aspect-[21/9]"><Pie data={{ labels: ['1º Sem', '2º Sem'], datasets: [{ label: 'Valor (R$)', data: semesterData, backgroundColor: ['#2dd4bf', '#0d9488'] }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } }, datalabels: { display: true, color: '#fff', font: { weight: 'bold' }, formatter: (v,c) => total>0 ? (v*100/total).toFixed(0)+'%' : '0%' } } }} /></div>
-                </div>
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
-                    <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4"><span className="w-2 h-6 bg-indigo-500 rounded-full"></span> Mix</h3>
-                    <div className="aspect-[21/9]"><Doughnut data={{ labels: ['Corretora', 'Assessoria'], datasets: [{ label: 'Valor (R$)', data: [totCorr, totAss], backgroundColor: ['#2563eb', '#a855f7'], borderWidth: 0 }] }} options={{ responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } }, datalabels: { display: true, color: '#fff', font: { weight: 'bold' }, formatter: (v,c) => (v/(totCorr+totAss)*100 || 0).toFixed(0)+'%' } } }} /></div>
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4"><span className="w-2 h-6 bg-indigo-500 rounded-full"></span> Comparativo</h3>
+                    <div className="aspect-[21/9] max-w-[65%] mx-auto"><Doughnut data={{ labels: ['Corretora', 'Assessoria'], datasets: [{ label: 'Valor (R$)', data: [totCorr, totAss], backgroundColor: ['#2563eb', '#a855f7'], borderWidth: 0 }] }} options={{ responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, color: '#ffffff' } }, datalabels: { display: true, color: '#ffffff', font: { weight: 'bold' }, formatter: (v,c) => (v/(totCorr+totAss)*100 || 0).toFixed(0)+'%' } } }} /></div>
                 </div>
             </div>
 
@@ -331,58 +422,79 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {} }) => {
                     <div className="mb-6 flex justify-between items-start">
                         <div>
                             <h2 className="text-lg font-bold text-slate-800 dark:text-white">Desempenho por Operadora</h2>
-                            <p className="text-sm text-slate-500">Detalhamento Financeiro</p>
                         </div>
                         <select value={selectedOperatorMonth} onChange={e => setSelectedOperatorMonth(e.target.value)} className="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg p-2 text-sm text-slate-700 dark:text-slate-300">
                             <option value="Todos">Todos os Meses</option>
                             {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
                         </select>
                     </div>
-                    <div className="aspect-[4/3] lg:aspect-auto lg:h-[300px]">
+                    <div className="h-[210px]">
                         <Bar 
-                            data={{ labels: opChartLabels, datasets: [{ label: 'Valor (R$)', data: opChartDataValues, backgroundColor: opChartColors, borderRadius: 6, maxBarThickness: 48 }] }}
-                            options={{ layout: { padding: { top: 30 } }, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, color: '#64748b', anchor: 'end', align: 'top', formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v), font: {size: 11, weight: 'bold'} } }, scales: { y: { display: false }, x: { title: { display: true, text: 'Operadoras' }, grid: { display: false }, ticks: { font: {size: 9} } } } }}
+                            data={{ labels: opChartLabels, datasets: [{ label: 'Valor (R$)', data: opChartDataValues, backgroundColor: opChartColors, borderRadius: 4, maxBarThickness: 41 }] }}
+                            options={{ layout: { padding: { top: 30 } }, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, color: '#ffffff', anchor: 'end', align: 'top', formatter: v => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v), font: {size: 11, weight: 'bold'} } }, scales: { y: { display: false }, x: { title: { display: false }, grid: { display: false }, ticks: { color: '#ffffff', font: {size: 9} } } } }}
                         />
                     </div>
                 </div>
 
                 <div className={`${nomeEmpresaUpper === 'PROTETTA' ? 'lg:col-span-1' : 'lg:col-span-2'} bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700`}>
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-6"><span className="w-2 h-6 bg-orange-400 rounded-full"></span> Composição Mensal</h3>
-                    <div className="aspect-[21/9] lg:aspect-auto lg:h-[300px]">
+                    <div className="h-[210px]">
                         <Bar 
-                            data={{ labels: months.map(m=>m.substring(0,3)), datasets: [{ label: 'Corretora', data: cCorr, backgroundColor: '#2563eb', borderRadius: 6, maxBarThickness: 48 }, { label: 'Assessoria', data: cAss, backgroundColor: '#a855f7', borderRadius: 6, maxBarThickness: 48 }] }}
-                            options={{ layout: { padding: { top: 30 } }, responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } }, datalabels: { display: true, color: '#64748b', anchor: 'end', align: 'top', formatter: v => v > 0 ? new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v) : '', font: {size: 11, weight: 'bold'} } }, scales: { y: { display: false }, x: { title: { display: false, text: 'Mês' }, grid: { display: false }, ticks: { font: {size: 9} } } } }}
+                            data={{ labels: months.map(m=>m.substring(0,3)), datasets: [{ label: 'Corretora', data: cCorr, backgroundColor: '#2563eb', borderRadius: 4, maxBarThickness: 41 }, { label: 'Assessoria', data: cAss, backgroundColor: '#a855f7', borderRadius: 4, maxBarThickness: 41 }] }}
+                            options={{ layout: { padding: { top: 30 } }, responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, color: '#ffffff' } }, datalabels: { display: true, color: '#ffffff', anchor: 'end', align: 'top', formatter: v => v > 0 ? new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v) : '', font: {size: 11, weight: 'bold'} } }, scales: { y: { display: false }, x: { title: { display: false, text: 'Mês' }, grid: { display: false }, ticks: { color: '#ffffff', font: {size: 9} } } } }}
                         />
                     </div>
                 </div>
             </div>
 
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden mb-8">
-                <div className="p-6 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
-                    <h3 className="text-lg font-bold text-slate-800 dark:text-white">Detalhamento Financeiro Mensal</h3>
+                <div className="p-6 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-white">Detalhamento Financeiro</h3>
+                    <div className="flex flex-col md:flex-row gap-3">
+                        <select 
+                            value={selectedTableOperator} 
+                            onChange={e => setSelectedTableOperator(e.target.value)} 
+                            className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg p-2 text-sm text-slate-700 dark:text-slate-300"
+                        >
+                            <option value="Todas">Todas as Operadoras</option>
+                            {Array.from(recordedOperators).sort().map(op => (
+                                <option key={op} value={op}>{op}</option>
+                            ))}
+                        </select>
+                        <select 
+                            value={selectedTableGrouping} 
+                            onChange={e => setSelectedTableGrouping(e.target.value)} 
+                            className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg p-2 text-sm text-slate-700 dark:text-slate-300"
+                        >
+                            <option value="Mensal">Mensal</option>
+                            <option value="Trimestral">Trimestral</option>
+                            <option value="Semestral">Semestral</option>
+                            <option value="Anual">Anual</option>
+                        </select>
+                    </div>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                            <tr><th className="px-6 py-4 uppercase font-semibold">Mês</th><th className="px-6 py-4 uppercase font-semibold">Status</th><th className="px-6 py-4 uppercase font-semibold text-right">Part. Anual</th><th className="px-6 py-4 uppercase font-semibold text-right text-emerald-600 dark:text-emerald-400">Valor</th></tr>
+                        <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 sticky top-0 z-10 shadow-[inset_0_-1px_0_rgba(0,0,0,0.1)]">
+                            <tr><th className="px-6 py-2 uppercase font-semibold text-xs">Período</th><th className="px-6 py-2 uppercase font-semibold text-xs">Status</th><th className="px-6 py-2 uppercase font-semibold text-xs text-right">Part. Anual</th><th className="px-6 py-2 uppercase font-semibold text-xs text-right text-emerald-600 dark:text-emerald-400">Valor</th></tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-700/50 text-slate-700 dark:text-slate-300">
-                            {data.map((val, idx) => (
+                            {tableRows.map((row, idx) => (
                                 <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                                    <td className="px-6 py-4 font-medium">{months[idx]}</td>
-                                    <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                            val === 0 
+                                    <td className="px-6 py-2 font-medium text-xs">{row.label}</td>
+                                    <td className="px-6 py-2">
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                                            row.val === 0 
                                                 ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' 
-                                                : val >= avg 
+                                                : row.val >= row.avg 
                                                     ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' 
                                                     : 'bg-yellow-100 text-yellow-800 dark:bg-amber-900/30 dark:text-amber-400'
                                         }`}>
-                                            {val === 0 ? 'Sem Movimento' : val >= avg ? 'Acima da Média' : 'Abaixo da Média'}
+                                            {row.val === 0 ? 'Sem Movimento' : row.val >= row.avg ? 'Acima da Média' : 'Abaixo da Média'}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-right">{total > 0 ? formatPercent(val/total) : '0%'}</td>
-                                    <td className="px-6 py-4 text-right font-bold">{formatCurrency(val)}</td>
+                                    <td className="px-6 py-2 text-right text-xs">{row.total > 0 ? formatPercent(row.val/row.total) : '0%'}</td>
+                                    <td className="px-6 py-2 text-right font-bold text-xs">{formatCurrency(row.val)}</td>
                                 </tr>
                             ))}
                         </tbody>
