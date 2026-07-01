@@ -12553,7 +12553,7 @@ export default function App() {
                 </div>
 
                 <div className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700">
-                  <table className="w-full text-left border-collapse min-w-max">
+                  <table className="w-full text-left border-collapse min-w-[900px]">
                     <thead className="bg-slate-100 dark:bg-slate-800/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700 shadow-sm">
                       <tr>
                         <th className="p-3 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cliente</th>
@@ -12596,9 +12596,42 @@ export default function App() {
 
                            rows = inconsistentes.map(v => ({ type: 'negativo', data: v, refVenda: v }));
                          } else {
+                           const parseRobustDate = (d) => {
+                             if (!d) return new Date(0);
+                             const dStr = String(d).trim();
+                             if (dStr.includes('T')) {
+                               const parsed = new Date(dStr);
+                               if (!isNaN(parsed.getTime())) return parsed;
+                             }
+                             if (dStr.includes('-')) {
+                               const parts = dStr.split('-');
+                               if (parts.length === 3) {
+                                 if (parts[0].length === 4) {
+                                   return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                                 } else if (parts[2].length === 4) {
+                                   return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+                                 }
+                               }
+                             }
+                             if (dStr.includes('/')) {
+                               const parts = dStr.split('/');
+                               if (parts.length === 3) {
+                                 let year = parts[2];
+                                 if (year.length === 2) year = "20" + year;
+                                 return new Date(parseInt(year, 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+                               }
+                             }
+                             const fallback = new Date(dStr);
+                             return isNaN(fallback.getTime()) ? new Date(0) : fallback;
+                           };
+
                            const byContrato = {};
                            rawVendas.forEach(v => {
                              if (!v.contrato) return;
+                             // Filtra vendas / relatórios a partir de 01/01/2026
+                             const dtVenda = parseRobustDate(v.dataVenda);
+                             if (dtVenda < parseRobustDate("2026-01-01")) return;
+
                              if (!byContrato[v.contrato]) byContrato[v.contrato] = [];
                              byContrato[v.contrato].push(v);
                            });
@@ -12607,41 +12640,9 @@ export default function App() {
                            Object.keys(byContrato).forEach(contrato => {
                              const vendasContrato = byContrato[contrato];
 
-                             const parseRobustDate = (d) => {
-                               if (!d) return new Date(0);
-                               const dStr = String(d).trim();
-                               if (dStr.includes('T')) {
-                                 const parsed = new Date(dStr);
-                                 if (!isNaN(parsed.getTime())) return parsed;
-                               }
-                               if (dStr.includes('-')) {
-                                 const parts = dStr.split('-');
-                                 if (parts.length === 3) {
-                                   if (parts[0].length === 4) {
-                                     return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-                                   } else if (parts[2].length === 4) {
-                                     return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
-                                   }
-                                 }
-                               }
-                               if (dStr.includes('/')) {
-                                 const parts = dStr.split('/');
-                                 if (parts.length === 3) {
-                                   let year = parts[2];
-                                   if (year.length === 2) year = "20" + year;
-                                   return new Date(parseInt(year, 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
-                                 }
-                               }
-                               const fallback = new Date(dStr);
-                               return isNaN(fallback.getTime()) ? new Date(0) : fallback;
-                             };
-
                              const sortedByDateAsc = [...vendasContrato].sort((a,b) => parseRobustDate(a.dataVenda) - parseRobustDate(b.dataVenda));
                              const primeiroRegistro = sortedByDateAsc[0];
                              if (!primeiroRegistro) return;
-                             
-                             const dataPrimeiraVenda = parseRobustDate(primeiroRegistro.dataVenda);
-                             if (dataPrimeiraVenda < parseRobustDate("2026-01-01")) return;
                              
                              const operadora = vendasContrato[0].codigoOperadora || "AMIL";
                              
