@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
     Home, ShoppingCart, Users, FileCheck, History, Receipt, 
     Plus, FolderTree, Shield, Settings, User, Moon, Sun, LogOut, Layers,
-    ChevronLeft, ChevronRight, GripVertical, Building, HelpCircle
+    ChevronLeft, ChevronRight, GripVertical, Building, HelpCircle, ChevronDown
 } from 'lucide-react';
 
 const SidebarItem = ({ icon: Icon, label, active, onClick, collapsed }) => (
@@ -13,7 +13,7 @@ const SidebarItem = ({ icon: Icon, label, active, onClick, collapsed }) => (
     </button>
 );
 
-export default function Sidebar({ currentUser, currentView, setCurrentView, hasAccess, isDarkMode, setIsDarkMode, handleLogout, defaultEmpresa }) {
+export default function Sidebar({ currentUser, currentView, setCurrentView, hasAccess, isDarkMode, setIsDarkMode, handleLogout, defaultEmpresa, empresasList = [], onSelectEmpresa }) {
     const [width, setWidth] = useState(() => {
         const saved = localStorage.getItem('protetta_sidebar_width');
         return saved ? parseInt(saved, 10) : 256;
@@ -122,9 +122,28 @@ export default function Sidebar({ currentUser, currentView, setCurrentView, hasA
                             )}
                             <div className="min-w-0 flex-1">
                                 <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider mb-0.5">Empresa Ativa</p>
-                                <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate leading-tight mt-0.5">
-                                    {defaultEmpresa?.nome || 'Empresa Padrão'}
-                                </p>
+                                {empresasList && empresasList.length > 1 ? (
+                                    <div className="relative group/select">
+                                        <select
+                                            value={defaultEmpresa?.nome || ''}
+                                            onChange={(e) => onSelectEmpresa?.(e.target.value)}
+                                            className="w-full bg-transparent text-sm font-bold text-slate-800 dark:text-slate-200 truncate leading-tight mt-0.5 pr-5 outline-none cursor-pointer appearance-none hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                                        >
+                                            {empresasList.map((emp) => (
+                                                <option key={emp.nome} value={emp.nome} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+                                                    {emp.nome}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <span className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover/select:text-indigo-500 transition-colors">
+                                            <ChevronDown size={12} />
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate leading-tight mt-0.5">
+                                        {defaultEmpresa?.nome || 'Empresa Padrão'}
+                                    </p>
+                                )}
                             </div>
                         </div>
                     ) : (
@@ -137,6 +156,21 @@ export default function Sidebar({ currentUser, currentView, setCurrentView, hasA
                                 <div className="h-10 w-10 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center text-lg font-bold shrink-0 border border-indigo-200 dark:border-indigo-800 border-opacity-50">
                                     {defaultEmpresa?.nome?.charAt(0) || 'E'}
                                 </div>
+                            )}
+                            
+                            {empresasList && empresasList.length > 1 && (
+                                <select
+                                    value={defaultEmpresa?.nome || ''}
+                                    onChange={(e) => onSelectEmpresa?.(e.target.value)}
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                    title="Trocar Empresa"
+                                >
+                                    {empresasList.map((emp) => (
+                                        <option key={emp.nome} value={emp.nome} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+                                            {emp.nome}
+                                        </option>
+                                    ))}
+                                </select>
                             )}
                         </div>
                     )}

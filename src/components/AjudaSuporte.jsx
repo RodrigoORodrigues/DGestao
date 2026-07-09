@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { HelpCircle, Send, Bot, MessageSquare, Plus, ChevronDown, ChevronRight, Search, FileText } from 'lucide-react';
+import { HelpCircle, Send, Bot, MessageSquare, Plus, ChevronDown, ChevronRight, Search, FileText, Sparkles } from 'lucide-react';
+import GuiaOnboarding from './GuiaOnboarding';
 
 const FAQ = [
     {
@@ -47,6 +48,7 @@ const BOT_KNOWLEDGE = [
 ];
 
 const AjudaSuporte = () => {
+    const [showOnboarding, setShowOnboarding] = useState(false);
     const [msgs, setMsgs] = useState([{ user: false, text: "Olá! Sou o Don, assistente virtual do Don Gestão. Pode perguntar algo básico como 'como emitir nota fiscal?' ou 'como trocar a senha?'" }]);
     const [input, setInput] = useState("");
     const [openFaq, setOpenFaq] = useState(null);
@@ -91,6 +93,37 @@ const AjudaSuporte = () => {
                 </h2>
                 <p className="text-slate-500 dark:text-slate-400 mt-2">Encontre respostas, consulte o manual ou fale com nosso bot para tirar suas dúvidas de forma rápida sobre menus e fluxos de gestão de comissionamento do software.</p>
             </header>
+
+            {/* NOVO: BANNER INTERATIVO PARA O GUIA DE INTEGRAÇÃO */}
+            <div className="bg-slate-900 dark:bg-slate-950 text-white p-6 rounded-2xl shadow-xl mb-8 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden border border-indigo-500/20">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-emerald-600/10 rounded-full blur-2xl pointer-events-none"></div>
+                
+                <div className="space-y-2 relative z-10 text-center md:text-left">
+                    <span className="inline-flex items-center gap-1.5 bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                        <Sparkles size={14} className="animate-pulse" /> Novidade interativa
+                    </span>
+                    <h3 className="text-xl md:text-2xl font-black tracking-tight text-white">
+                        Guia de Integração e Primeiro Acesso
+                    </h3>
+                    <p className="text-slate-300 text-xs md:text-sm max-w-xl leading-relaxed">
+                        Aprenda a configurar e operar o sistema Don Gestão em poucos minutos através de um simulador passo a passo interativo com keyboard controls!
+                    </p>
+                </div>
+                
+                <div className="relative z-10 shrink-0 w-full md:w-auto">
+                    <button
+                        onClick={() => setShowOnboarding(true)}
+                        className="w-full md:w-auto inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg hover:shadow-indigo-500/20 transition-all transform hover:-translate-y-0.5"
+                    >
+                        Iniciar Guia Prático <Sparkles size={16} />
+                    </button>
+                </div>
+            </div>
+
+            {showOnboarding && (
+                <GuiaOnboarding onClose={() => setShowOnboarding(false)} />
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                 {/* FAQ e Guia Rápido */}

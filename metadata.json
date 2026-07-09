@@ -2,5 +2,7 @@
   "name": "Don Gestão",
   "description": "Don Gestão app imported from GitHub.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
