@@ -188,10 +188,12 @@ export default function Sidebar({ currentUser, currentView, setCurrentView, hasA
                 {hasAccess('processar') && <SidebarItem collapsed={collapsed} icon={FileCheck} label="Relatório Comissão" active={currentView === 'processar'} onClick={() => setCurrentView('processar')} />}
                 {hasAccess('historico') && <SidebarItem collapsed={collapsed} icon={History} label="Relatórios Salvos" active={currentView === 'historico'} onClick={() => setCurrentView('historico')} />}
                 
+                {/* 
                 {(hasAccess('nfe') || currentUser?.role === 'admin') && <p className={`text-xs font-bold text-slate-400 dark:text-slate-500 uppercase pt-6 mb-2 truncate ${collapsed ? 'text-center' : ''}`}>
                     {collapsed ? '...' : 'Faturamento'}
                 </p>}
                 {(hasAccess('nfe') || currentUser?.role === 'admin') && <SidebarItem collapsed={collapsed} icon={Receipt} label="Emissor NFS-e" active={currentView === 'nfe'} onClick={() => setCurrentView('nfe')} />}
+                */}
 
                 {hasAccess('gestor') && <p className={`text-xs font-bold text-slate-400 dark:text-slate-500 uppercase pt-6 mb-2 truncate ${collapsed ? 'text-center' : ''}`}>
                     {collapsed ? '...' : 'Gestor de Extratos'}
