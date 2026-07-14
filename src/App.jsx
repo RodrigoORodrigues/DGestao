@@ -9555,19 +9555,23 @@ export default function App() {
       const maxCom = Math.max(...operadoraSorted.map(([_, stats]) => stats.comissao), 1);
 
       chartsHeaderHtml = `
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 25px; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+        <div style="display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 25px; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+            <!-- Faturamento Total desativado
             <div style="background: #f8fafc !important; border: 1px solid #e2e8f0 !important; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: center; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
                 <span style="font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 4px; display: block; text-align: left;">Faturamento Total</span>
-                <span style="font-size: 18px; font-weight: 800; color: #0f172a; display: block; text-align: left;">${formatarMoeda(totalVendasValor)}</span>
+                <span style="font-size: 18px; font-weight: 800; color: #0f172a; display: block; text-align: left;">\${formatarMoeda(totalVendasValor)}</span>
             </div>
+            -->
             <div style="background: #f8fafc !important; border: 1px solid #e2e8f0 !important; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: center; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
                 <span style="font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 4px; display: block; text-align: left;">Total Comissão</span>
-                <span style="font-size: 18px; font-weight: 800; color: #0284c7; display: block; text-align: left;">${formatarMoeda(totalComissao)}</span>
+                <span style="font-size: 18px; font-weight: 800; color: #0284c7; display: block; text-align: left;">\${formatarMoeda(totalComissao)}</span>
             </div>
+            <!-- Ticket Médio desativado
             <div style="background: #f8fafc !important; border: 1px solid #e2e8f0 !important; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: center; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
                 <span style="font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 4px; display: block; text-align: left;">Ticket Médio</span>
-                <span style="font-size: 18px; font-weight: 800; color: #475569; display: block; text-align: left;">${formatarMoeda(ticketMedio)}</span>
+                <span style="font-size: 18px; font-weight: 800; color: #475569; display: block; text-align: left;">\${formatarMoeda(ticketMedio)}</span>
             </div>
+            -->
         </div>
       `;
     }
@@ -11987,39 +11991,24 @@ export default function App() {
                 const totalVidas = pdfData.reduce((acc, l) => acc + (Number(l.vidas) || 0), 0);
                 const ticketMedio = pdfData.length > 0 ? totalVendasValor / pdfData.length : 0;
 
-                const operadoraStats = {};
-                pdfData.forEach((linha) => {
-                  const op = (linha.codigoOperadora || linha.codOperadora || linha.operadora) || "AMIL";
-                  const valor = Number(linha.valorTotal || linha.valor) || 0;
-                  const comissao = Number(linha.comissao) || 0;
-                  if (!operadoraStats[op]) {
-                    operadoraStats[op] = { faturamento: 0, comissao: 0 };
-                  }
-                  operadoraStats[op].faturamento += valor;
-                  operadoraStats[op].comissao += comissao;
-                });
-
-                const operadoraSorted = Object.entries(operadoraStats)
-                  .sort((a, b) => b[1].faturamento - a[1].faturamento)
-                  .slice(0, 5);
-
-                const maxFat = Math.max(...operadoraSorted.map(([_, stats]) => stats.faturamento), 1);
-                const maxCom = Math.max(...operadoraSorted.map(([_, stats]) => stats.comissao), 1);
-
                 return (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 no-print">
+                  <div className="grid grid-cols-1 gap-4 mb-6 no-print">
+                    {/* Faturamento Total desativado
                     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm flex flex-col justify-center transition-colors duration-200">
                       <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Faturamento Total</span>
                       <span className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-white">{formatarMoeda(totalVendasValor)}</span>
                     </div>
+                    */}
                     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm flex flex-col justify-center transition-colors duration-200">
                       <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Total Comissão</span>
                       <span className="text-xl md:text-2xl font-extrabold text-sky-600 dark:text-sky-400">{formatarMoeda(totalComissao)}</span>
                     </div>
+                    {/* Ticket Médio desativado
                     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm flex flex-col justify-center transition-colors duration-200">
                       <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Ticket Médio</span>
                       <span className="text-xl md:text-2xl font-extrabold text-slate-600 dark:text-slate-300">{formatarMoeda(ticketMedio)}</span>
                     </div>
+                    */}
                   </div>
                 );
               })()}
