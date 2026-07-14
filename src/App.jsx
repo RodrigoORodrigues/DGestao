@@ -5,6 +5,7 @@ import ptBR from "date-fns/locale/pt-BR";
 registerLocale("pt-BR", ptBR);
 import { supabase } from "./config/supabase";
 import { findClientMetadata } from "./utils/clientMetadata";
+import { PJ_CLIENTS_LIST } from "./utils/pj_clients_list";
 
 export async function safeSupabaseInsert(table, dataArray) {
   if (!dataArray || (Array.isArray(dataArray) && dataArray.length === 0))
@@ -321,6 +322,41 @@ const matchesCommaSeparated = (rowValue, filterValue, exact = false) => {
     }
     return cleanRow.includes(cleanPart);
   });
+};
+
+export const cleanAndNormalizeName = (name) => {
+  if (!name) return "";
+  return name
+    .replace(/^\d+[\d.\-/]*\s+/, "")
+    .replace(/\s+\d+[\d.\-/]*$/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+};
+
+export const isSameClientName = (nameA, nameB) => {
+  const normA = cleanAndNormalizeName(nameA);
+  const normB = cleanAndNormalizeName(nameB);
+  if (!normA || !normB) return false;
+  if (normA === normB) return true;
+  if (normA.length >= 12 && normB.length >= 12) {
+    if (normA.includes(normB) || normB.includes(normA)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+export const getClientTipoForVendaName = (vendaName, clientes, pjClientsList = []) => {
+  if (!vendaName) return "Pessoa física";
+  const found = (clientes || []).find((c) => isSameClientName(c.nome, vendaName));
+  if (found && found.tipo) return found.tipo;
+  const isPJ = (pjClientsList || []).some((pjName) => isSameClientName(pjName, vendaName));
+  if (isPJ) return "Pessoa jurídica";
+  return "Pessoa física";
 };
 
 export default function App() {
@@ -981,6 +1017,7 @@ export default function App() {
     inicioVigenciaFim: "",
     notaFiscal: "",
     corretor: "Todos",
+    tipoCliente: "Todos",
   };
   const [vendasFilterForm, setVendasFilterForm] =
     useState(defaultVendasFilters);
@@ -993,6 +1030,7 @@ export default function App() {
   const vendasColLabels = {
     numero: "Registo",
     cliente: "Cliente",
+    tipoCliente: "Tipo",
     dataVenda: "Data",
     situacao: "Situação",
     valor: "Valor",
@@ -1018,6 +1056,7 @@ export default function App() {
   const defaultVendasCols = {
     numero: false,
     cliente: true,
+    tipoCliente: true,
     dataVenda: true,
     situacao: false,
     valor: true,
@@ -1455,7 +1494,61 @@ export default function App() {
         });
         setUsersList(filteredSubs);
       }
-      if (resCli.data) setClientes(userFilters(resCli.data));
+      if (resCli.data) {
+        let rawClients = resCli.data;
+        const clientsToSetPJ = [];
+        rawClients = rawClients.map((c) => {
+          if (c.tipo !== "Pessoa jurídica" && c.nome) {
+            const matchesPJ = PJ_CLIENTS_LIST.some((pjName) => {
+              const dbCleaned = c.nome
+                .replace(/^\d+[\d.\-/]*\s+/, "")
+                .replace(/\s+\d+[\d.\-/]*$/, "")
+                .replace(/\s+/g, " ")
+                .trim();
+              const pjCleaned = pjName
+                .replace(/^\d+[\d.\-/]*\s+/, "")
+                .replace(/\s+\d+[\d.\-/]*$/, "")
+                .replace(/\s+/g, " ")
+                .trim();
+              const dbNorm = dbCleaned
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-z]/g, "")
+                .trim();
+              const pjNorm = pjCleaned
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-z]/g, "")
+                .trim();
+              if (dbNorm === pjNorm) return true;
+              if (dbNorm.length >= 12 && pjNorm.length >= 12) {
+                if (dbNorm.includes(pjNorm) || pjNorm.includes(dbNorm)) {
+                  return true;
+                }
+              }
+              return false;
+            });
+            if (matchesPJ) {
+              clientsToSetPJ.push(c.id);
+              return { ...c, tipo: "Pessoa jurídica" };
+            }
+          }
+          return c;
+        });
+
+        if (clientsToSetPJ.length > 0) {
+          console.log(`[AutoPJ] Updating ${clientsToSetPJ.length} clients to 'Pessoa jurídica' in Supabase...`);
+          Promise.all(
+            clientsToSetPJ.map((id) =>
+              safeSupabaseUpdate("clientes", { tipo: "Pessoa jurídica" }, "id", id)
+            )
+          ).catch((e) => console.error("[AutoPJ] Error auto-updating client types to PJ:", e));
+        }
+
+        setClientes(userFilters(rawClients));
+      }
       if (resVendas.data) {
         let allVendas = resVendas.data;
         const toUpdate = [];
@@ -2710,6 +2803,12 @@ export default function App() {
         todasAsVendas = todasAsVendas.filter((v) => matchesCommaSeparated(v.vitalicio, f.vitalicio, true));
       if (f.corretor && f.corretor !== "Todos")
         todasAsVendas = todasAsVendas.filter((v) => matchesCommaSeparated(v.corretor, f.corretor, true));
+      if (f.tipoCliente && f.tipoCliente !== "Todos") {
+        todasAsVendas = todasAsVendas.filter((v) => {
+          const actualTipo = getClientTipoForVendaName(v.cliente, clientes, PJ_CLIENTS_LIST);
+          return actualTipo === f.tipoCliente;
+        });
+      }
       if (f.dataInicio)
         todasAsVendas = todasAsVendas.filter(
           (v) => v.dataVenda >= f.dataInicio,
@@ -2721,6 +2820,11 @@ export default function App() {
     todasAsVendas.sort((a, b) => {
       let valA = a[vendasSortConfig.key];
       let valB = b[vendasSortConfig.key];
+
+      if (vendasSortConfig.key === "tipoCliente") {
+        valA = getClientTipoForVendaName(a.cliente, clientes, PJ_CLIENTS_LIST);
+        valB = getClientTipoForVendaName(b.cliente, clientes, PJ_CLIENTS_LIST);
+      }
 
       if (valA === null || valA === undefined) valA = "";
       if (valB === null || valB === undefined) valB = "";
@@ -10601,6 +10705,27 @@ export default function App() {
                         </div>
                       </div>
 
+                      {/* Tipo do Cliente */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">
+                          Tipo do Cliente
+                        </label>
+                        <select
+                          value={vendasFilterForm.tipoCliente}
+                          onChange={(e) =>
+                            setVendasFilterForm({
+                              ...vendasFilterForm,
+                              tipoCliente: e.target.value,
+                            })
+                          }
+                          className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500"
+                        >
+                          <option value="Todos">Todos</option>
+                          <option value="Pessoa física">Pessoa física</option>
+                          <option value="Pessoa jurídica">Pessoa jurídica</option>
+                        </select>
+                      </div>
+
                       {/* Contrato */}
                       <div>
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">
@@ -10883,6 +11008,14 @@ export default function App() {
                           Cliente {getSortIcon("cliente")}
                         </th>
                       )}
+                      {vendasTableCols.tipoCliente && (
+                        <th
+                          onClick={() => handleSortVendas("tipoCliente")}
+                          className="cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-4 font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 w-32"
+                        >
+                          Tipo {getSortIcon("tipoCliente")}
+                        </th>
+                      )}
                       {vendasTableCols.dataVenda && (
                         <th
                           onClick={() => handleSortVendas("dataVenda")}
@@ -11104,6 +11237,14 @@ export default function App() {
                               <div className="font-bold text-slate-900 dark:text-slate-100">
                                 {venda.cliente}
                               </div>
+                            </td>
+                          )}
+                          {vendasTableCols.tipoCliente && (
+                            <td
+                              onClick={() => abrirModalVenda(venda)}
+                              className="cursor-pointer py-4 px-4 text-slate-500 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700"
+                            >
+                              {getClientTipoForVendaName(venda.cliente, clientes, PJ_CLIENTS_LIST)}
                             </td>
                           )}
                           {vendasTableCols.dataVenda && (
