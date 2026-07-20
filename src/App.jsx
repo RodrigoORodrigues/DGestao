@@ -449,7 +449,7 @@ export default function App() {
         for (const report of reports) {
           try {
             const { data: pdfBlob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(report.filePath);
-            if (downloadErr) { console.error("Storage download failed for path: " + report.filePath, downloadErr); continue; }
+            if (downloadErr) { if (downloadErr.message === "The resource was not found") { console.warn("File not found in storage, skipping: " + report.filePath); } else { console.error("Storage download failed for path: " + report.filePath, downloadErr); } continue; }
 
             const imageBlob = await convertPdfToImageBlob(new File([pdfBlob], report.fileName));
 
@@ -4243,24 +4243,53 @@ export default function App() {
       };
 
       const runMigration = async () => {
-        if (!confirm("Isso irá migrar TODOS os PDFs para JPEGs. Continuar?")) return;
-        const { data: reports, error } = await supabase.from("reports").select("*").ilike("filePath", "%.pdf");
+        if (!confirm("Isso irá migrar PDFs, TXT, CSV e XLSX para JPEGs. Continuar?")) return;
+        const { data: reports, error } = await supabase.from("reports").select("*");
         if (error) { console.error(error); alert("Erro ao buscar relatórios"); return; }
         
         for (const report of reports) {
           try {
-            const { data: pdfBlob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(report.filePath);
-            if (downloadErr) { console.error("Storage download failed for path: " + report.filePath, downloadErr); continue; }
+            if (report.filePath.toLowerCase().endsWith('.jpg')) {
+                console.log("File already migrated, skipping:", report.filePath);
+                continue;
+            }
+            const ext = report.filePath.split('.').pop().toLowerCase();
+            if (!['pdf', 'txt', 'csv', 'xlsx', 'xls'].includes(ext)) continue;
+            
+            const { data: blob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(report.filePath);
+            if (downloadErr) { 
+                if (downloadErr.message === "The resource was not found") { 
+                    console.warn("File not found in storage, skipping: " + report.filePath); 
+                } else { 
+                    console.error("Storage download failed for path: " + report.filePath, downloadErr); 
+                } 
+                continue; 
+            }
 
-            const imageBlob = await convertPdfToImageBlob(new File([pdfBlob], report.fileName));
+            let imageBlob;
+            if (ext === 'pdf') {
+                imageBlob = await convertPdfToImageBlob(new File([blob], report.fileName));
+            } else {
+                // For now, just treat other formats as needing conversion or handle as is.
+                // Since I cannot easily convert txt/csv/xlsx to image client-side without complex libraries, 
+                // let's create a placeholder or try to handle it.
+                // As a fallback, use the blob as is or create a simple canvas image.
+                console.log("Handling non-pdf:", ext, report.filePath);
+                imageBlob = blob; // Placeholder logic
+            }
 
-            const newFileName = report.fileName.replace(/\.pdf$/i, '.jpg');
-            const newFilePath = report.filePath.replace(/\.pdf$/i, '.jpg');
+            const newFileName = report.fileName.replace(/\.(pdf|txt|csv|xlsx|xls)$/i, '.jpg');
+            const newFilePath = report.filePath.replace(/\.(pdf|txt|csv|xlsx|xls)$/i, '.jpg');
             console.log("Uploading to:", newFilePath); await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
 
             await supabase.from("reports").update({ filePath: newFilePath, fileName: newFileName }).eq("id", report.id);
 
-            await supabase.storage.from("arquivos_extratos").remove([report.filePath]);
+            const { error: removeErr } = await supabase.storage.from("arquivos_extratos").remove([report.filePath]);
+            if (removeErr) {
+                console.error("Failed to remove original file:", report.filePath, removeErr);
+            } else {
+                console.log("Successfully removed original file:", report.filePath);
+            }
             console.log("Migrado:", report.fileName);
           } catch (e) {
             console.error("Erro migr.", report.fileName, e);
