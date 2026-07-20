@@ -4275,6 +4275,42 @@ export default function App() {
         alert("Movimentação concluída!");
       };
 
+      const moveExistingJpgFilesToMigrados = async () => {
+        const targetFolder = 'migrados_jpg';
+        if (!confirm(`Isso irá mover TODOS os JPEGs para a pasta '${targetFolder}'. Continuar?`)) return;
+
+        const { data: files, error: listError } = await supabase.storage.from("arquivos_extratos").list('');
+        if (listError) { console.error(listError); return; }
+
+        for (const file of files) {
+          if (file.name.startsWith(targetFolder + '/')) continue;
+
+          if (file.name.toLowerCase().endsWith('.jpg')) {
+            const oldPath = file.name;
+            const newPath = `${targetFolder}/${file.name}`;
+            
+            try {
+                console.log(`Moving ${oldPath} to ${newPath}`);
+
+                const { data: blob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(oldPath);
+                if (downloadErr) { console.error(`Erro ao baixar ${oldPath}:`, downloadErr); continue; }
+
+                const { error: uploadErr } = await supabase.storage.from("arquivos_extratos").upload(newPath, blob);
+                if (uploadErr) { console.error(`Erro ao enviar ${newPath}:`, uploadErr); continue; }
+
+                const { error: removeErr } = await supabase.storage.from("arquivos_extratos").remove([oldPath]);
+                if (removeErr) { console.error(`Erro ao remover ${oldPath}:`, removeErr); }
+
+                await supabase.from("reports").update({ filePath: newPath }).eq("filePath", oldPath);
+                console.log("Movido:", file.name);
+            } catch (e) {
+                console.error("Erro movendo.", file.name, e);
+            }
+          }
+        }
+        alert("Movimentação de JPEGs concluída!");
+      };
+
       const runMigration = async () => {
         if (!confirm("Isso irá migrar PDFs, TXT, CSV e XLSX para JPEGs. Continuar?")) return;
         const { data: reports, error } = await supabase.from("reports").select("*");
@@ -4335,7 +4371,8 @@ export default function App() {
       useEffect(() => {
         window.executarMigracao = runMigration;
         window.executarMigração = runMigration;
-      }, [runMigration]);
+        window.organizarMigrados = moveExistingJpgFilesToMigrados;
+      }, [runMigration, moveExistingJpgFilesToMigrados]);
 
       for (const arq of formData.arquivos) {
         let file = arq.file;
