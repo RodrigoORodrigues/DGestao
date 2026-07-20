@@ -4258,13 +4258,11 @@ export default function App() {
             
             const { data: blob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(report.filePath);
             if (downloadErr) { 
-                if (downloadErr.message === "The resource was not found") { 
-                    console.warn("File not found in storage, skipping: " + report.filePath); 
-                } else { 
-                    console.error("Storage download failed for path: " + report.filePath, downloadErr); 
-                } 
+                console.error(`Falha ao baixar ${report.filePath}:`, downloadErr);
                 continue; 
             }
+            
+            // ... (rest of the logic)
 
             let imageBlob;
             if (ext === 'pdf') {
