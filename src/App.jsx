@@ -4242,6 +4242,39 @@ export default function App() {
         return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8));
       };
 
+      const movePdfFiles = async (targetFolder) => {
+        if (!confirm(`Isso irá mover TODOS os PDFs para a pasta '${targetFolder}'. Continuar?`)) return;
+
+        const { data: files, error: listError } = await supabase.storage.from("arquivos_extratos").list('');
+        if (listError) { console.error(listError); return; }
+
+        for (const file of files) {
+          if (file.name.toLowerCase().endsWith('.pdf')) {
+            const oldPath = file.name;
+            const newPath = `${targetFolder}/${file.name}`;
+            
+            try {
+                console.log(`Moving ${oldPath} to ${newPath}`);
+
+                const { data: blob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(oldPath);
+                if (downloadErr) { console.error(`Erro ao baixar ${oldPath}:`, downloadErr); continue; }
+
+                const { error: uploadErr } = await supabase.storage.from("arquivos_extratos").upload(newPath, blob);
+                if (uploadErr) { console.error(`Erro ao enviar ${newPath}:`, uploadErr); continue; }
+
+                const { error: removeErr } = await supabase.storage.from("arquivos_extratos").remove([oldPath]);
+                if (removeErr) { console.error(`Erro ao remover ${oldPath}:`, removeErr); }
+
+                await supabase.from("reports").update({ filePath: newPath }).eq("filePath", oldPath);
+                console.log("Movido:", file.name);
+            } catch (e) {
+                console.error("Erro movendo.", file.name, e);
+            }
+          }
+        }
+        alert("Movimentação concluída!");
+      };
+
       const runMigration = async () => {
         if (!confirm("Isso irá migrar PDFs, TXT, CSV e XLSX para JPEGs. Continuar?")) return;
         const { data: reports, error } = await supabase.from("reports").select("*");
