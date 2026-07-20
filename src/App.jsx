@@ -4228,8 +4228,10 @@ export default function App() {
         alert("Migração concluída");
       };
       
-      window.executarMigracao = runMigration;
-      window.executarMigração = runMigration;
+      useEffect(() => {
+        window.executarMigracao = runMigration;
+        window.executarMigração = runMigration;
+      }, [runMigration]);
 
       for (const arq of formData.arquivos) {
         let file = arq.file;
