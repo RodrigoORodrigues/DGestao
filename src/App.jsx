@@ -371,6 +371,7 @@ export default function App() {
       try {
         const { data: allV, error: fetchErr } = await supabase.from('vendas').select('*');
         if (fetchErr || !allV) throw fetchErr;
+        window.allV = allV;
 
         const formatDateForInputLocal = (value) => {
           if (!value && value !== 0) return "";
@@ -471,17 +472,17 @@ export default function App() {
     runMigration();
   }, []);
 
-        const sulamericaVendas = allV
-          .filter(
+        const sulamericaVendas = window.allV
+          ? window.allV.filter(
             (v) =>
               (v.operadora && v.operadora.includes("SULAMERICA")) ||
               (v.codigoOperadora && v.codigoOperadora.includes("SULAMERICA")),
-          )
-          .sort(
+          ).sort(
             (a, b) =>
               new Date(a.dataVenda || a.data || 0) -
               new Date(b.dataVenda || b.data || 0),
-          );
+          )
+          : [];
 
         const mapped = sulamericaVendas.map((v, i) => ({ ...v, _index: i }));
         const vendasParaSalvar = [];
