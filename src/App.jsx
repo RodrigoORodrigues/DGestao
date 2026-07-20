@@ -4310,6 +4310,7 @@ export default function App() {
         }
         alert("Movimentação de JPEGs concluída!");
       };
+      window.organizarMigrados = moveExistingJpgFilesToMigrados;
 
       const runMigration = async () => {
         if (!confirm("Isso irá migrar PDFs, TXT, CSV e XLSX para JPEGs. Continuar?")) return;
@@ -4367,6 +4368,8 @@ export default function App() {
         }
         alert("Migração concluída");
       };
+      window.executarMigracao = runMigration;
+      window.executarMigração = runMigration;
       
       useEffect(() => {
         window.executarMigracao = runMigration;
