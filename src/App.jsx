@@ -4246,6 +4246,8 @@ export default function App() {
         if (!confirm("Isso irá migrar PDFs, TXT, CSV e XLSX para JPEGs. Continuar?")) return;
         const { data: reports, error } = await supabase.from("reports").select("*");
         if (error) { console.error(error); alert("Erro ao buscar relatórios"); return; }
+        console.log("Reports found:", reports?.length);
+        if (!reports || reports.length === 0) { console.log("No reports to migrate."); return; }
         
         for (const report of reports) {
           try {
