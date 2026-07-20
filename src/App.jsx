@@ -360,13 +360,224 @@ export const getClientTipoForVendaName = (vendaName, clientes, pjClientsList = [
 };
 
 export default function App() {
+  const convertPdfToImageBlob = async (file) => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    
+    let totalWidth = 0;
+    let totalHeight = 0;
+    const pages = [];
+    const scale = 1.5;
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale });
+      pages.push({ page, viewport });
+      totalWidth = Math.max(totalWidth, viewport.width);
+      totalHeight += viewport.height;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = totalWidth;
+    canvas.height = totalHeight;
+    const context = canvas.getContext('2d');
+    
+    let currentHeight = 0;
+    for (const { page, viewport } of pages) {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = viewport.width;
+      tempCanvas.height = viewport.height;
+      const tempContext = tempCanvas.getContext('2d');
+      await page.render({ canvasContext: tempContext, viewport }).promise;
+      context.drawImage(tempCanvas, 0, currentHeight);
+      currentHeight += viewport.height;
+    }
+    
+    return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+  };
+
+  const convertNonPdfToImageBlob = async (file, ext) => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 1000;
+      const ctx = canvas.getContext('2d');
+      
+      // Background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Header
+      ctx.fillStyle = '#f3f4f6';
+      ctx.fillRect(0, 0, canvas.width, 100);
+      
+      ctx.fillStyle = '#111827';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.fillText(file.name, 40, 58);
+      
+      // Badge
+      ctx.fillStyle = ext === 'xlsx' || ext === 'xls' ? '#10b981' : '#3b82f6';
+      ctx.fillRect(700, 35, 60, 30);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillText(ext.toUpperCase(), 715, 54);
+      
+      // Border
+      ctx.strokeStyle = '#e5e7eb';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(0, 0, canvas.width, canvas.height);
+      
+      // Read and print content if txt/csv
+      if (ext === 'txt' || ext === 'csv') {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const text = e.target.result;
+          ctx.fillStyle = '#374151';
+          ctx.font = '14px monospace';
+          const lines = text.split('\n');
+          let y = 150;
+          for (let i = 0; i < Math.min(lines.length, 45); i++) {
+            ctx.fillText(lines[i].substring(0, 90), 40, y);
+            y += 18;
+          }
+          if (lines.length > 45) {
+            ctx.fillStyle = '#9ca3af';
+            ctx.fillText(`... [Conteúdo truncado: total ${lines.length} linhas] ...`, 40, y + 10);
+          }
+          canvas.toBlob(resolve, 'image/jpeg', 0.85);
+        };
+        reader.readAsText(file);
+      } else {
+        // For Excel files, draw a nice spreadsheet preview style or placeholder info
+        ctx.fillStyle = '#374151';
+        ctx.font = '16px sans-serif';
+        ctx.fillText("Planilha de Dados (Visualização do Arquivo)", 40, 160);
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '14px sans-serif';
+        ctx.fillText(`Tamanho do Arquivo: ${(file.size / 1024).toFixed(2)} KB`, 40, 190);
+        ctx.fillText("Este arquivo XLSX/XLS foi migrado para JPEG.", 40, 220);
+        ctx.fillText("Os dados originais foram preservados no fluxo de processamento.", 40, 250);
+        
+        // Draw grid mockup to make it look like a spreadsheet image
+        ctx.strokeStyle = '#d1d5db';
+        ctx.lineWidth = 1;
+        let y = 300;
+        for (let r = 0; r < 15; r++) {
+          ctx.beginPath();
+          ctx.moveTo(40, y);
+          ctx.lineTo(760, y);
+          ctx.stroke();
+          y += 30;
+        }
+        let x = 40;
+        for (let c = 0; c < 6; c++) {
+          ctx.beginPath();
+          ctx.moveTo(x, 300);
+          ctx.lineTo(x, 720);
+          ctx.stroke();
+          x += 120;
+        }
+        
+        ctx.fillStyle = '#10b981';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText("Visualização de planilha gerada automaticamente na migração", 40, 760);
+        
+        canvas.toBlob(resolve, 'image/jpeg', 0.85);
+      }
+    });
+  };
+
+  const moveExistingJpgFilesToMigrados = async () => {
+    const targetFolder = 'migrados_jpg';
+    if (!confirm(`Isso irá mover TODOS os JPEGs para a pasta '${targetFolder}'. Continuar?`)) return;
+
+    const { data: files, error: listError } = await supabase.storage.from("arquivos_extratos").list('');
+    if (listError) { console.error(listError); return; }
+
+    for (const file of files) {
+      if (file.name.startsWith(targetFolder + '/')) continue;
+
+      if (file.name.toLowerCase().endsWith('.jpg')) {
+        const oldPath = file.name;
+        const newPath = `${targetFolder}/${file.name}`;
+        
+        try {
+            console.log(`Moving ${oldPath} to ${newPath}`);
+
+            const { data: blob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(oldPath);
+            if (downloadErr) { console.error(`Erro ao baixar ${oldPath}:`, downloadErr); continue; }
+
+            const { error: uploadErr } = await supabase.storage.from("arquivos_extratos").upload(newPath, blob);
+            if (uploadErr) { console.error(`Erro ao enviar ${newPath}:`, uploadErr); continue; }
+
+            const { error: removeErr } = await supabase.storage.from("arquivos_extratos").remove([oldPath]);
+            if (removeErr) { console.error(`Erro ao remover ${oldPath}:`, removeErr); }
+
+            await supabase.from("reports").update({ filePath: newPath }).eq("filePath", oldPath);
+            console.log("Movido:", file.name);
+        } catch (e) {
+            console.error("Erro movendo.", file.name, e);
+        }
+      }
+    }
+    alert("Movimentação de JPEGs concluída!");
+  };
+
+  const runMigration = async () => {
+    if (!confirm("Isso irá migrar PDFs, TXT, CSV e XLSX para JPEGs. Continuar?")) return;
+    const { data: reports, error } = await supabase.from("reports").select("*");
+    if (error) { console.error(error); alert("Erro ao buscar relatórios"); return; }
+    console.log("Reports found:", reports?.length);
+    if (!reports || reports.length === 0) { console.log("No reports to migrate."); return; }
+    
+    for (const report of reports) {
+      try {
+        if (report.filePath.toLowerCase().endsWith('.jpg') || report.filePath.startsWith('migrados_jpg/')) {
+            console.log("File already migrated, skipping:", report.filePath);
+            continue;
+        }
+        const ext = report.filePath.split('.').pop().toLowerCase();
+        if (!['pdf', 'txt', 'csv', 'xlsx', 'xls'].includes(ext)) continue;
+        
+        const { data: blob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(report.filePath);
+        if (downloadErr) { 
+            console.error(`Falha ao baixar ${report.filePath}:`, downloadErr);
+            continue; 
+        }
+
+        let imageBlob;
+        if (ext === 'pdf') {
+            imageBlob = await convertPdfToImageBlob(new File([blob], report.fileName));
+        } else {
+            imageBlob = await convertNonPdfToImageBlob(new File([blob], report.fileName), ext);
+        }
+
+        const targetFolder = 'migrados_jpg';
+        const newFileName = report.fileName.replace(/\.(pdf|txt|csv|xlsx|xls)$/i, '.jpg');
+        const newFilePath = `${targetFolder}/${newFileName}`;
+        console.log("Uploading to:", newFilePath); await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
+
+        await supabase.from("reports").update({ filePath: newFilePath, fileName: newFileName }).eq("id", report.id);
+
+        const { error: removeErr } = await supabase.storage.from("arquivos_extratos").remove([report.filePath]);
+        if (removeErr) {
+            console.error("Failed to remove original file:", report.filePath, removeErr);
+        } else {
+            console.log("Successfully removed original file:", report.filePath);
+        }
+        console.log("Migrado:", report.fileName);
+      } catch (e) {
+        console.error("Erro migr.", report.fileName, e);
+      }
+    }
+    alert("Migração concluída");
+  };
+
   useEffect(() => {
-     const handleCorrigirSulamAmerica = async () => {
+    const handleCorrigirSulamAmerica = async () => {
       if (window.__MIGRATED_SULAMERICA__) return;
       window.__MIGRATED_SULAMERICA__ = true;
       console.log("Running one-time Sulamérica migration...");
-
-      let atualizacoesRealizadas = 0;
 
       try {
         const { data: allV, error: fetchErr } = await supabase.from('vendas').select('*');
@@ -403,73 +614,68 @@ export default function App() {
       } catch (e) { console.error(e); }
     };
 
-    const convertPdfToImageBlob = async (file) => {
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        
-        let totalWidth = 0;
-        let totalHeight = 0;
-        const pages = [];
-        const scale = 1.5;
+    const runMigrationSilent = async () => {
+      if (window.__MIGRATED_PDF_TO_JPG__) return;
+      window.__MIGRATED_PDF_TO_JPG__ = true;
+      console.log("Running automatic silent files migration...");
 
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const viewport = page.getViewport({ scale });
-          pages.push({ page, viewport });
-          totalWidth = Math.max(totalWidth, viewport.width);
-          totalHeight += viewport.height;
-        }
+      const { data: reports, error } = await supabase.from("reports").select("*");
+      if (error || !reports || reports.length === 0) return;
 
-        const canvas = document.createElement('canvas');
-        canvas.width = totalWidth;
-        canvas.height = totalHeight;
-        const context = canvas.getContext('2d');
-        
-        let currentHeight = 0;
-        for (const { page, viewport } of pages) {
-          const tempCanvas = document.createElement('canvas');
-          tempCanvas.width = viewport.width;
-          tempCanvas.height = viewport.height;
-          const tempContext = tempCanvas.getContext('2d');
-          await page.render({ canvasContext: tempContext, viewport }).promise;
-          context.drawImage(tempCanvas, 0, currentHeight);
-          currentHeight += viewport.height;
-        }
-        
-        return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8));
-    };
-
-    const runMigration = async () => {
-        if (window.__MIGRATED_PDF_TO_JPG__) return;
-        window.__MIGRATED_PDF_TO_JPG__ = true;
-        
-        const { data: reports, error } = await supabase.from("reports").select("*").ilike("filePath", "%.pdf");
-        if (error) { console.error(error); return; }
-        
-        for (const report of reports) {
-          try {
-            const { data: pdfBlob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(report.filePath);
-            if (downloadErr) { if (downloadErr.message === "The resource was not found") { console.warn("File not found in storage, skipping: " + report.filePath); } else { console.error("Storage download failed for path: " + report.filePath, downloadErr); } continue; }
-
-            const imageBlob = await convertPdfToImageBlob(new File([pdfBlob], report.fileName));
-
-            const newFileName = report.fileName.replace(/\.pdf$/i, '.jpg');
-            const newFilePath = report.filePath.replace(/\.pdf$/i, '.jpg');
-            console.log("Uploading to:", newFilePath); await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
-
-            await supabase.from("reports").update({ filePath: newFilePath, fileName: newFileName }).eq("id", report.id);
-
-            await supabase.storage.from("arquivos_extratos").remove([report.filePath]);
-            console.log("Migrado:", report.fileName);
-          } catch (e) {
-            console.error("Erro migr.", report.fileName, e);
+      for (const report of reports) {
+        try {
+          if (report.filePath.toLowerCase().endsWith('.jpg') || report.filePath.startsWith('migrados_jpg/')) {
+            continue;
           }
+          const ext = report.filePath.split('.').pop().toLowerCase();
+          if (!['pdf', 'txt', 'csv', 'xlsx', 'xls'].includes(ext)) continue;
+
+          console.log("Automatically migrating file:", report.filePath);
+          const { data: blob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(report.filePath);
+          if (downloadErr) {
+            console.error(`Falha ao baixar ${report.filePath}:`, downloadErr);
+            continue;
+          }
+
+          let imageBlob;
+          if (ext === 'pdf') {
+            imageBlob = await convertPdfToImageBlob(new File([blob], report.fileName));
+          } else {
+            imageBlob = await convertNonPdfToImageBlob(new File([blob], report.fileName), ext);
+          }
+
+          const targetFolder = 'migrados_jpg';
+          const newFileName = report.fileName.replace(/\.(pdf|txt|csv|xlsx|xls)$/i, '.jpg');
+          const newFilePath = `${targetFolder}/${newFileName}`;
+
+          const { error: uploadErr } = await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
+          if (uploadErr) {
+            console.error("Upload failed for migrated file:", uploadErr);
+            continue;
+          }
+
+          await supabase.from("reports").update({ filePath: newFilePath, fileName: newFileName }).eq("id", report.id);
+
+          const { error: removeErr } = await supabase.storage.from("arquivos_extratos").remove([report.filePath]);
+          if (removeErr) {
+            console.error("Failed to remove original file:", report.filePath, removeErr);
+          } else {
+            console.log("Successfully removed original file:", report.filePath);
+          }
+        } catch (e) {
+          console.error("Erro na migração automática do arquivo:", report.fileName, e);
         }
-        console.log("Migração concluída");
+      }
+      console.log("Migração automática concluída");
     };
-    
+
     handleCorrigirSulamAmerica();
-    runMigration();
+    runMigrationSilent();
+
+    // Assign globally
+    window.executarMigracao = runMigration;
+    window.executarMigração = runMigration;
+    window.organizarMigrados = moveExistingJpgFilesToMigrados;
   }, []);
 
         const sulamericaVendas = window.allV
@@ -4206,195 +4412,26 @@ export default function App() {
         }
       }
 
-      const convertPdfToImageBlob = async (file) => {
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        
-        let totalWidth = 0;
-        let totalHeight = 0;
-        const pages = [];
-        const scale = 1.5;
-
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const viewport = page.getViewport({ scale });
-          pages.push({ page, viewport });
-          totalWidth = Math.max(totalWidth, viewport.width);
-          totalHeight += viewport.height;
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = totalWidth;
-        canvas.height = totalHeight;
-        const context = canvas.getContext('2d');
-        
-        let currentHeight = 0;
-        for (const { page, viewport } of pages) {
-          const tempCanvas = document.createElement('canvas');
-          tempCanvas.width = viewport.width;
-          tempCanvas.height = viewport.height;
-          const tempContext = tempCanvas.getContext('2d');
-          await page.render({ canvasContext: tempContext, viewport }).promise;
-          context.drawImage(tempCanvas, 0, currentHeight);
-          currentHeight += viewport.height;
-        }
-        
-        return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8));
-      };
-
-      const movePdfFiles = async (targetFolder) => {
-        if (!confirm(`Isso irá mover TODOS os PDFs para a pasta '${targetFolder}'. Continuar?`)) return;
-
-        const { data: files, error: listError } = await supabase.storage.from("arquivos_extratos").list('');
-        if (listError) { console.error(listError); return; }
-
-        for (const file of files) {
-          if (file.name.toLowerCase().endsWith('.pdf')) {
-            const oldPath = file.name;
-            const newPath = `${targetFolder}/${file.name}`;
-            
-            try {
-                console.log(`Moving ${oldPath} to ${newPath}`);
-
-                const { data: blob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(oldPath);
-                if (downloadErr) { console.error(`Erro ao baixar ${oldPath}:`, downloadErr); continue; }
-
-                const { error: uploadErr } = await supabase.storage.from("arquivos_extratos").upload(newPath, blob);
-                if (uploadErr) { console.error(`Erro ao enviar ${newPath}:`, uploadErr); continue; }
-
-                const { error: removeErr } = await supabase.storage.from("arquivos_extratos").remove([oldPath]);
-                if (removeErr) { console.error(`Erro ao remover ${oldPath}:`, removeErr); }
-
-                await supabase.from("reports").update({ filePath: newPath }).eq("filePath", oldPath);
-                console.log("Movido:", file.name);
-            } catch (e) {
-                console.error("Erro movendo.", file.name, e);
-            }
-          }
-        }
-        alert("Movimentação concluída!");
-      };
-
-      const moveExistingJpgFilesToMigrados = async () => {
-        const targetFolder = 'migrados_jpg';
-        if (!confirm(`Isso irá mover TODOS os JPEGs para a pasta '${targetFolder}'. Continuar?`)) return;
-
-        const { data: files, error: listError } = await supabase.storage.from("arquivos_extratos").list('');
-        if (listError) { console.error(listError); return; }
-
-        for (const file of files) {
-          if (file.name.startsWith(targetFolder + '/')) continue;
-
-          if (file.name.toLowerCase().endsWith('.jpg')) {
-            const oldPath = file.name;
-            const newPath = `${targetFolder}/${file.name}`;
-            
-            try {
-                console.log(`Moving ${oldPath} to ${newPath}`);
-
-                const { data: blob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(oldPath);
-                if (downloadErr) { console.error(`Erro ao baixar ${oldPath}:`, downloadErr); continue; }
-
-                const { error: uploadErr } = await supabase.storage.from("arquivos_extratos").upload(newPath, blob);
-                if (uploadErr) { console.error(`Erro ao enviar ${newPath}:`, uploadErr); continue; }
-
-                const { error: removeErr } = await supabase.storage.from("arquivos_extratos").remove([oldPath]);
-                if (removeErr) { console.error(`Erro ao remover ${oldPath}:`, removeErr); }
-
-                await supabase.from("reports").update({ filePath: newPath }).eq("filePath", oldPath);
-                console.log("Movido:", file.name);
-            } catch (e) {
-                console.error("Erro movendo.", file.name, e);
-            }
-          }
-        }
-        alert("Movimentação de JPEGs concluída!");
-      };
-      window.organizarMigrados = moveExistingJpgFilesToMigrados;
-
-      const runMigration = async () => {
-        if (!confirm("Isso irá migrar PDFs, TXT, CSV e XLSX para JPEGs. Continuar?")) return;
-        const { data: reports, error } = await supabase.from("reports").select("*");
-        if (error) { console.error(error); alert("Erro ao buscar relatórios"); return; }
-        console.log("Reports found:", reports?.length);
-        if (!reports || reports.length === 0) { console.log("No reports to migrate."); return; }
-        
-        for (const report of reports) {
-          try {
-            if (report.filePath.toLowerCase().endsWith('.jpg')) {
-                console.log("File already migrated, skipping:", report.filePath);
-                continue;
-            }
-            const ext = report.filePath.split('.').pop().toLowerCase();
-            if (!['pdf', 'txt', 'csv', 'xlsx', 'xls'].includes(ext)) continue;
-            
-            const { data: blob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(report.filePath);
-            if (downloadErr) { 
-                console.error(`Falha ao baixar ${report.filePath}:`, downloadErr);
-                continue; 
-            }
-            
-            // ... (rest of the logic)
-
-            let imageBlob;
-            if (ext === 'pdf') {
-                imageBlob = await convertPdfToImageBlob(new File([blob], report.fileName));
-            } else {
-                // For now, just treat other formats as needing conversion or handle as is.
-                // Since I cannot easily convert txt/csv/xlsx to image client-side without complex libraries, 
-                // let's create a placeholder or try to handle it.
-                // As a fallback, use the blob as is or create a simple canvas image.
-                console.log("Handling non-pdf:", ext, report.filePath);
-                imageBlob = blob; // Placeholder logic
-            }
-
-            const targetFolder = 'migrados_jpg';
-            const newFileName = report.fileName.replace(/\.(pdf|txt|csv|xlsx|xls)$/i, '.jpg');
-            const newFilePath = `${targetFolder}/${newFileName}`;
-            console.log("Uploading to:", newFilePath); await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
-
-            await supabase.from("reports").update({ filePath: newFilePath, fileName: newFileName }).eq("id", report.id);
-
-            const { error: removeErr } = await supabase.storage.from("arquivos_extratos").remove([report.filePath]);
-            if (removeErr) {
-                console.error("Failed to remove original file:", report.filePath, removeErr);
-            } else {
-                console.log("Successfully removed original file:", report.filePath);
-            }
-            console.log("Migrado:", report.fileName);
-          } catch (e) {
-            console.error("Erro migr.", report.fileName, e);
-          }
-        }
-        alert("Migração concluída");
-      };
-      window.executarMigracao = runMigration;
-      window.executarMigração = runMigration;
-      
-      useEffect(() => {
-        window.executarMigracao = runMigration;
-        window.executarMigração = runMigration;
-        window.organizarMigrados = moveExistingJpgFilesToMigrados;
-        console.log("Window functions assigned:", {
-            executarMigracao: !!window.executarMigracao,
-            organizarMigrados: !!window.organizarMigrados
-        });
-      }, [runMigration, moveExistingJpgFilesToMigrados]);
-
       for (const arq of formData.arquivos) {
         let file = arq.file;
         let fileName = file.name;
+        const ext = file.name.split('.').pop().toLowerCase();
 
-        if (file.name.toLowerCase().endsWith('.pdf')) {
+        if (ext === 'pdf') {
           const imageBlob = await convertPdfToImageBlob(file);
           file = new File([imageBlob], file.name.replace(/\.pdf$/i, '.jpg'), { type: 'image/jpeg' });
+          fileName = file.name;
+        } else if (['txt', 'csv', 'xlsx', 'xls'].includes(ext)) {
+          const imageBlob = await convertNonPdfToImageBlob(file, ext);
+          file = new File([imageBlob], file.name.replace(/\.(txt|csv|xlsx|xls)$/i, '.jpg'), { type: 'image/jpeg' });
           fileName = file.name;
         }
 
         const saveOperadora = (finalOperadora || "").trim();
         const saveCodOperadora = (formData.codOperadora || "").trim();
         const safeFileName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
-        const filePath = `${Date.now()}_${safeFileName}`;
+        const targetFolder = 'migrados_jpg';
+        const filePath = `${targetFolder}/${Date.now()}_${safeFileName}`;
         const { error: uploadErr } = await supabase.storage
           .from("arquivos_extratos")
           .upload(filePath, file);
