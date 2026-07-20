@@ -361,7 +361,7 @@ export const getClientTipoForVendaName = (vendaName, clientes, pjClientsList = [
 
 export default function App() {
   useEffect(() => {
-    const handleCorrigirSulamAmerica = async () => {
+     const handleCorrigirSulamAmerica = async () => {
       if (window.__MIGRATED_SULAMERICA__) return;
       window.__MIGRATED_SULAMERICA__ = true;
       console.log("Running one-time Sulamérica migration...");
@@ -398,12 +398,78 @@ export default function App() {
         const diffMesesSulAmericaLocal = (dataAnterior, dataAtual) => {
           const ini = formatDateForInputLocal(dataAnterior);
           const fim = formatDateForInputLocal(dataAtual);
-          if (!ini || !fim) return 0;
-          const a = new Date(`${ini}T00:00:00`);
-          const b = new Date(`${fim}T00:00:00`);
-          if (a >= b) return 0;
-          return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
         };
+      } catch (e) { console.error(e); }
+    };
+
+    const convertPdfToImageBlob = async (file) => {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        
+        let totalWidth = 0;
+        let totalHeight = 0;
+        const pages = [];
+        const scale = 1.5;
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale });
+          pages.push({ page, viewport });
+          totalWidth = Math.max(totalWidth, viewport.width);
+          totalHeight += viewport.height;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = totalWidth;
+        canvas.height = totalHeight;
+        const context = canvas.getContext('2d');
+        
+        let currentHeight = 0;
+        for (const { page, viewport } of pages) {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = viewport.width;
+          tempCanvas.height = viewport.height;
+          const tempContext = tempCanvas.getContext('2d');
+          await page.render({ canvasContext: tempContext, viewport }).promise;
+          context.drawImage(tempCanvas, 0, currentHeight);
+          currentHeight += viewport.height;
+        }
+        
+        return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+    };
+
+    const runMigration = async () => {
+        if (window.__MIGRATED_PDF_TO_JPG__) return;
+        window.__MIGRATED_PDF_TO_JPG__ = true;
+        
+        const { data: reports, error } = await supabase.from("reports").select("*").ilike("filePath", "%.pdf");
+        if (error) { console.error(error); return; }
+        
+        for (const report of reports) {
+          try {
+            const { data: pdfBlob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(report.filePath);
+            if (downloadErr) { console.error("Erro download:", downloadErr); continue; }
+
+            const imageBlob = await convertPdfToImageBlob(new File([pdfBlob], report.fileName));
+
+            const newFileName = report.fileName.replace(/\.pdf$/i, '.jpg');
+            const newFilePath = report.filePath.replace(/\.pdf$/i, '.jpg');
+            await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
+
+            await supabase.from("reports").update({ filePath: newFilePath, fileName: newFileName }).eq("id", report.id);
+
+            await supabase.storage.from("arquivos_extratos").remove([report.filePath]);
+            console.log("Migrado:", report.fileName);
+          } catch (e) {
+            console.error("Erro migr.", report.fileName, e);
+          }
+        }
+        console.log("Migração concluída");
+    };
+    
+    handleCorrigirSulamAmerica();
+    runMigration();
+  }, []);
 
         const sulamericaVendas = allV
           .filter(
@@ -476,32 +542,6 @@ export default function App() {
           return;
         }
 
-        const total = vendasParaSalvar.length;
-        console.log(`Corrigindo ${total} parcelas da Sulamerica...`);
-        let madeChanges = false;
-        
-        for (let i = 0; i < total; i++) {
-          const v = vendasParaSalvar[i];
-          const sanitized = { parcela: v.parcela };
-          try {
-            await supabase.from('vendas').update(sanitized).eq('id', v.id);
-            madeChanges = true;
-          } catch(err) {
-            console.error("Failed to update " + v.id, err);
-          }
-        }
-
-        console.log("Correção concluída.");
-        if (madeChanges) {
-           window.location.reload();
-        }
-      } catch (e) {
-        console.error("Erro na migração sulamerica", e);
-      }
-    };
-
-    handleCorrigirSulamAmerica();
-  }, []);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem("protetta_theme");
     return saved ? saved === "dark" : true;
