@@ -4372,6 +4372,10 @@ export default function App() {
         window.executarMigracao = runMigration;
         window.executarMigração = runMigration;
         window.organizarMigrados = moveExistingJpgFilesToMigrados;
+        console.log("Window functions assigned:", {
+            executarMigracao: !!window.executarMigracao,
+            organizarMigrados: !!window.organizarMigrados
+        });
       }, [runMigration, moveExistingJpgFilesToMigrados]);
 
       for (const arq of formData.arquivos) {
