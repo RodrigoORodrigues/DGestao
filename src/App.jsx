@@ -326,7 +326,7 @@ const matchesCommaSeparated = (rowValue, filterValue, exact = false) => {
 
 export const cleanAndNormalizeName = (name) => {
   if (!name) return "";
-  return name
+  return String(name)
     .replace(/^\d+[\d.\-/]*\s+/, "")
     .replace(/\s+\d+[\d.\-/]*$/, "")
     .replace(/\s+/g, " ")
@@ -1498,38 +1498,8 @@ export default function App() {
         let rawClients = resCli.data;
         const clientsToSetPJ = [];
         rawClients = rawClients.map((c) => {
-          if (c.tipo !== "Pessoa jurídica" && c.nome) {
-            const matchesPJ = PJ_CLIENTS_LIST.some((pjName) => {
-              const dbCleaned = c.nome
-                .replace(/^\d+[\d.\-/]*\s+/, "")
-                .replace(/\s+\d+[\d.\-/]*$/, "")
-                .replace(/\s+/g, " ")
-                .trim();
-              const pjCleaned = pjName
-                .replace(/^\d+[\d.\-/]*\s+/, "")
-                .replace(/\s+\d+[\d.\-/]*$/, "")
-                .replace(/\s+/g, " ")
-                .trim();
-              const dbNorm = dbCleaned
-                .toLowerCase()
-                .normalize("NFD")
-                .replace(/[\u0300-\u036f]/g, "")
-                .replace(/[^a-z]/g, "")
-                .trim();
-              const pjNorm = pjCleaned
-                .toLowerCase()
-                .normalize("NFD")
-                .replace(/[\u0300-\u036f]/g, "")
-                .replace(/[^a-z]/g, "")
-                .trim();
-              if (dbNorm === pjNorm) return true;
-              if (dbNorm.length >= 12 && pjNorm.length >= 12) {
-                if (dbNorm.includes(pjNorm) || pjNorm.includes(dbNorm)) {
-                  return true;
-                }
-              }
-              return false;
-            });
+          if (c && c.tipo !== "Pessoa jurídica" && c.nome) {
+            const matchesPJ = PJ_CLIENTS_LIST.some((pjName) => isSameClientName(c.nome, pjName));
             if (matchesPJ) {
               clientsToSetPJ.push(c.id);
               return { ...c, tipo: "Pessoa jurídica" };
@@ -4195,11 +4165,84 @@ export default function App() {
         }
       }
 
+      const convertPdfToImageBlob = async (file) => {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        
+        let totalWidth = 0;
+        let totalHeight = 0;
+        const pages = [];
+        const scale = 1.5;
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale });
+          pages.push({ page, viewport });
+          totalWidth = Math.max(totalWidth, viewport.width);
+          totalHeight += viewport.height;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = totalWidth;
+        canvas.height = totalHeight;
+        const context = canvas.getContext('2d');
+        
+        let currentHeight = 0;
+        for (const { page, viewport } of pages) {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = viewport.width;
+          tempCanvas.height = viewport.height;
+          const tempContext = tempCanvas.getContext('2d');
+          await page.render({ canvasContext: tempContext, viewport }).promise;
+          context.drawImage(tempCanvas, 0, currentHeight);
+          currentHeight += viewport.height;
+        }
+        
+        return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+      };
+
+      const runMigration = async () => {
+        if (!confirm("Isso irá migrar TODOS os PDFs para JPEGs. Continuar?")) return;
+        const { data: reports, error } = await supabase.from("reports").select("*").ilike("filePath", "%.pdf");
+        if (error) { console.error(error); alert("Erro ao buscar relatórios"); return; }
+        
+        for (const report of reports) {
+          try {
+            const { data: pdfBlob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(report.filePath);
+            if (downloadErr) { console.error("Erro download:", downloadErr); continue; }
+
+            const imageBlob = await convertPdfToImageBlob(new File([pdfBlob], report.fileName));
+
+            const newFileName = report.fileName.replace(/\.pdf$/i, '.jpg');
+            const newFilePath = report.filePath.replace(/\.pdf$/i, '.jpg');
+            await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
+
+            await supabase.from("reports").update({ filePath: newFilePath, fileName: newFileName }).eq("id", report.id);
+
+            await supabase.storage.from("arquivos_extratos").remove([report.filePath]);
+            console.log("Migrado:", report.fileName);
+          } catch (e) {
+            console.error("Erro migr.", report.fileName, e);
+          }
+        }
+        alert("Migração concluída");
+      };
+      
+      window.runMigration = runMigration;
+
       for (const arq of formData.arquivos) {
-        const file = arq.file;
+        let file = arq.file;
+        let fileName = file.name;
+
+        if (file.name.toLowerCase().endsWith('.pdf')) {
+          const imageBlob = await convertPdfToImageBlob(file);
+          file = new File([imageBlob], file.name.replace(/\.pdf$/i, '.jpg'), { type: 'image/jpeg' });
+          fileName = file.name;
+        }
+
         const saveOperadora = (finalOperadora || "").trim();
         const saveCodOperadora = (formData.codOperadora || "").trim();
-        const safeFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+        const safeFileName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
         const filePath = `${Date.now()}_${safeFileName}`;
         const { error: uploadErr } = await supabase.storage
           .from("arquivos_extratos")
@@ -4217,7 +4260,7 @@ export default function App() {
           codOperadora: saveCodOperadora || null,
           notaFiscal: arq.notaFiscal || null,
           date: new Date().toISOString(),
-          fileName: file.name,
+          fileName: fileName,
           filePath: filePath,
         };
         const { error: insertErr } = await safeSupabaseInsert("reports", [
