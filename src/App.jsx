@@ -499,7 +499,8 @@ export default function App() {
 
       if (file.name.toLowerCase().endsWith('.jpg')) {
         const oldPath = file.name;
-        const newPath = `${targetFolder}/${file.name}`;
+        const safeFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+        const newPath = `${targetFolder}/${safeFileName}`;
         
         try {
             console.log(`Moving ${oldPath} to ${newPath}`);
@@ -553,11 +554,18 @@ export default function App() {
         }
 
         const targetFolder = 'migrados_jpg';
-        const newFileName = report.fileName.replace(/\.(pdf|txt|csv|xlsx|xls)$/i, '.jpg');
-        const newFilePath = `${targetFolder}/${newFileName}`;
-        console.log("Uploading to:", newFilePath); await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
+        const rawNewFileName = report.fileName.replace(/\.(pdf|txt|csv|xlsx|xls)$/i, '.jpg');
+        const safeFileName = rawNewFileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+        const uniqueFileName = `${report.id}_${safeFileName}`;
+        const newFilePath = `${targetFolder}/${uniqueFileName}`;
+        console.log("Uploading to:", newFilePath);
+        const { error: uploadErr } = await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
+        if (uploadErr) {
+            console.error("Upload failed for migrated file:", uploadErr);
+            continue;
+        }
 
-        await supabase.from("reports").update({ filePath: newFilePath, fileName: newFileName }).eq("id", report.id);
+        await supabase.from("reports").update({ filePath: newFilePath, fileName: rawNewFileName }).eq("id", report.id);
 
         const { error: removeErr } = await supabase.storage.from("arquivos_extratos").remove([report.filePath]);
         if (removeErr) {
@@ -645,8 +653,10 @@ export default function App() {
           }
 
           const targetFolder = 'migrados_jpg';
-          const newFileName = report.fileName.replace(/\.(pdf|txt|csv|xlsx|xls)$/i, '.jpg');
-          const newFilePath = `${targetFolder}/${newFileName}`;
+          const rawNewFileName = report.fileName.replace(/\.(pdf|txt|csv|xlsx|xls)$/i, '.jpg');
+          const safeFileName = rawNewFileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+          const uniqueFileName = `${report.id}_${safeFileName}`;
+          const newFilePath = `${targetFolder}/${uniqueFileName}`;
 
           const { error: uploadErr } = await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
           if (uploadErr) {
@@ -654,7 +664,7 @@ export default function App() {
             continue;
           }
 
-          await supabase.from("reports").update({ filePath: newFilePath, fileName: newFileName }).eq("id", report.id);
+          await supabase.from("reports").update({ filePath: newFilePath, fileName: rawNewFileName }).eq("id", report.id);
 
           const { error: removeErr } = await supabase.storage.from("arquivos_extratos").remove([report.filePath]);
           if (removeErr) {
