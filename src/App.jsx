@@ -487,9 +487,13 @@ export default function App() {
     });
   };
 
-  const moveExistingJpgFilesToMigrados = async () => {
+  const moveExistingJpgFilesToMigrados = async (skipConfirm = true) => {
     const targetFolder = 'migrados_jpg';
-    if (!confirm(`Isso irá mover TODOS os JPEGs para a pasta '${targetFolder}'. Continuar?`)) return;
+    if (!skipConfirm) {
+      if (!confirm(`Isso irá mover TODOS os JPEGs para a pasta '${targetFolder}'. Continuar?`)) return;
+    } else {
+      console.log(`[Organizar] Iniciando movimentação de JPEGs antigos para '${targetFolder}'...`);
+    }
 
     const { data: files, error: listError } = await supabase.storage.from("arquivos_extratos").list('');
     if (listError) { console.error(listError); return; }
@@ -521,13 +525,20 @@ export default function App() {
         }
       }
     }
-    alert("Movimentação de JPEGs concluída!");
+    console.log("[Organizar] Movimentação de JPEGs concluída!");
+    if (!skipConfirm) {
+      alert("Movimentação de JPEGs concluída!");
+    }
   };
 
-  const runMigration = async () => {
-    if (!confirm("Isso irá migrar PDFs, TXT, CSV e XLSX para JPEGs. Continuar?")) return;
+  const runMigration = async (skipConfirm = true) => {
+    if (!skipConfirm) {
+      if (!confirm("Isso irá migrar PDFs, TXT, CSV e XLSX para JPEGs. Continuar?")) return;
+    } else {
+      console.log("[Migração] Iniciando migração de PDFs, TXT, CSV e XLSX para JPEGs...");
+    }
     const { data: reports, error } = await supabase.from("reports").select("*");
-    if (error) { console.error(error); alert("Erro ao buscar relatórios"); return; }
+    if (error) { console.error(error); if (!skipConfirm) alert("Erro ao buscar relatórios"); return; }
     console.log("Reports found:", reports?.length);
     if (!reports || reports.length === 0) { console.log("No reports to migrate."); return; }
     
@@ -578,7 +589,10 @@ export default function App() {
         console.error("Erro migr.", report.fileName, e);
       }
     }
-    alert("Migração concluída");
+    console.log("[Migração] Migração concluída com sucesso!");
+    if (!skipConfirm) {
+      alert("Migração concluída");
+    }
   };
 
   useEffect(() => {
