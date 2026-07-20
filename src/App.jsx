@@ -4228,7 +4228,8 @@ export default function App() {
         alert("Migração concluída");
       };
       
-      window.runMigration = runMigration;
+      window.executarMigracao = runMigration;
+      window.executarMigração = runMigration;
 
       for (const arq of formData.arquivos) {
         let file = arq.file;
