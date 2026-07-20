@@ -4311,8 +4311,9 @@ export default function App() {
                 imageBlob = blob; // Placeholder logic
             }
 
+            const targetFolder = 'migrados_jpg';
             const newFileName = report.fileName.replace(/\.(pdf|txt|csv|xlsx|xls)$/i, '.jpg');
-            const newFilePath = report.filePath.replace(/\.(pdf|txt|csv|xlsx|xls)$/i, '.jpg');
+            const newFilePath = `${targetFolder}/${newFileName}`;
             console.log("Uploading to:", newFilePath); await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
 
             await supabase.from("reports").update({ filePath: newFilePath, fileName: newFileName }).eq("id", report.id);
