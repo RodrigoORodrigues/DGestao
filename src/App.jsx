@@ -449,13 +449,13 @@ export default function App() {
         for (const report of reports) {
           try {
             const { data: pdfBlob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(report.filePath);
-            if (downloadErr) { console.error("Erro download:", downloadErr); continue; }
+            if (downloadErr) { console.error("Storage download failed for path: " + report.filePath, downloadErr); continue; }
 
             const imageBlob = await convertPdfToImageBlob(new File([pdfBlob], report.fileName));
 
             const newFileName = report.fileName.replace(/\.pdf$/i, '.jpg');
             const newFilePath = report.filePath.replace(/\.pdf$/i, '.jpg');
-            await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
+            console.log("Uploading to:", newFilePath); await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
 
             await supabase.from("reports").update({ filePath: newFilePath, fileName: newFileName }).eq("id", report.id);
 
@@ -4250,13 +4250,13 @@ export default function App() {
         for (const report of reports) {
           try {
             const { data: pdfBlob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(report.filePath);
-            if (downloadErr) { console.error("Erro download:", downloadErr); continue; }
+            if (downloadErr) { console.error("Storage download failed for path: " + report.filePath, downloadErr); continue; }
 
             const imageBlob = await convertPdfToImageBlob(new File([pdfBlob], report.fileName));
 
             const newFileName = report.fileName.replace(/\.pdf$/i, '.jpg');
             const newFilePath = report.filePath.replace(/\.pdf$/i, '.jpg');
-            await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
+            console.log("Uploading to:", newFilePath); await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
 
             await supabase.from("reports").update({ filePath: newFilePath, fileName: newFileName }).eq("id", report.id);
 
