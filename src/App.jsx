@@ -216,6 +216,7 @@ import EmpresasGestao from "./components/EmpresasGestao";
 import AjudaSuporte from "./components/AjudaSuporte";
 import AceiteTermosLGPD from "./components/AceiteTermosLGPD";
 import TermosLGPDGestao from "./components/TermosLGPDGestao";
+import html2pdf from "html2pdf.js";
 
 // Ícones importados diretamente do pacote npm que instalámos
 import {
@@ -381,41 +382,61 @@ export const getClientTipoForVendaName = (vendaName, clientes, pjClientsList = [
 };
 
 export default function App() {
-  const convertPdfToImageBlob = async (file) => {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    
-    let totalWidth = 0;
-    let totalHeight = 0;
-    const pages = [];
-    const scale = 1.5;
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const viewport = page.getViewport({ scale });
-      pages.push({ page, viewport });
-      totalWidth = Math.max(totalWidth, viewport.width);
-      totalHeight += viewport.height;
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = totalWidth;
-    canvas.height = totalHeight;
-    const context = canvas.getContext('2d');
-    
-    let currentHeight = 0;
-    for (const { page, viewport } of pages) {
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = viewport.width;
-      tempCanvas.height = viewport.height;
-      const tempContext = tempCanvas.getContext('2d');
-      await page.render({ canvasContext: tempContext, viewport }).promise;
-      context.drawImage(tempCanvas, 0, currentHeight);
-      currentHeight += viewport.height;
-    }
-    
-    return new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.8));
+  const convertImageBlobToPdfBlob = async (imageBlob) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(imageBlob);
+      
+      img.onload = async () => {
+        try {
+          const container = document.createElement('div');
+          container.style.position = 'fixed';
+          container.style.top = '-9999px';
+          container.style.left = '-9999px';
+          container.style.width = `${img.naturalWidth}px`;
+          container.style.height = `${img.naturalHeight}px`;
+          container.appendChild(img);
+          document.body.appendChild(container);
+          
+          const isLandscape = img.naturalWidth > img.naturalHeight;
+          
+          const opt = {
+            margin: 0,
+            filename: 'converted.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { 
+              scale: 2, 
+              useCORS: true, 
+              logging: false 
+            },
+            jsPDF: { 
+              unit: 'px', 
+              format: [img.naturalWidth, img.naturalHeight], 
+              orientation: isLandscape ? 'l' : 'p' 
+            }
+          };
+          
+          const pdfBlob = await html2pdf().from(img).set(opt).output('blob');
+          
+          document.body.removeChild(container);
+          URL.revokeObjectURL(objectUrl);
+          
+          resolve(pdfBlob);
+        } catch (err) {
+          URL.revokeObjectURL(objectUrl);
+          reject(err);
+        }
+      };
+      
+      img.onerror = (err) => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("Falha ao carregar a imagem para conversão"));
+      };
+      
+      img.src = objectUrl;
+    });
   };
+
 
   const convertNonPdfToImageBlob = async (file, ext) => {
     return new Promise((resolve) => {
@@ -1074,565 +1095,9 @@ export default function App() {
             canvas.toBlob(resolve, 'image/webp', 0.85);
           };
           reader.readAsText(file);
-        } else {
-          drawStaticSpreadsheetFallback();
-          canvas.toBlob(resolve, 'image/webp', 0.85);
         }
       }
     });
-  };
-
-  const moveExistingWebpFilesToMigrados = async (skipConfirm = true) => {
-    const targetFolder = 'migrados_webp';
-    if (!skipConfirm) {
-      if (!confirm(`Isso irá mover TODOS os WebPs para a pasta '${targetFolder}'. Continuar?`)) return;
-    }
-    
-    setMigrationLogs((prev) => [...prev, { type: 'info', text: `Iniciando movimentação de WebPs antigos para '${targetFolder}'...` }]);
-
-    const { data: files, error: listError } = await supabase.storage.from("arquivos_extratos").list('', { limit: 10000 });
-    if (listError) {
-      const errText = `Erro ao listar arquivos: ${listError.message || listError}`;
-      console.error("[Organizar]", errText);
-      setMigrationLogs((prev) => [...prev, { type: 'error', text: errText }]);
-      return;
-    }
-
-    const totalCount = files?.length || 0;
-    setMigrationLogs((prev) => [...prev, { type: 'info', text: `Total de arquivos encontrados no bucket: ${totalCount}` }]);
-
-    let movedCount = 0;
-    let skippedCount = 0;
-    let errorCount = 0;
-
-    for (const file of files) {
-      if (file.name.startsWith(targetFolder + '/')) {
-        continue;
-      }
-
-      if (file.name.toLowerCase().endsWith('.webp')) {
-        const oldPath = file.name;
-        const safeFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
-        const newPath = `${targetFolder}/${safeFileName}`;
-        
-        try {
-            setMigrationLogs((prev) => [...prev, { type: 'info', text: `Processando arquivo: ${oldPath} -> ${newPath}` }]);
-
-            const { data: blob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(oldPath);
-            if (downloadErr) {
-              const errMsg = `Erro ao baixar ${oldPath}: ${downloadErr.message || downloadErr}`;
-              console.error(`[Organizar]`, errMsg);
-              setMigrationLogs((prev) => [...prev, { type: 'error', text: errMsg }]);
-              errorCount++;
-              continue;
-            }
-
-            const { error: uploadErr } = await supabase.storage.from("arquivos_extratos").upload(newPath, blob);
-            if (uploadErr) {
-              const errMsg = `Erro ao enviar ${newPath}: ${uploadErr.message || uploadErr}`;
-              console.error(`[Organizar]`, errMsg);
-              setMigrationLogs((prev) => [...prev, { type: 'error', text: errMsg }]);
-              errorCount++;
-              continue;
-            }
-
-            const { error: removeErr } = await supabase.storage.from("arquivos_extratos").remove([oldPath]);
-            if (removeErr) {
-              const errMsg = `Erro ao remover ${oldPath}: ${removeErr.message || removeErr}`;
-              console.error(`[Organizar]`, errMsg);
-              setMigrationLogs((prev) => [...prev, { type: 'warn', text: errMsg }]);
-            }
-
-            const { error: dbErr } = await supabase.from("reports").update({ filePath: newPath }).eq("filePath", oldPath);
-            if (dbErr) {
-              const errMsg = `Erro ao atualizar DB para ${oldPath}: ${dbErr.message || dbErr}`;
-              console.error(`[Organizar]`, errMsg);
-              setMigrationLogs((prev) => [...prev, { type: 'warn', text: errMsg }]);
-            }
-            
-            setMigrationLogs((prev) => [...prev, { type: 'success', text: `Sucesso! Movido ${oldPath} para ${newPath}` }]);
-            movedCount++;
-        } catch (e) {
-            const errMsg = `Erro ao mover ${oldPath}: ${e.message || e}`;
-            console.error("[Organizar] Erro movendo.", file.name, e);
-            setMigrationLogs((prev) => [...prev, { type: 'error', text: errMsg }]);
-            errorCount++;
-        }
-      } else {
-        skippedCount++;
-      }
-    }
-    setMigrationLogs((prev) => [...prev, { type: 'success', text: `Concluído! Movidos: ${movedCount}, Ignorados (não-WebP/já migrados): ${skippedCount}, Erros: ${errorCount}` }]);
-    if (!skipConfirm) {
-      alert(`Movimentação de WebPs concluída! Movidos: ${movedCount}, Erros: ${errorCount}`);
-    }
-  };
-
-  const runMigration = async (skipConfirm = true) => {
-    if (!skipConfirm) {
-      if (!confirm("Isso irá migrar PDFs, TXT, CSV e XLSX para WebPs. Continuar?")) return;
-    }
-    
-    setMigrationLogs((prev) => [...prev, { type: 'info', text: "Iniciando migração de PDFs, TXT, CSV e XLSX para WebPs..." }]);
-    const { data: reports, error } = await supabase.from("reports").select("*");
-    if (error) {
-      const errMsg = `Erro ao buscar relatórios no DB: ${error.message || error}`;
-      console.error(error);
-      setMigrationLogs((prev) => [...prev, { type: 'error', text: errMsg }]);
-      return;
-    }
-    
-    const count = reports?.length || 0;
-    setMigrationLogs((prev) => [...prev, { type: 'info', text: `Total de relatórios encontrados no DB: ${count}` }]);
-    if (!reports || count === 0) {
-      setMigrationLogs((prev) => [...prev, { type: 'warn', text: "Nenhum relatório para migrar." }]);
-      return;
-    }
-    
-    let migratedCount = 0;
-    let skippedCount = 0;
-    let errorCount = 0;
-
-    for (const report of reports) {
-      try {
-        if (report.filePath.toLowerCase().endsWith('.webp') || report.filePath.startsWith('migrados_webp/')) {
-            skippedCount++;
-            continue;
-        }
-        const ext = report.filePath.split('.').pop().toLowerCase();
-        if (!['pdf', 'txt', 'csv', 'xlsx', 'xls'].includes(ext)) {
-            skippedCount++;
-            continue;
-        }
-        
-        setMigrationLogs((prev) => [...prev, { type: 'info', text: `Baixando arquivo original para conversão: ${report.filePath}` }]);
-        const { data: blob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(report.filePath);
-        if (downloadErr) { 
-            const errMsg = `Falha ao baixar ${report.filePath}: ${downloadErr.message || downloadErr}`;
-            console.error(downloadErr);
-            setMigrationLogs((prev) => [...prev, { type: 'error', text: errMsg }]);
-            errorCount++;
-            continue; 
-        }
-        
-        setMigrationLogs((prev) => [...prev, { type: 'info', text: `Convertendo arquivo (${ext.toUpperCase()}) para WebP...` }]);
-        let imageBlob;
-        if (ext === 'pdf') {
-            imageBlob = await convertPdfToImageBlob(new File([blob], report.fileName));
-        } else {
-            imageBlob = await convertNonPdfToImageBlob(new File([blob], report.fileName), ext);
-        }
-
-        const targetFolder = 'migrados_webp';
-        const rawNewFileName = report.fileName.replace(/\.(pdf|txt|csv|xlsx|xls)$/i, '.webp');
-        const safeFileName = rawNewFileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
-        const uniqueFileName = `${report.id}_${safeFileName}`;
-        const newFilePath = `${targetFolder}/${uniqueFileName}`;
-        
-        setMigrationLogs((prev) => [...prev, { type: 'info', text: `Enviando WebP convertido: ${newFilePath}` }]);
-        const { error: uploadErr } = await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
-        if (uploadErr) {
-            const errMsg = `Erro ao enviar ${newFilePath}: ${uploadErr.message || uploadErr}`;
-            console.error(uploadErr);
-            setMigrationLogs((prev) => [...prev, { type: 'error', text: errMsg }]);
-            errorCount++;
-            continue;
-        }
-
-        await supabase.from("reports").update({ filePath: newFilePath, fileName: rawNewFileName }).eq("id", report.id);
-
-        const { error: removeErr } = await supabase.storage.from("arquivos_extratos").remove([report.filePath]);
-        if (removeErr) {
-            const errMsg = `Aviso: Falha ao remover arquivo original no storage: ${removeErr.message || removeErr}`;
-            console.error(removeErr);
-            setMigrationLogs((prev) => [...prev, { type: 'warn', text: errMsg }]);
-        }
-        
-        setMigrationLogs((prev) => [...prev, { type: 'success', text: `Sucesso! Relatório ID ${report.id} (${report.fileName}) migrado para WebP.` }]);
-        migratedCount++;
-      } catch (e) {
-        const errMsg = `Erro na migração do relatório ${report.fileName}: ${e.message || e}`;
-        console.error(e);
-        setMigrationLogs((prev) => [...prev, { type: 'error', text: errMsg }]);
-        errorCount++;
-      }
-    }
-    
-    setMigrationLogs((prev) => [...prev, { type: 'success', text: `Concluído! Migrados: ${migratedCount}, Ignorados (já WebPs): ${skippedCount}, Erros: ${errorCount}` }]);
-    if (!skipConfirm) {
-      alert(`Migração concluída! Migrados: ${migratedCount}, Erros: ${errorCount}`);
-    }
-  };
-
-  const regerarImagensAssim = async (skipConfirm = false) => {
-    if (!skipConfirm) {
-      if (!confirm("Isso irá regerar as imagens de visualização de todos os 23 relatórios da ASSIM em formato paisagem com fidelidade absoluta. Continuar?")) return;
-    }
-
-    setMigrationLogs((prev) => [...prev, { type: 'info', text: "Iniciando a regeneração de imagens dos relatórios ASSIM..." }]);
-
-    try {
-      // 1. Fetch all reports from the metadata 'reports' table that are ASSIM-related
-      const { data: dbReps, error: errDb } = await supabase.from('reports').select('*');
-      if (errDb) throw errDb;
-
-      const assimDbReports = dbReps.filter(r => {
-        const name = String(r.fileName || r.filePath || '').toUpperCase();
-        const partner = String(r.parceiro || '').toUpperCase();
-        return name.includes("ASSIM") || partner.includes("ASSIM");
-      });
-
-      setMigrationLogs((prev) => [...prev, { type: 'info', text: `Encontrados ${assimDbReports.length} relatórios ASSIM no cadastro de extratos.` }]);
-
-      // 2. Fetch all savedReports to get the raw data rows
-      const { data: savedReps, error: errSaved } = await supabase.from('savedReports').select('*');
-      if (errSaved) throw errSaved;
-
-      setMigrationLogs((prev) => [...prev, { type: 'info', text: `Buscando dados das planilhas correspondentes na nuvem...` }]);
-
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (const r of assimDbReports) {
-        try {
-          const fileName = r.fileName || '';
-          
-          // Match logic
-          const nfMatch = fileName.match(/NOTA\s*(\d+)/i);
-          let nf = nfMatch ? nfMatch[1] : null;
-          
-          // Fallback parsing for files like "2° DEZENA - MARÇO ODONTO - 132.webp"
-          if (!nf) {
-            const numMatch = fileName.match(/-?\s*(\d+)\.webp/i);
-            if (numMatch) nf = numMatch[1];
-          }
-
-          const isDental = fileName.toUpperCase().includes("DENTAL") || fileName.toUpperCase().includes("ODONTO");
-
-          let matchedSaved = null;
-          if (nf) {
-            // Special correction for Feb 111 vs Feb 112 discrepancy
-            let targetNf = nf;
-            if (nf === '111') {
-              targetNf = '112'; // Map Feb NOTA 111 file to Feb NOTA 112 saved report
-            }
-
-            matchedSaved = savedReps.find(sr => {
-              const srRows = Array.isArray(sr.dados) ? sr.dados : [];
-              const hasNf = srRows.some(row => String(row.notaFiscal) === String(targetNf));
-              const srIsDental = String(sr.nome || '').toUpperCase().includes("DENTAL") || String(sr.nome || '').toUpperCase().includes("ODONTO");
-              return hasNf && (isDental ? srIsDental : !srIsDental);
-            });
-
-            // Fallback match by NF only
-            if (!matchedSaved) {
-              matchedSaved = savedReps.find(sr => {
-                const srRows = Array.isArray(sr.dados) ? sr.dados : [];
-                return srRows.some(row => String(row.notaFiscal) === String(targetNf));
-              });
-            }
-          }
-
-          let rows = [];
-          if (matchedSaved) {
-            rows = matchedSaved.dados || [];
-            setMigrationLogs((prev) => [...prev, { type: 'info', text: `Relatório "${fileName}" associado à planilha salva ID ${matchedSaved.id}.` }]);
-          } else {
-            // Mock rows for the 2 June reports to display them beautifully in landscape
-            if (nf === '262') {
-              rows = [
-                { contrato: "312894", cliente: "ANA MARIA SILVA", cod: "12458", parcela: "1", vidas: "1", data: "2026-06-05", valorTotal: 1200.00, comissaoPorcentagem: 5, comissao: 60.00, situacao: "FATURADO PROTETTA NF", notaFiscal: "262" }
-              ];
-              setMigrationLogs((prev) => [...prev, { type: 'info', text: `Relatório "${fileName}" (NF 262): Carregando dados da referência original.` }]);
-            } else if (nf === '272') {
-              rows = [
-                { contrato: "312905", cliente: "JOSE CARLOS SOUZA", cod: "12459", parcela: "1", vidas: "1", data: "2026-06-08", valorTotal: 950.00, comissaoPorcentagem: 5, comissao: 47.50, situacao: "FATURADO PROTETTA NF", notaFiscal: "272" }
-              ];
-              setMigrationLogs((prev) => [...prev, { type: 'info', text: `Relatório "${fileName}" (NF 272): Carregando dados da referência original.` }]);
-            } else {
-              setMigrationLogs((prev) => [...prev, { type: 'warn', text: `Aviso: Não foi possível obter dados para "${fileName}". Usando estrutura vazia.` }]);
-            }
-          }
-
-          // Let's draw the image
-          const blob = await new Promise((resolveBlob, rejectBlob) => {
-            try {
-              const canvasWidth = 1200;
-              const canvasHeight = 850;
-
-              const canvas = document.createElement('canvas');
-              canvas.width = canvasWidth;
-              canvas.height = canvasHeight;
-              const ctx = canvas.getContext('2d');
-
-              const setupCanvas = (dynamicHeight) => {
-                canvas.height = dynamicHeight;
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                // Header
-                ctx.fillStyle = '#f3f4f6';
-                ctx.fillRect(0, 0, canvas.width, 100);
-                
-                ctx.fillStyle = '#111827';
-                ctx.font = 'bold 20px sans-serif';
-                ctx.fillText(fileName.replace(/\.(jpg|webp)$/i, ''), 40, 58);
-                
-                // Badge
-                ctx.fillStyle = '#10b981';
-                const badgeX = canvasWidth - 100;
-                ctx.fillRect(badgeX, 35, 60, 30);
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 12px sans-serif';
-                ctx.fillText("ASSIM", badgeX + 11, 54);
-                
-                // Border
-                ctx.strokeStyle = '#e5e7eb';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(0, 0, canvas.width, canvas.height);
-              };
-
-              const formatCurrency = (val) => {
-                if (val === null || val === undefined || val === '') return '';
-                const num = parseFloat(val);
-                if (isNaN(num)) return String(val);
-                return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-              };
-
-              const formatDate = (dateStr) => {
-                if (!dateStr) return '';
-                if (dateStr.includes('-')) {
-                  const parts = dateStr.split('T')[0].split('-');
-                  if (parts.length === 3) {
-                    return `${parts[2]}/${parts[1]}/${parts[0]}`;
-                  }
-                }
-                return dateStr;
-              };
-
-              const findValue = (row, possibleKeys) => {
-                for (const k of possibleKeys) {
-                  const foundKey = Object.keys(row).find(key => key.toLowerCase() === k.toLowerCase());
-                  if (foundKey !== undefined) return row[foundKey];
-                }
-                return '';
-              };
-
-              const finalHeaders = [
-                'Contrato',
-                'Cliente',
-                'Cód.',
-                'Parcela',
-                'Vidas',
-                'Data',
-                'Valor Total',
-                '%',
-                'Comissão',
-                'Situação',
-                'Nota Fiscal'
-              ];
-
-              const colWidths = [100, 250, 80, 60, 50, 90, 100, 50, 100, 150, 90];
-              const colPositions = [40];
-              for (let i = 0; i < colWidths.length; i++) {
-                colPositions.push(colPositions[i] + colWidths[i]);
-              }
-
-              const finalRows = rows.map(row => {
-                const getVal = (possibleKeys) => findValue(row, possibleKeys);
-                return {
-                  'Contrato': getVal(['contrato']),
-                  'Cliente': getVal(['cliente']),
-                  'Cód.': getVal(['cod']),
-                  'Parcela': getVal(['parcela']),
-                  'Vidas': getVal(['vidas']),
-                  'Data': formatDate(getVal(['data', 'inicioVigencia'])),
-                  'Valor Total': parseFloat(getVal(['valorTotal', 'valor'])) || 0,
-                  '%': parseFloat(getVal(['comissaoPorcentagem'])) || 0,
-                  'Comissão': parseFloat(getVal(['comissao'])) || 0,
-                  'Situação': getVal(['situacao', 'status']),
-                  'Nota Fiscal': getVal(['notaFiscal', 'nfe'])
-                };
-              });
-
-              const startY = 230;
-              const headerHeight = 35;
-              const rowHeight = 28;
-              const totalRowsHeight = (finalRows.length + 1) * rowHeight; // +1 for sum row
-              const footerSpace = 100;
-              const neededHeight = startY + headerHeight + totalRowsHeight + footerSpace;
-              const finalHeight = Math.max(canvasHeight, neededHeight);
-
-              setupCanvas(finalHeight);
-
-              ctx.fillStyle = '#374151';
-              ctx.font = 'bold 16px sans-serif';
-              ctx.fillText("Demonstrativo ASSIM Saúde (Fidelidade Absoluta)", 40, 150);
-              
-              ctx.fillStyle = '#6b7280';
-              ctx.font = '14px sans-serif';
-              ctx.fillText(`Total de Registros: ${finalRows.length}`, 40, 180);
-
-              // Draw Table Header
-              let y = startY;
-              ctx.fillStyle = '#f3f4f6';
-              ctx.fillRect(40, y, canvasWidth - 80, 35);
-              ctx.strokeStyle = '#d1d5db';
-              ctx.lineWidth = 1;
-              ctx.strokeRect(40, y, canvasWidth - 80, 35);
-
-              ctx.fillStyle = '#111827';
-              ctx.font = 'bold 11px sans-serif';
-              for (let c = 0; c < finalHeaders.length; c++) {
-                let align = 'left';
-                if (c === 4 || c === 5 || c === 7 || c === 10) align = 'center';
-                if (c === 6 || c === 8) align = 'right';
-
-                let xOffset = 8;
-                if (align === 'right') {
-                  ctx.textAlign = 'right';
-                  xOffset = colWidths[c] - 8;
-                } else if (align === 'center') {
-                  ctx.textAlign = 'center';
-                  xOffset = colWidths[c] / 2;
-                } else {
-                  ctx.textAlign = 'left';
-                }
-                ctx.fillText(finalHeaders[c], colPositions[c] + xOffset, y + 22);
-              }
-
-              y += 35;
-
-              let totalValorTotal = 0;
-              let totalComissao = 0;
-              let totalVidasCount = 0;
-
-              // Draw Table Rows
-              ctx.font = '11px sans-serif';
-              finalRows.forEach((row) => {
-                totalValorTotal += row['Valor Total'] || 0;
-                totalComissao += row['Comissão'] || 0;
-                totalVidasCount += parseInt(row['Vidas']) || 0;
-
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(40, y, canvasWidth - 80, 28);
-                ctx.strokeStyle = '#e5e7eb';
-                ctx.strokeRect(40, y, canvasWidth - 80, 28);
-
-                ctx.fillStyle = '#111827';
-                for (let c = 0; c < finalHeaders.length; c++) {
-                  let val = '';
-                  let align = 'left';
-
-                  const rawVal = row[finalHeaders[c]];
-                  if (c === 6) val = formatCurrency(rawVal);
-                  else if (c === 7) val = `${rawVal}%`;
-                  else if (c === 8) val = formatCurrency(rawVal);
-                  else val = String(rawVal !== undefined && rawVal !== null ? rawVal : '');
-
-                  if (c === 4 || c === 5 || c === 7 || c === 10) align = 'center';
-                  if (c === 6 || c === 8) align = 'right';
-
-                  let xOffset = 8;
-                  if (align === 'right') {
-                    ctx.textAlign = 'right';
-                    xOffset = colWidths[c] - 8;
-                  } else if (align === 'center') {
-                    ctx.textAlign = 'center';
-                    xOffset = colWidths[c] / 2;
-                  } else {
-                    ctx.textAlign = 'left';
-                  }
-                  ctx.fillText(val, colPositions[c] + xOffset, y + 18);
-                }
-                y += 28;
-              });
-
-              // Sum Row
-              ctx.fillStyle = '#ffffff';
-              ctx.fillRect(40, y, canvasWidth - 80, 28);
-              ctx.strokeStyle = '#d1d5db';
-              ctx.lineWidth = 1;
-              ctx.strokeRect(40, y, canvasWidth - 80, 28);
-
-              ctx.fillStyle = '#111827';
-              ctx.font = 'bold 11px sans-serif';
-
-              for (let c = 0; c < finalHeaders.length; c++) {
-                let val = '';
-                let align = 'left';
-
-                if (c === 1) val = 'Total Geral';
-                else if (c === 4) val = String(totalVidasCount);
-                else if (c === 6) val = formatCurrency(totalValorTotal);
-                else if (c === 8) val = formatCurrency(totalComissao);
-
-                if (c === 4 || c === 5 || c === 7 || c === 10) align = 'center';
-                if (c === 6 || c === 8) align = 'right';
-
-                let xOffset = 8;
-                if (align === 'right') {
-                  ctx.textAlign = 'right';
-                  xOffset = colWidths[c] - 8;
-                } else if (align === 'center') {
-                  ctx.textAlign = 'center';
-                  xOffset = colWidths[c] / 2;
-                } else {
-                  ctx.textAlign = 'left';
-                }
-                ctx.fillText(val, colPositions[c] + xOffset, y + 18);
-              }
-              y += 28;
-
-              // Draw vertical lines
-              ctx.strokeStyle = '#d1d5db';
-              for (let c = 1; c < finalHeaders.length; c++) {
-                ctx.beginPath();
-                ctx.moveTo(colPositions[c], startY);
-                ctx.lineTo(colPositions[c], y);
-                ctx.stroke();
-              }
-
-              ctx.textAlign = 'left';
-              ctx.fillStyle = '#6b7280';
-              ctx.font = 'italic 11px sans-serif';
-              ctx.fillText(`Exibindo todas as ${finalRows.length} linhas de dados extraídos com fidelidade absoluta.`, 40, y + 25);
-              
-              ctx.fillStyle = '#10b981';
-              ctx.font = 'bold 14px sans-serif';
-              ctx.fillText("Visualização de planilha original ASSIM com fidelidade absoluta", 40, finalHeight - 40);
-
-              canvas.toBlob(resolveBlob, 'image/webp', 0.85);
-            } catch (err) {
-              rejectBlob(err);
-            }
-          });
-
-          // 3. Upload the WebP blob to Supabase Storage, overwriting the old WebP
-          const pathTarget = r.filePath;
-          setMigrationLogs((prev) => [...prev, { type: 'info', text: `Atualizando imagem no storage: ${pathTarget}` }]);
-          
-          const { error: uploadErr } = await supabase.storage.from("arquivos_extratos").upload(pathTarget, blob, { upsert: true });
-          if (uploadErr) throw uploadErr;
-
-          setMigrationLogs((prev) => [...prev, { type: 'success', text: `Sucesso! Relatório ID ${r.id} (${fileName}) regenerado em formato paisagem com fidelidade absoluta.` }]);
-          successCount++;
-        } catch (innerErr) {
-          errorCount++;
-          const errMsg = `Erro ao processar relatório ID ${r.id}: ${innerErr.message || innerErr}`;
-          console.error(innerErr);
-          setMigrationLogs((prev) => [...prev, { type: 'error', text: errMsg }]);
-        }
-      }
-
-      setMigrationLogs((prev) => [...prev, { type: 'success', text: `Processo concluído! Sucessos: ${successCount}, Falhas: ${errorCount}.` }]);
-      alert(`Regeneração dos relatórios ASSIM concluída!\nSucesso: ${successCount}\nFalhas: ${errorCount}`);
-    } catch (e) {
-      const errMsg = `Erro geral na regeneração dos relatórios ASSIM: ${e.message || e}`;
-      console.error(e);
-      setMigrationLogs((prev) => [...prev, { type: 'error', text: errMsg }]);
-      alert(errMsg);
-    }
   };
 
   useEffect(() => {
@@ -1759,78 +1224,7 @@ export default function App() {
       } catch (e) { console.error(e); }
     };
 
-    const runMigrationSilent = async () => {
-      if (window.__MIGRATED_PDF_TO_WEBP__) return;
-      window.__MIGRATED_PDF_TO_WEBP__ = true;
-      console.log("Running automatic silent files migration...");
-
-      // Automatically organize any leftover or unorganized .webp files first
-      try {
-        await moveExistingWebpFilesToMigrados(true);
-      } catch (organizeErr) {
-        console.error("[Organizar Silencioso] Erro ao mover WebPs antigos:", organizeErr);
-      }
-
-      const { data: reports, error } = await supabase.from("reports").select("*");
-      if (error || !reports || reports.length === 0) return;
-
-      for (const report of reports) {
-        try {
-          if (report.filePath.toLowerCase().endsWith('.webp') || report.filePath.startsWith('migrados_webp/')) {
-            continue;
-          }
-          const ext = report.filePath.split('.').pop().toLowerCase();
-          if (!['pdf', 'txt', 'csv', 'xlsx', 'xls'].includes(ext)) continue;
-
-          console.log("Automatically migrating file:", report.filePath);
-          const { data: blob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(report.filePath);
-          if (downloadErr) {
-            console.error(`Falha ao baixar ${report.filePath}:`, downloadErr);
-            continue;
-          }
-
-          let imageBlob;
-          if (ext === 'pdf') {
-            imageBlob = await convertPdfToImageBlob(new File([blob], report.fileName));
-          } else {
-            imageBlob = await convertNonPdfToImageBlob(new File([blob], report.fileName), ext);
-          }
-
-          const targetFolder = 'migrados_webp';
-          const rawNewFileName = report.fileName.replace(/\.(pdf|txt|csv|xlsx|xls)$/i, '.webp');
-          const safeFileName = rawNewFileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
-          const uniqueFileName = `${report.id}_${safeFileName}`;
-          const newFilePath = `${targetFolder}/${uniqueFileName}`;
-
-          const { error: uploadErr } = await supabase.storage.from("arquivos_extratos").upload(newFilePath, imageBlob);
-          if (uploadErr) {
-            console.error("Upload failed for migrated file:", uploadErr);
-            continue;
-          }
-
-          await supabase.from("reports").update({ filePath: newFilePath, fileName: rawNewFileName }).eq("id", report.id);
-
-          const { error: removeErr } = await supabase.storage.from("arquivos_extratos").remove([report.filePath]);
-          if (removeErr) {
-            console.error("Failed to remove original file:", report.filePath, removeErr);
-          } else {
-            console.log("Successfully removed original file:", report.filePath);
-          }
-        } catch (e) {
-          console.error("Erro na migração automática do arquivo:", report.fileName, e);
-        }
-      }
-      console.log("Migração automática concluída");
-    };
-
     handleCorrigirSulamAmerica();
-    runMigrationSilent();
-
-    // Assign globally
-    window.executarMigracao = runMigration;
-    window.executarMigração = runMigration;
-    window.organizarMigrados = moveExistingWebpFilesToMigrados;
-    window.regerarImagensAssim = regerarImagensAssim;
   }, []);
 
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -1933,7 +1327,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState("dashboard");
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
-  const [migrationLogs, setMigrationLogs] = useState([]);
+
 
   const [dbReports, setDbReports] = useState([]);
   const [selectedExtratos, setSelectedExtratos] = useState([]);
@@ -2001,6 +1395,147 @@ export default function App() {
     tipo: "Todos",
     situacao: "Todos",
   });
+
+  const [rollbackLogs, setRollbackLogs] = useState([]);
+  const [isRollingBack, setIsRollingBack] = useState(false);
+
+  const runImageToPdfRollback = async () => {
+    if (isRollingBack) return;
+    if (!confirm("Isso irá converter TODOS os arquivos em 'migrados_webp' e 'migrados_jpg' de volta para PDF e movê-los para a raiz da pasta 'arquivos_extratos'. Deseja continuar?")) return;
+
+    setIsRollingBack(true);
+    setRollbackLogs([]);
+    setRollbackLogs(prev => [...prev, { type: 'info', text: 'Iniciando varredura das pastas migrados_webp e migrados_jpg...' }]);
+
+    try {
+      const { data: webpFiles, error: webpError } = await supabase.storage.from("arquivos_extratos").list("migrados_webp", { limit: 10000 });
+      const { data: jpgFiles, error: jpgError } = await supabase.storage.from("arquivos_extratos").list("migrados_jpg", { limit: 10000 });
+
+      if (webpError) {
+        setRollbackLogs(prev => [...prev, { type: 'error', text: `Erro ao listar migrados_webp: ${webpError.message}` }]);
+      }
+      if (jpgError) {
+        setRollbackLogs(prev => [...prev, { type: 'error', text: `Erro ao listar migrados_jpg: ${jpgError.message}` }]);
+      }
+
+      const targets = [];
+      if (webpFiles) {
+        webpFiles.forEach(f => {
+          if (f.name !== '.emptyFolderPlaceholder' && f.name) {
+            targets.push({
+              folder: 'migrados_webp',
+              fileName: f.name,
+              fullPath: `migrados_webp/${f.name}`,
+              ext: 'webp'
+            });
+          }
+        });
+      }
+      if (jpgFiles) {
+        jpgFiles.forEach(f => {
+          if (f.name !== '.emptyFolderPlaceholder' && f.name) {
+            targets.push({
+              folder: 'migrados_jpg',
+              fileName: f.name,
+              fullPath: `migrados_jpg/${f.name}`,
+              ext: 'jpg'
+            });
+          }
+        });
+      }
+
+      setRollbackLogs(prev => [...prev, { type: 'info', text: `Encontrados ${targets.length} arquivos para converter.` }]);
+
+      if (targets.length === 0) {
+        setRollbackLogs(prev => [...prev, { type: 'warn', text: 'Nenhum arquivo encontrado nas pastas de migração.' }]);
+        setIsRollingBack(false);
+        alert("Nenhum arquivo encontrado nas pastas de migração!");
+        return;
+      }
+
+      const { data: dbReps, error: errDb } = await supabase.from('reports').select('*');
+      if (errDb) {
+        setRollbackLogs(prev => [...prev, { type: 'error', text: `Erro ao buscar relatórios do BD: ${errDb.message}` }]);
+      }
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const target of targets) {
+        try {
+          setRollbackLogs(prev => [...prev, { type: 'info', text: `Baixando ${target.fullPath}...` }]);
+          
+          const { data: blob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(target.fullPath);
+          if (downloadErr) {
+            throw new Error(`Falha no download: ${downloadErr.message}`);
+          }
+
+          setRollbackLogs(prev => [...prev, { type: 'info', text: `Convertendo ${target.fileName} para PDF...` }]);
+
+          const pdfBlob = await convertImageBlobToPdfBlob(blob);
+
+          const nameWithoutExt = target.fileName.substring(0, target.fileName.lastIndexOf('.')) || target.fileName;
+          const newFileName = `${nameWithoutExt}.pdf`;
+          const newFilePath = newFileName;
+
+          setRollbackLogs(prev => [...prev, { type: 'info', text: `Enviando ${newFilePath} para a raiz do bucket...` }]);
+
+          const { error: uploadErr } = await supabase.storage.from("arquivos_extratos").upload(newFilePath, pdfBlob, { upsert: true });
+          if (uploadErr) {
+            throw new Error(`Falha no upload: ${uploadErr.message}`);
+          }
+
+          if (dbReps && dbReps.length > 0) {
+            const matchingReports = dbReps.filter(r => 
+              String(r.filePath).toLowerCase() === String(target.fullPath).toLowerCase() ||
+              String(r.filePath).toLowerCase() === String(target.fileName).toLowerCase()
+            );
+
+            if (matchingReports.length > 0) {
+              setRollbackLogs(prev => [...prev, { type: 'info', text: `Atualizando ${matchingReports.length} registros no banco de dados...` }]);
+              for (const rep of matchingReports) {
+                let cleanDocName = rep.fileName || '';
+                cleanDocName = cleanDocName.replace(/\.(webp|jpg|jpeg)$/i, '.pdf');
+                
+                const { error: updateErr } = await supabase.from("reports").update({
+                  filePath: newFilePath,
+                  fileName: cleanDocName
+                }).eq("id", rep.id);
+
+                if (updateErr) {
+                  setRollbackLogs(prev => [...prev, { type: 'warn', text: `Erro ao atualizar relatório ID ${rep.id} no BD: ${updateErr.message}` }]);
+                }
+              }
+            }
+          }
+
+          setRollbackLogs(prev => [...prev, { type: 'info', text: `Excluindo arquivo antigo ${target.fullPath}...` }]);
+          const { error: removeErr } = await supabase.storage.from("arquivos_extratos").remove([target.fullPath]);
+          if (removeErr) {
+            setRollbackLogs(prev => [...prev, { type: 'warn', text: `Erro ao remover arquivo original: ${removeErr.message}` }]);
+          }
+
+          setRollbackLogs(prev => [...prev, { type: 'success', text: `Sucesso! Arquivo ${target.fileName} convertido e movido para ${newFilePath}.` }]);
+          successCount++;
+        } catch (err) {
+          errorCount++;
+          setRollbackLogs(prev => [...prev, { type: 'error', text: `Falha ao processar ${target.fileName}: ${err.message || err}` }]);
+        }
+      }
+
+      setRollbackLogs(prev => [...prev, { type: 'success', text: `Processo concluído! Sucessos: ${successCount}, Falhas: ${errorCount}` }]);
+      alert(`Processo concluído!\nSucesso: ${successCount}\nFalhas: ${errorCount}`);
+      
+      if (typeof fetchReports === 'function') {
+        fetchReports();
+      }
+    } catch (generalErr) {
+      setRollbackLogs(prev => [...prev, { type: 'error', text: `Erro geral no processo: ${generalErr.message || generalErr}` }]);
+      alert(`Erro geral: ${generalErr.message}`);
+    } finally {
+      setIsRollingBack(false);
+    }
+  };
 
   // Empresas Gestão
   const [rawEmpresasList, setRawEmpresasList] = useState(() => {
@@ -5616,23 +5151,11 @@ export default function App() {
       for (const arq of formData.arquivos) {
         let file = arq.file;
         let fileName = file.name;
-        const ext = file.name.split('.').pop().toLowerCase();
-
-        if (ext === 'pdf') {
-          const imageBlob = await convertPdfToImageBlob(file);
-          file = new File([imageBlob], file.name.replace(/\.pdf$/i, '.webp'), { type: 'image/webp' });
-          fileName = file.name;
-        } else if (['txt', 'csv', 'xlsx', 'xls'].includes(ext)) {
-          const imageBlob = await convertNonPdfToImageBlob(file, ext);
-          file = new File([imageBlob], file.name.replace(/\.(txt|csv|xlsx|xls)$/i, '.webp'), { type: 'image/webp' });
-          fileName = file.name;
-        }
 
         const saveOperadora = (finalOperadora || "").trim();
         const saveCodOperadora = (formData.codOperadora || "").trim();
         const safeFileName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
-        const targetFolder = 'migrados_webp';
-        const filePath = `${targetFolder}/${Date.now()}_${safeFileName}`;
+        const filePath = `${Date.now()}_${safeFileName}`;
         const { error: uploadErr } = await supabase.storage
           .from("arquivos_extratos")
           .upload(filePath, file);
@@ -18090,72 +17613,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors animate-in fade-in duration-300">
-                  <div className="flex items-center space-x-3 mb-4">
-                    <div className="bg-amber-100 dark:bg-amber-500/20 p-2 rounded-lg">
-                      <FolderTree className="text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-slate-900 dark:text-white text-lg">
-                        Migração & Higienização de Imagens
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Organiza os arquivos de imagens e documentos convertidos para a pasta segura "migrados_webp" no Supabase Storage.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-3 mb-4">
-                    <button
-                      onClick={() => moveExistingWebpFilesToMigrados(false)}
-                      className="flex-1 py-3 px-4 bg-amber-50 dark:bg-amber-950/20 hover:bg-amber-100 dark:hover:bg-amber-950/40 text-amber-800 dark:text-amber-300 rounded-lg flex items-center justify-center border border-amber-200 dark:border-amber-800 transition-colors font-bold text-sm"
-                    >
-                      <RefreshCw size={16} className="mr-2" />
-                      Organizar WebPs Soltos
-                    </button>
-                    <button
-                      onClick={() => runMigration(false)}
-                      className="flex-1 py-3 px-4 bg-emerald-50 dark:bg-emerald-950/20 hover:bg-emerald-100 dark:hover:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 rounded-lg flex items-center justify-center border border-emerald-200 dark:border-emerald-800 transition-colors font-bold text-sm"
-                    >
-                      <FileCheck size={16} className="mr-2" />
-                      Migrar PDFs/Outros para WebP
-                    </button>
-                    <button
-                      onClick={() => regerarImagensAssim(false)}
-                      className="flex-1 py-3 px-4 bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/40 text-blue-800 dark:text-blue-300 rounded-lg flex items-center justify-center border border-blue-200 dark:border-blue-800 transition-colors font-bold text-sm"
-                    >
-                      <Layers size={16} className="mr-2" />
-                      Regerar Imagens ASSIM (Fidelidade Absoluta)
-                    </button>
-                  </div>
 
-                  {migrationLogs.length > 0 && (
-                    <div className="mt-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Histórico de Execução:</span>
-                        <button 
-                          onClick={() => setMigrationLogs([])}
-                          className="text-xs text-red-500 hover:text-red-700 font-bold"
-                        >
-                          Limpar Histórico
-                        </button>
-                      </div>
-                      <div className="bg-slate-900 text-slate-100 font-mono text-xs p-4 rounded-lg max-h-60 overflow-y-auto space-y-1">
-                        {migrationLogs.map((log, idx) => (
-                          <div 
-                            key={idx} 
-                            className={
-                              log.type === 'success' ? 'text-emerald-400' :
-                              log.type === 'error' ? 'text-red-400' :
-                              log.type === 'warn' ? 'text-amber-400' : 'text-slate-300'
-                            }
-                          >
-                            {log.text}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
 
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors animate-in fade-in duration-300">
                   <div className="flex items-center space-x-3 mb-4">
@@ -18182,6 +17640,64 @@ export default function App() {
                       </span>
                     </button>
                   </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors animate-in fade-in duration-300">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <div className="bg-amber-100 dark:bg-amber-500/20 p-2 rounded-lg">
+                      <FileText className="text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900 dark:text-white text-lg">
+                        Reversão de Imagens para PDF
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Varre as pastas "migrados_webp" and "migrados_jpg", converte todas as imagens de volta para formato PDF com alta fidelidade, move-as de volta para a raiz do bucket e atualiza as referências no banco de dados.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4">
+                    <button
+                      onClick={runImageToPdfRollback}
+                      disabled={isRollingBack}
+                      className={`p-4 rounded-lg flex items-center justify-center transition-all font-bold text-sm hover:scale-[1.01] ${
+                        isRollingBack 
+                        ? "bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed" 
+                        : "bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-500/10"
+                      }`}
+                    >
+                      <RefreshCw size={20} className={`mr-2 ${isRollingBack ? "animate-spin" : ""}`} />
+                      {isRollingBack ? "Convertendo e Movendo Arquivos..." : "Converter e Mover Imagens para PDF Agora"}
+                    </button>
+                  </div>
+
+                  {rollbackLogs.length > 0 && (
+                    <div className="mt-4 border-t border-slate-150 dark:border-slate-700/50 pt-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Histórico de Reversão:</span>
+                        <button 
+                          onClick={() => setRollbackLogs([])}
+                          className="text-xs text-red-500 hover:text-red-700 font-bold"
+                        >
+                          Limpar Logs
+                        </button>
+                      </div>
+                      <div className="bg-slate-900 text-slate-100 font-mono text-xs p-4 rounded-lg max-h-60 overflow-y-auto space-y-1 shadow-inner">
+                        {rollbackLogs.map((log, idx) => (
+                          <div 
+                            key={idx} 
+                            className={
+                              log.type === 'success' ? 'text-emerald-400' :
+                              log.type === 'error' ? 'text-red-400' :
+                              log.type === 'warn' ? 'text-amber-400' : 'text-slate-300'
+                            }
+                          >
+                            {log.text}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
