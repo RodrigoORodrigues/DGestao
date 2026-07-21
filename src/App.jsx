@@ -173,6 +173,8 @@ export async function syncGlobalSysConfigToDB(
               ),
         custom_op_seg: savedCustomOpSeg ||
           existingDados.custom_op_seg || { operadoras: [], seguradoras: [] },
+        backup_enabled: localStorage.getItem("backup_enabled") === "true",
+        backup_destination: localStorage.getItem("backup_destination") || "nuvem",
       },
       empresa: "Todas",
     };
@@ -2148,6 +2150,8 @@ export default function App() {
   );
   const [backupList, setBackupList] = useState([]);
   const [loadingBackups, setLoadingBackups] = useState(false);
+  const [backupEnabled, setBackupEnabled] = useState(false);
+  const [backupDestination, setBackupDestination] = useState("nuvem");
   const tabelaPdfRef = useRef(null);
   const [editRowIndex, setEditRowIndex] = useState(-1);
   const [editRowData, setEditRowData] = useState({});
@@ -2503,33 +2507,64 @@ export default function App() {
     if (!supabase) return;
     setLoadingBackups(true);
     try {
-      const { data, error } = await supabase.storage
-        .from("arquivos_extratos")
-        .list("backups", {
-          sortBy: { column: "created_at", order: "desc" },
-        });
-      if (error) throw error;
-      const empStr = nomeEmpresaUpper.replace(/[^A-Z0-9]/gi, "_");
-      const filtered = (data || [])
-        .filter(
-          (f) => f.name && f.name.includes(empStr) && f.name.endsWith(".zip"),
-        )
-        .slice(0, 10);
-      setBackupList(filtered);
+      // 1. Carrega backups da Nuvem (Storage)
+      let cloudList = [];
+      try {
+        const { data, error } = await supabase.storage
+          .from("arquivos_extratos")
+          .list("backups", {
+            sortBy: { column: "created_at", order: "desc" },
+          });
+        if (!error && data) {
+          const empStr = nomeEmpresaUpper.replace(/[^A-Z0-9]/gi, "_");
+          cloudList = data
+            .filter((f) => f.name && f.name.includes(empStr) && f.name.endsWith(".zip"))
+            .map((f) => ({
+              id: f.id || f.name,
+              name: f.name,
+              created_at: f.created_at || new Date(),
+              type: "cloud",
+            }));
+        }
+      } catch (storageErr) {
+        console.warn("Erro ao buscar backups do storage:", storageErr);
+      }
+
+      // 2. Carrega backups do Banco de Dados (savedReports)
+      let dbList = [];
+      try {
+        const { data, error } = await supabase
+          .from("savedReports")
+          .select("id, nome, dataCriacao")
+          .like("nome", "___BACKUP_DB_%")
+          .order("dataCriacao", { ascending: false })
+          .limit(10);
+        if (!error && data) {
+          dbList = data.map((r) => ({
+            id: r.id,
+            name: r.nome,
+            created_at: r.dataCriacao || new Date(),
+            type: "database",
+          }));
+        }
+      } catch (dbErr) {
+        console.warn("Erro ao buscar backups do banco:", dbErr);
+      }
+
+      const combined = [...cloudList, ...dbList].sort(
+        (a, b) => new Date(b.created_at) - new Date(a.created_at)
+      );
+      setBackupList(combined.slice(0, 10));
     } catch (err) {
       let msg = err.message || String(err);
-      if (msg.includes("Failed to fetch") || msg.includes("Bucket not found")) {
-        setBackupList([
-          {
-            id: "error",
-            name: "ERRO: O Bucket 'arquivos_extratos' não existe ou está bloqueado no Supabase.",
-            created_at: new Date(),
-          },
-        ]);
-      } else {
-        setBackupList([]);
-      }
-      console.warn("Aviso ao carregar backups:", msg);
+      setBackupList([
+        {
+          id: "error",
+          name: "ERRO ao buscar lista unificada de backups: " + msg,
+          created_at: new Date(),
+          type: "error",
+        },
+      ]);
     } finally {
       setLoadingBackups(false);
     }
@@ -2572,6 +2607,17 @@ export default function App() {
         setCustomOpSeg(parsed);
         localStorage.setItem("protetta_custom_op_seg", JSON.stringify(parsed));
       }
+
+      // Carregar configurações de backup
+      const isBackupOn = sysConfig.hasOwnProperty("backup_enabled")
+        ? !!sysConfig.backup_enabled
+        : (localStorage.getItem("backup_enabled") === "true");
+      const destBackup = sysConfig.backup_destination || localStorage.getItem("backup_destination") || "nuvem";
+
+      setBackupEnabled(isBackupOn);
+      setBackupDestination(destBackup);
+      localStorage.setItem("backup_enabled", String(isBackupOn));
+      localStorage.setItem("backup_destination", destBackup);
 
       // Reconstruct and update companies list based on data
       setRawEmpresasList((prev) => {
@@ -3310,91 +3356,140 @@ export default function App() {
     }
   }, [currentUser, nomeEmpresaUpper]);
 
-  // BACKUP AUTOMÁTICO
-  const backupDataRef = useRef({
+  // CONFIGURAÇÕES E FLUXO DE BACKUP
+  const backupParamsRef = useRef({
     clientes,
     savedReportsList,
     vendasList,
     usersList,
     dbReports,
+    backupDestination,
+    nomeEmpresaUpper,
+    currentUser,
   });
+
   useEffect(() => {
-    backupDataRef.current = {
+    backupParamsRef.current = {
       clientes,
       savedReportsList,
       vendasList,
       usersList,
       dbReports,
+      backupDestination,
+      nomeEmpresaUpper,
+      currentUser,
     };
-  }, [clientes, savedReportsList, vendasList, usersList, dbReports]);
+  }, [clientes, savedReportsList, vendasList, usersList, dbReports, backupDestination, nomeEmpresaUpper, currentUser]);
 
+  const updateBackupConfig = async (enabled, destination) => {
+    setBackupEnabled(enabled);
+    setBackupDestination(destination);
+    localStorage.setItem("backup_enabled", String(enabled));
+    localStorage.setItem("backup_destination", destination);
+    await syncGlobalSysConfigToDB(null, null, null);
+  };
+
+  const createBackup = async (destinationToUse, isAuto = false) => {
+    const params = backupParamsRef.current;
+    const data = {
+      clientes: params.clientes,
+      savedReportsList: params.savedReportsList.filter((r) => r.nome !== "___LOCAL_SYS_CONFIG___" && !r.nome.startsWith("___BACKUP_DB_")),
+      vendasList: params.vendasList,
+      usersList: params.usersList.map((u) => ({ username: u.username, role: u.role })),
+      dbReports: params.dbReports,
+    };
+
+    if (data.clientes.length === 0 && data.savedReportsList.length === 0 && data.vendasList.length === 0) {
+      if (!isAuto) showAlert("Não existem dados suficientes para backup.");
+      return;
+    }
+
+    const now = new Date();
+    const dateStr = dataDeHojeInterna();
+    const timeStr = `${String(now.getHours()).padStart(2, "0")}h${String(now.getMinutes()).padStart(2, "0")}m`;
+    const empStr = params.nomeEmpresaUpper.replace(/[^A-Z0-9]/gi, "_");
+    const zipName = `${empStr}_Backup_${isAuto ? "Auto_" : ""}${dateStr}_${timeStr}.zip`;
+
+    if (destinationToUse === "local") {
+      try {
+        const zip = new JSZip();
+        zip.file("clientes.json", JSON.stringify(data.clientes, null, 2));
+        zip.file("historico_relatorios.json", JSON.stringify(data.savedReportsList, null, 2));
+        zip.file("vendas_servicos.json", JSON.stringify(data.vendasList, null, 2));
+        zip.file("utilizadores.json", JSON.stringify(data.usersList, null, 2));
+        zip.file("arquivos_extratos.json", JSON.stringify(data.dbReports, null, 2));
+
+        const content = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(content);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = zipName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        if (!isAuto) showAlert("Backup local transferido com sucesso!");
+      } catch (err) {
+        if (!isAuto) showAlert("Erro ao gerar backup local: " + err.message);
+      }
+    } else if (destinationToUse === "banco") {
+      try {
+        const payload = {
+          nome: `___BACKUP_DB_${empStr}_${isAuto ? "Auto_" : ""}${dateStr}_${timeStr}___`,
+          dados: data,
+          empresa: params.nomeEmpresaUpper,
+          periodo: isAuto ? "Backup_Auto" : "Backup",
+          dataCriacao: now.toISOString(),
+          criadoPor: isAuto ? "System_Auto" : (params.currentUser?.username || "System"),
+        };
+        const { error } = await supabase.from("savedReports").insert([payload]);
+        if (error) throw error;
+        if (!isAuto) showAlert("Backup salvo no banco de dados com sucesso!");
+        fetchBackups();
+      } catch (err) {
+        if (!isAuto) showAlert("Erro ao salvar backup no banco de dados: " + err.message);
+      }
+    } else {
+      try {
+        const zip = new JSZip();
+        zip.file("clientes.json", JSON.stringify(data.clientes, null, 2));
+        zip.file("historico_relatorios.json", JSON.stringify(data.savedReportsList, null, 2));
+        zip.file("vendas_servicos.json", JSON.stringify(data.vendasList, null, 2));
+        zip.file("utilizadores.json", JSON.stringify(data.usersList, null, 2));
+        zip.file("arquivos_extratos.json", JSON.stringify(data.dbReports, null, 2));
+
+        const content = await zip.generateAsync({ type: "blob" });
+        const filename = `backups/${zipName}`;
+        const { error: uploadErr } = await supabase.storage
+          .from("arquivos_extratos")
+          .upload(filename, content, {
+            contentType: "application/zip",
+            upsert: true,
+          });
+        if (uploadErr) throw uploadErr;
+        if (!isAuto) showAlert("Backup salvo na nuvem com sucesso!");
+        fetchBackups();
+      } catch (err) {
+        if (!isAuto) showAlert("Erro ao salvar backup na nuvem: " + err.message);
+      }
+    }
+  };
+
+  // BACKUP AUTOMÁTICO REATIVO E ATIVÁVEL
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !backupEnabled) return;
+
+    console.log(`[Auto Backup] Agendando rotina periódica a cada 15 min. Destino: ${backupDestination}`);
     const interval = setInterval(
       async () => {
-        const data = backupDataRef.current;
-        if (
-          data.clientes.length === 0 &&
-          data.savedReportsList.length === 0 &&
-          data.vendasList.length === 0
-        )
-          return;
-        try {
-          const zip = new JSZip();
-          zip.file("clientes.json", JSON.stringify(data.clientes, null, 2));
-          zip.file(
-            "historico_relatorios.json",
-            JSON.stringify(data.savedReportsList, null, 2),
-          );
-          zip.file(
-            "vendas_servicos.json",
-            JSON.stringify(data.vendasList, null, 2),
-          );
-          zip.file(
-            "utilizadores.json",
-            JSON.stringify(
-              data.usersList.map((u) => ({
-                username: u.username,
-                role: u.role,
-              })),
-              null,
-              2,
-            ),
-          );
-          zip.file(
-            "arquivos_extratos.json",
-            JSON.stringify(data.dbReports, null, 2),
-          );
-
-          const content = await zip.generateAsync({ type: "blob" });
-
-          const now = new Date();
-          const timeStr = `${String(now.getHours()).padStart(2, "0")}h${String(now.getMinutes()).padStart(2, "0")}m`;
-          const empStr = nomeEmpresaUpper.replace(/[^A-Z0-9]/gi, "_");
-          const filename = `backups/${empStr}_AutoBackup_${dataDeHojeInterna()}_${timeStr}.zip`;
-
-          if (supabase) {
-            const { error: uploadErr } = await supabase.storage
-              .from("arquivos_extratos")
-              .upload(filename, content, {
-                contentType: "application/zip",
-                upsert: true,
-              });
-            if (uploadErr) {
-              console.error("Auto backup upload falhou", uploadErr);
-            } else {
-              console.log("Backup automático guardado na nuvem:", filename);
-            }
-          }
-        } catch (err) {
-          console.error("Auto backup falhou", err);
-        }
+        console.log(`[Auto Backup] Iniciando salvamento automático... Destino: ${backupDestination}`);
+        await createBackup(backupDestination, true);
       },
       15 * 60 * 1000,
-    ); // 15 minutos
+    );
 
     return () => clearInterval(interval);
-  }, [currentUser, nomeEmpresaUpper, supabase]);
+  }, [currentUser, backupEnabled, backupDestination]);
 
   useEffect(() => {
     if (currentView === "settings") {
@@ -3402,27 +3497,59 @@ export default function App() {
     }
   }, [currentView, nomeEmpresaUpper, supabase]);
 
-  const handleRestoreBackup = (filename) => {
+  const handleRestoreBackup = (backup) => {
+    const isDb = backup.type === "database";
+    const displayName = isDb
+      ? backup.name.replace("___BACKUP_DB_", "").replace("___", "").replace(/_/g, " ")
+      : backup.name.replace("backups/", "");
+
     showConfirm(
-      `Tem a certeza que deseja restaurar o backup ${filename}? ISTO SUBSTITUIRÁ TODOS OS DADOS ATUAIS DA LOJA.`,
+      `Tem a certeza que deseja restaurar o backup ${displayName}? ISTO SUBSTITUIRÁ TODOS OS DADOS ATUAIS DA LOJA.`,
       async () => {
         setLoading(true);
         setLoadingMsg("A descarregar backup...");
         try {
-          const { data: fileBlob, error } = await supabase.storage
-            .from("arquivos_extratos")
-            .download(`backups/${filename}`);
-          if (error) throw error;
+          let clientesData = null;
+          let historicoData = null;
+          let vendasData = null;
+          let extratosData = null;
+
+          if (isDb) {
+            setLoadingMsg("Carregando do banco de dados...");
+            const { data, error } = await supabase
+              .from("savedReports")
+              .select("dados")
+              .eq("id", backup.id)
+              .single();
+            if (error) throw error;
+            const payload = data.dados;
+            clientesData = payload.clientes;
+            historicoData = payload.savedReportsList;
+            vendasData = payload.vendasList;
+            extratosData = payload.dbReports;
+          } else {
+            setLoadingMsg("Descarregando do cloud storage...");
+            const { data: fileBlob, error } = await supabase.storage
+              .from("arquivos_extratos")
+              .download(`backups/${backup.name}`);
+            if (error) throw error;
+
+            setLoadingMsg("Descompactando arquivo .ZIP...");
+            const zip = new JSZip();
+            const unzipped = await zip.loadAsync(fileBlob);
+
+            const clientesFile = unzipped.file("clientes.json");
+            const historicoFile = unzipped.file("historico_relatorios.json");
+            const vendasFile = unzipped.file("vendas_servicos.json");
+            const extratosFile = unzipped.file("arquivos_extratos.json");
+
+            if (clientesFile) clientesData = JSON.parse(await clientesFile.async("text"));
+            if (historicoFile) historicoData = JSON.parse(await historicoFile.async("text"));
+            if (vendasFile) vendasData = JSON.parse(await vendasFile.async("text"));
+            if (extratosFile) extratosData = JSON.parse(await extratosFile.async("text"));
+          }
 
           setLoadingMsg("A restaurar banco de dados...");
-          const zip = new JSZip();
-          const unzipped = await zip.loadAsync(fileBlob);
-
-          const clientesFile = unzipped.file("clientes.json");
-          const historicoFile = unzipped.file("historico_relatorios.json");
-          const vendasFile = unzipped.file("vendas_servicos.json");
-          const extratosFile = unzipped.file("arquivos_extratos.json");
-
           // Clear existing first
           await supabase
             .from("vendas")
@@ -3432,39 +3559,24 @@ export default function App() {
           await supabase.from("clientes").delete().neq("id", 0);
           await supabase.from("reports").delete().neq("id", 0);
 
-          if (clientesFile) {
-            const parsedData = JSON.parse(await clientesFile.async("text"));
-            const data = parsedData.map((c) => {
-              return c;
-            });
-            if (data.length > 0) await supabase.from("clientes").upsert(data);
+          if (clientesData && clientesData.length > 0) {
+            await supabase.from("clientes").upsert(clientesData);
           }
-          if (historicoFile) {
-            const parsedData = JSON.parse(await historicoFile.async("text"));
-            const data = parsedData.map((r) => {
-              return r;
-            });
-            if (data.length > 0)
-              await supabase.from("savedReports").upsert(data);
+          if (historicoData && historicoData.length > 0) {
+            await supabase.from("savedReports").upsert(historicoData);
           }
-          if (vendasFile) {
-            const data = JSON.parse(await vendasFile.async("text"));
-            if (data.length > 0) await supabase.from("vendas").upsert(data);
+          if (vendasData && vendasData.length > 0) {
+            await supabase.from("vendas").upsert(vendasData);
           }
-          if (extratosFile) {
-            const parsedData = JSON.parse(await extratosFile.async("text"));
-            // Be careful not to overwrite global reports, so only restore current empresa
-            const myReports = parsedData
-              .filter(
-                (r) =>
-                  (r.empresa || "").toUpperCase() === nomeEmpresaUpper ||
-                  (r.empresa || "").toUpperCase().includes(nomeEmpresaUpper),
-              )
-              .map((r) => {
-                return r;
-              });
-            if (myReports.length > 0)
+          if (extratosData && extratosData.length > 0) {
+            const myReports = extratosData.filter(
+              (r) =>
+                (r.empresa || "").toUpperCase() === nomeEmpresaUpper ||
+                (r.empresa || "").toUpperCase().includes(nomeEmpresaUpper),
+            );
+            if (myReports.length > 0) {
               await supabase.from("reports").upsert(myReports);
+            }
           }
 
           await loadFromDB();
@@ -17644,6 +17756,115 @@ export default function App() {
                 </h2>
               </header>
               <div className="grid gap-6">
+                {/* CONFIGURAÇÃO DE BACKUP AUTOMÁTICO */}
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <div className="bg-blue-100 dark:bg-blue-500/20 p-2 rounded-lg">
+                      <Settings className="text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900 dark:text-white text-lg">
+                        Backup Automático
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Ative/desative os backups automáticos periódicos (a cada 15 minutos) e defina o destino ideal dos dados.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
+                      <div>
+                        <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                          Status do Backup Automático
+                        </span>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {backupEnabled ? "Os backups automáticos periódicos estão ATIVADOS." : "Os backups automáticos periódicos estão DESATIVADOS por padrão."}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => updateBackupConfig(!backupEnabled, backupDestination)}
+                        className={`px-4 py-2 rounded-lg font-bold text-xs transition-all flex items-center ${
+                          backupEnabled
+                            ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                            : "bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-500/10"
+                        }`}
+                      >
+                        {backupEnabled ? (
+                          <>
+                            <CheckCircle size={14} className="mr-1.5" />
+                            Ativo
+                          </>
+                        ) : (
+                          <>
+                            <XCircle size={14} className="mr-1.5" />
+                            Inativo
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+                        Local onde Salvar
+                      </label>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <button
+                          onClick={() => updateBackupConfig(backupEnabled, "banco")}
+                          className={`p-3 rounded-lg border text-left transition-all ${
+                            backupDestination === "banco"
+                              ? "bg-blue-50 dark:bg-blue-950/20 border-blue-500 text-blue-900 dark:text-blue-300"
+                              : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300"
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2 mb-1">
+                            <Database size={16} className={backupDestination === "banco" ? "text-blue-500" : "text-slate-400"} />
+                            <span className="text-sm font-bold">Banco de Dados</span>
+                          </div>
+                          <p className="text-[11px] opacity-80 leading-relaxed">
+                            Salva as tabelas em formato JSON diretamente na tabela interna de configurações do PostgreSQL.
+                          </p>
+                        </button>
+
+                        <button
+                          onClick={() => updateBackupConfig(backupEnabled, "local")}
+                          className={`p-3 rounded-lg border text-left transition-all ${
+                            backupDestination === "local"
+                              ? "bg-blue-50 dark:bg-blue-950/20 border-blue-500 text-blue-900 dark:text-blue-300"
+                              : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300"
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2 mb-1">
+                            <Download size={16} className={backupDestination === "local" ? "text-blue-500" : "text-slate-400"} />
+                            <span className="text-sm font-bold">Local (Download)</span>
+                          </div>
+                          <p className="text-[11px] opacity-80 leading-relaxed">
+                            Aciona um download automático de um arquivo .ZIP diretamente para a sua pasta de downloads.
+                          </p>
+                        </button>
+
+                        <button
+                          onClick={() => updateBackupConfig(backupEnabled, "nuvem")}
+                          className={`p-3 rounded-lg border text-left transition-all ${
+                            backupDestination === "nuvem"
+                              ? "bg-blue-50 dark:bg-blue-950/20 border-blue-500 text-blue-900 dark:text-blue-300"
+                              : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300"
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2 mb-1">
+                            <HardDrive size={16} className={backupDestination === "nuvem" ? "text-blue-500" : "text-slate-400"} />
+                            <span className="text-sm font-bold">Nuvem (Supabase)</span>
+                          </div>
+                          <p className="text-[11px] opacity-80 leading-relaxed">
+                            Salva o arquivo .ZIP de forma ultra-segura na nuvem (Storage do Supabase) na pasta 'backups/'.
+                          </p>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CRIAR BACKUP MANUAL INSTANTÂNEO */}
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors">
                   <div className="flex items-center space-x-3 mb-4">
                     <div className="bg-emerald-100 dark:bg-emerald-500/20 p-2 rounded-lg">
@@ -17651,96 +17872,68 @@ export default function App() {
                     </div>
                     <div>
                       <h3 className="font-bold text-slate-900 dark:text-white text-lg">
-                        Criar Backup de Segurança (Cloud)
+                        Criar Backup Manual Instantâneo
                       </h3>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Exporta os dados armazenados no Supabase para o seu PC.
+                        Gera e salva um backup completo imediatamente usando o local escolhido (atualmente:{" "}
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                          {backupDestination === "banco"
+                            ? "Banco de Dados"
+                            : backupDestination === "local"
+                            ? "Local (Download)"
+                            : "Nuvem (Supabase)"}
+                        </span>
+                        ).
                       </p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <button
                       onClick={async () => {
-                        if (
-                          clientes.length === 0 &&
-                          savedReportsList.length === 0 &&
-                          vendasList.length === 0
-                        )
-                          return showAlert(
-                            "Não existem dados suficientes para backup.",
-                          );
                         setLoading(true);
-                        setLoadingMsg("A gerar Backup Geral Supabase...");
+                        setLoadingMsg("Gerando backup...");
                         try {
-                          const zip = new JSZip();
-                          zip.file(
-                            "clientes.json",
-                            JSON.stringify(clientes, null, 2),
-                          );
-                          zip.file(
-                            "historico_relatorios.json",
-                            JSON.stringify(savedReportsList, null, 2),
-                          );
-                          zip.file(
-                            "vendas_servicos.json",
-                            JSON.stringify(vendasList, null, 2),
-                          );
-                          zip.file(
-                            "utilizadores.json",
-                            JSON.stringify(
-                              usersList.map((u) => ({
-                                username: u.username,
-                                role: u.role,
-                              })),
-                              null,
-                              2,
-                            ),
-                          );
-                          zip.file(
-                            "arquivos_extratos.json",
-                            JSON.stringify(dbReports, null, 2),
-                          );
-
-                          const content = await zip.generateAsync({
-                            type: "blob",
-                          });
-                          const url = URL.createObjectURL(content);
-                          const a = document.createElement("a");
-                          a.href = url;
-                          a.download = `DonGestao_BackupGeral_${dataDeHojeInterna()}.zip`;
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
-                          URL.revokeObjectURL(url);
-                          showAlert("Backup transferido com sucesso!");
-                        } catch (err) {
-                          showAlert("Erro ao gerar ZIP: " + err.message);
+                          await createBackup(backupDestination, false);
                         } finally {
                           setLoading(false);
                         }
                       }}
-                      className="p-4 bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg flex items-center justify-center border border-slate-300 dark:border-slate-600 hover:border-emerald-500 dark:hover:border-emerald-500 transition-colors text-slate-800 dark:text-white"
+                      className="p-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center justify-center transition-all shadow-md shadow-emerald-500/10 font-bold text-sm hover:scale-[1.01]"
+                    >
+                      <Save size={20} className="mr-2" />
+                      Criar Backup no Local Configurado
+                    </button>
+
+                    <button
+                      onClick={async () => {
+                        setLoading(true);
+                        setLoadingMsg("Gerando arquivo .ZIP...");
+                        try {
+                          await createBackup("local", false);
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}
+                      className="p-4 bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg flex items-center justify-center border border-slate-300 dark:border-slate-600 transition-all text-slate-800 dark:text-white font-semibold text-sm hover:scale-[1.01]"
                     >
                       <Download size={20} className="mr-2" />
-                      <span className="font-bold">
-                        Baixar Arquivo .ZIP Completo
-                      </span>
+                      Forçar Download de ZIP Local
                     </button>
                   </div>
                 </div>
 
+                {/* RESTAURAR BACKUPS UNIFICADOS */}
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors">
                   <div className="flex items-center space-x-3 mb-4">
-                    <div className="bg-blue-100 dark:bg-blue-500/20 p-2 rounded-lg">
-                      <History className="text-blue-600 dark:text-blue-400" />
+                    <div className="bg-indigo-100 dark:bg-indigo-500/20 p-2 rounded-lg">
+                      <History className="text-indigo-600 dark:text-indigo-400" />
                     </div>
                     <div>
                       <h3 className="font-bold text-slate-900 dark:text-white text-lg">
-                        Restaurar Backup (Cloud)
+                        Restaurar Backup Recente
                       </h3>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Restaure os dados de um dos 10 últimos backups
-                        automáticos.
+                        Restaure dados completos de um dos últimos 10 backups detectados na nuvem ou no banco.
                       </p>
                     </div>
                     <button
@@ -17760,40 +17953,51 @@ export default function App() {
                       </div>
                     ) : backupList.length === 0 ? (
                       <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                        Nenhum backup encontrado na nuvem para esta loja.
+                        Nenhum backup recente encontrado para esta loja.
                       </div>
                     ) : (
-                      backupList.map((backup) => (
-                        <div
-                          key={backup.id}
-                          className={`flex items-center justify-between p-3 bg-white border border-slate-200 dark:border-slate-300 rounded-lg ${backup.id === "error" ? "border-red-400" : "hover:border-blue-400"} transition-colors`}
-                        >
-                          <div>
-                            <p
-                              className={`text-sm font-bold ${backup.id === "error" ? "text-red-600" : "text-black"}`}
-                            >
-                              {backup.name.replace("backups/", "")}
-                            </p>
-                            <p className="text-xs text-slate-600">
-                              Criado em:{" "}
-                              {new Date(backup.created_at).toLocaleString()}
-                            </p>
+                      backupList.map((backup) => {
+                        const isDb = backup.type === "database";
+                        return (
+                          <div
+                            key={backup.id}
+                            className={`flex items-center justify-between p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700/50 rounded-lg ${backup.id === "error" ? "border-red-400" : "hover:border-blue-400"} transition-colors`}
+                          >
+                            <div className="flex-1 min-w-0 pr-4">
+                              <p
+                                className={`text-sm font-bold truncate ${backup.id === "error" ? "text-red-600" : "text-slate-900 dark:text-white"}`}
+                              >
+                                {isDb
+                                  ? backup.name.replace("___BACKUP_DB_", "").replace("___", "").replace(/_/g, " ")
+                                  : backup.name.replace("backups/", "")}
+                              </p>
+                              <div className="flex items-center space-x-2 mt-1">
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                    isDb
+                                      ? "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300"
+                                      : "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
+                                  }`}
+                                >
+                                  {isDb ? "Banco de Dados" : "Nuvem (ZIP)"}
+                                </span>
+                                <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                                  {new Date(backup.created_at).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                            {backup.id !== "error" && (
+                              <button
+                                onClick={() => handleRestoreBackup(backup)}
+                                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg flex items-center transition-colors shadow-sm shrink-0"
+                              >
+                                <RefreshCw size={14} className="mr-1.5" />
+                                Restaurar
+                              </button>
+                            )}
                           </div>
-                          {backup.id !== "error" && (
-                            <button
-                              onClick={() =>
-                                handleRestoreBackup(
-                                  backup.name.replace("backups/", ""),
-                                )
-                              }
-                              className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg flex items-center transition-colors shadow-sm"
-                            >
-                              <RefreshCw size={14} className="mr-1.5" />
-                              Restaurar
-                            </button>
-                          )}
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>
