@@ -513,11 +513,10 @@ export default function App() {
         };
         reader.readAsText(file);
       } else {
-        const isPreventInitial = file.name.toUpperCase().includes("PREVENT");
-        const isAssimInitial = file.name.toUpperCase().includes("ASSIM");
-        const isLandscapeInitial = isPreventInitial || isAssimInitial;
-        const initialCanvasWidth = isLandscapeInitial ? 1200 : 800;
-        const initialCanvasHeight = isLandscapeInitial ? 850 : 1000;
+        // Spreadsheets (XLS, XLSX, CSV) are processed in Landscape format by default to avoid cutting off columns
+        const isLandscapeInitial = true;
+        const initialCanvasWidth = 1200;
+        const initialCanvasHeight = 850;
 
         const canvas = document.createElement('canvas');
         canvas.width = initialCanvasWidth;
@@ -735,11 +734,24 @@ export default function App() {
           let colPositions = [40];
 
           const isPrevent = file.name.toUpperCase().includes("PREVENT") || 
-                            headers.some(h => String(h).toLowerCase() === 'beneficiario' || String(h).toLowerCase() === 'valor provento');
+                            headers.some(h => {
+                              const sh = String(h).toLowerCase();
+                              return sh === 'beneficiario' || sh === 'valor provento' || sh.includes('provento');
+                            }) ||
+                            rows.some(row => 
+                              Object.values(row).some(val => String(val).toUpperCase().includes("PREVENT"))
+                            );
           const isAssim = file.name.toUpperCase().includes("ASSIM") || 
-                          headers.some(h => String(h).toLowerCase() === 'contrato');
-          const isLandscape = isPrevent || isAssim;
-          const currentCanvasWidth = isLandscape ? 1200 : 800;
+                          headers.some(h => {
+                            const sh = String(h).toLowerCase();
+                            return sh === 'contrato' || sh === 'vidas' || sh === 'comissão' || sh === 'valor total' || sh.includes('assim');
+                          }) ||
+                          rows.some(row => 
+                            Object.values(row).some(val => String(val).toUpperCase().includes("ASSIM"))
+                          );
+          // Spreadsheets are rendered in landscape format to fit multiple columns beautifully
+          const isLandscape = true;
+          const currentCanvasWidth = 1200;
 
           const formatCurrency = (val) => {
             if (val === null || val === undefined || val === '') return '';
@@ -2103,6 +2115,12 @@ export default function App() {
     setSelectedEmpresaOverride(empName);
     if (empName) {
       localStorage.setItem("protetta_selected_empresa", empName);
+      setEmpresasList((prevRaw) =>
+        prevRaw.map((e) => ({
+          ...e,
+          isDefault: e.nome.toUpperCase() === empName.toUpperCase(),
+        }))
+      );
     } else {
       localStorage.removeItem("protetta_selected_empresa");
     }
