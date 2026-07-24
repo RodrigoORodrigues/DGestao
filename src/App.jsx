@@ -57,64 +57,45 @@ export async function safeSupabaseUpdate(table, updateObj, eqField, eqValue) {
   return { data, error: null };
 }
 
-let syncUserPrefsTimeout = null;
-let pendingPrefsByUser = {};
-
 export async function syncUserPrefsToDB(userId, prefs) {
   if (!userId) return;
+  try {
+    const nomePref = `___USER_PREFS_${userId}___`;
+    const { data: existing } = await supabase
+      .from("savedReports")
+      .select("*")
+      .eq("nome", nomePref)
+      .limit(1);
 
-  if (!pendingPrefsByUser[userId]) {
-    pendingPrefsByUser[userId] = {};
-  }
-  pendingPrefsByUser[userId] = { ...pendingPrefsByUser[userId], ...prefs };
-
-  if (syncUserPrefsTimeout) {
-    clearTimeout(syncUserPrefsTimeout);
-  }
-
-  syncUserPrefsTimeout = setTimeout(async () => {
-    const prefsToSync = { ...pendingPrefsByUser[userId] };
-    delete pendingPrefsByUser[userId];
-    syncUserPrefsTimeout = null;
-
-    try {
-      const nomePref = `___USER_PREFS_${userId}___`;
-      const { data: existing } = await supabase
-        .from("savedReports")
-        .select("*")
-        .eq("nome", nomePref)
-        .limit(1);
-
-      let existingDados = {};
-      if (existing && existing.length > 0) {
-        existingDados = Array.isArray(existing[0].dados)
-          ? existing[0].dados[0]
-          : existing[0].dados;
-        if (!existingDados) existingDados = {};
-      }
-
-      const payload = {
-        nome: nomePref,
-        dados: { ...existingDados, ...prefsToSync },
-        empresa: "System_Prefs",
-      };
-
-      if (existing && existing.length > 0) {
-        await safeSupabaseUpdate("savedReports", payload, "id", existing[0].id);
-      } else {
-        await safeSupabaseInsert("savedReports", [
-          {
-            ...payload,
-            periodo: "System",
-            dataCriacao: new Date().toISOString(),
-            criadoPor: `User_${userId}`,
-          },
-        ]);
-      }
-    } catch (e) {
-      console.error("User Prefs Sync Failed", e);
+    let existingDados = {};
+    if (existing && existing.length > 0) {
+      existingDados = Array.isArray(existing[0].dados)
+        ? existing[0].dados[0]
+        : existing[0].dados;
+      if (!existingDados) existingDados = {};
     }
-  }, 1000);
+
+    const payload = {
+      nome: nomePref,
+      dados: { ...existingDados, ...prefs },
+      empresa: "System_Prefs",
+    };
+
+    if (existing && existing.length > 0) {
+      await safeSupabaseUpdate("savedReports", payload, "id", existing[0].id);
+    } else {
+      await safeSupabaseInsert("savedReports", [
+        {
+          ...payload,
+          periodo: "System",
+          dataCriacao: new Date().toISOString(),
+          criadoPor: `User_${userId}`,
+        },
+      ]);
+    }
+  } catch (e) {
+    console.error("User Prefs Sync Failed", e);
+  }
 }
 
 export async function syncGlobalSysConfigToDB(
@@ -173,8 +154,6 @@ export async function syncGlobalSysConfigToDB(
               ),
         custom_op_seg: savedCustomOpSeg ||
           existingDados.custom_op_seg || { operadoras: [], seguradoras: [] },
-        backup_enabled: localStorage.getItem("backup_enabled") === "true",
-        backup_destination: localStorage.getItem("backup_destination") || "nuvem",
       },
       empresa: "Todas",
     };
@@ -216,7 +195,6 @@ import EmpresasGestao from "./components/EmpresasGestao";
 import AjudaSuporte from "./components/AjudaSuporte";
 import AceiteTermosLGPD from "./components/AceiteTermosLGPD";
 import TermosLGPDGestao from "./components/TermosLGPDGestao";
-import html2pdf from "html2pdf.js";
 
 // Ícones importados diretamente do pacote npm que instalámos
 import {
@@ -230,6 +208,7 @@ import {
   ArrowLeft,
   Building2,
   FolderTree,
+  Cloud,
   FileSpreadsheet,
   Download,
   X,
@@ -286,10 +265,11 @@ import {
 
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
-import * as pdfjsLib from "pdfjs-dist";
+import * as pdfjsLibNamespace from "pdfjs-dist";
+const pdfjsLib = pdfjsLibNamespace.default || pdfjsLibNamespace;
 
 // Configuração do Worker do PDF.js - usa a mesma versão da biblioteca
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || "2.16.105"}/pdf.worker.min.js`;
 const printColLabels = {
   cod: "Cód.",
   contrato: "Contrato",
@@ -382,734 +362,17 @@ export const getClientTipoForVendaName = (vendaName, clientes, pjClientsList = [
 };
 
 export default function App() {
-  const convertImageBlobToPdfBlob = async (imageBlob) => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      const objectUrl = URL.createObjectURL(imageBlob);
-      
-      img.onload = async () => {
-        try {
-          const container = document.createElement('div');
-          container.style.position = 'fixed';
-          container.style.top = '-9999px';
-          container.style.left = '-9999px';
-          container.style.width = `${img.naturalWidth}px`;
-          container.style.height = `${img.naturalHeight}px`;
-          container.appendChild(img);
-          document.body.appendChild(container);
-          
-          const isLandscape = img.naturalWidth > img.naturalHeight;
-          
-          const opt = {
-            margin: 0,
-            filename: 'converted.pdf',
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { 
-              scale: 2, 
-              useCORS: true, 
-              logging: false 
-            },
-            jsPDF: { 
-              unit: 'px', 
-              format: [img.naturalWidth, img.naturalHeight], 
-              orientation: isLandscape ? 'l' : 'p' 
-            }
-          };
-          
-          const pdfBlob = await html2pdf().from(img).set(opt).output('blob');
-          
-          document.body.removeChild(container);
-          URL.revokeObjectURL(objectUrl);
-          
-          resolve(pdfBlob);
-        } catch (err) {
-          URL.revokeObjectURL(objectUrl);
-          reject(err);
-        }
-      };
-      
-      img.onerror = (err) => {
-        URL.revokeObjectURL(objectUrl);
-        reject(new Error("Falha ao carregar a imagem para conversão"));
-      };
-      
-      img.src = objectUrl;
-    });
-  };
-
-
-  const convertNonPdfToImageBlob = async (file, ext) => {
-    return new Promise((resolve) => {
-      if (ext === 'txt') {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          try {
-            const text = e.target.result;
-            const textUpper = text.toUpperCase();
-
-            const hasAssimKeywords = textUpper.includes("ASSIM") || 
-                                     textUpper.includes("NOVO COMISSIONAMENTO") || 
-                                     textUpper.includes("PROTETTA CORRETORA");
-            const hasPreventKeywords = textUpper.includes("PREVENT");
-            
-            const lines = text.split('\n');
-            const hasLongLines = lines.some(line => line.length > 80);
-
-            const isPrevent = file.name.toUpperCase().includes("PREVENT") || hasPreventKeywords;
-            const isAssim = file.name.toUpperCase().includes("ASSIM") || hasAssimKeywords;
-            const isLandscape = isPrevent || isAssim || hasLongLines;
-
-            const canvasWidth = isLandscape ? 1300 : 800;
-            const lineCountToDraw = Math.min(lines.length, 100);
-            const canvasHeight = Math.max(1000, 150 + lineCountToDraw * 18 + 100);
-
-            const canvas = document.createElement('canvas');
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
-            const ctx = canvas.getContext('2d');
-
-            // Fill background with clean modern cool white
-            ctx.fillStyle = '#f8fafc';
-            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-
-            // Inner content background
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(20, 20, canvasWidth - 40, canvasHeight - 40);
-
-            // Frame border
-            ctx.strokeStyle = '#cbd5e1';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(20, 20, canvasWidth - 40, canvasHeight - 40);
-
-            // Header bar
-            ctx.fillStyle = '#f1f5f9';
-            ctx.fillRect(20, 20, canvasWidth - 40, 60);
-            ctx.strokeStyle = '#cbd5e1';
-            ctx.beginPath();
-            ctx.moveTo(20, 80);
-            ctx.lineTo(canvasWidth - 20, 80);
-            ctx.stroke();
-
-            // Header Text
-            ctx.fillStyle = '#0f172a';
-            ctx.font = 'bold 16px sans-serif';
-            ctx.fillText(file.name, 40, 55);
-
-            // Badge
-            ctx.fillStyle = '#3b82f6';
-            ctx.fillRect(canvasWidth - 120, 35, 80, 30);
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 12px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText("TXT REPORT", canvasWidth - 80, 54);
-            ctx.textAlign = 'left';
-
-            // Draw text lines
-            ctx.fillStyle = '#1e293b';
-            ctx.font = '13px monospace';
-
-            let y = 120;
-            const maxChars = isLandscape ? 160 : 90;
-
-            for (let i = 0; i < lineCountToDraw; i++) {
-              const lineText = lines[i].substring(0, maxChars);
-              ctx.fillText(lineText, 40, y);
-              y += 18;
-            }
-
-            if (lines.length > 100) {
-              ctx.fillStyle = '#64748b';
-              ctx.font = 'italic 12px sans-serif';
-              ctx.fillText(`... [Conteúdo truncado: exibindo 100 de ${lines.length} linhas para visualização] ...`, 40, y + 10);
-            }
-
-            canvas.toBlob(resolve, 'image/webp', 0.85);
-          } catch (err) {
-            console.error("Erro ao desenhar TXT:", err);
-            const canvas = document.createElement('canvas');
-            canvas.width = 800;
-            canvas.height = 600;
-            canvas.toBlob(resolve, 'image/webp', 0.85);
-          }
-        };
-        reader.readAsText(file);
-      } else {
-        // Spreadsheets (XLS, XLSX, CSV) are processed in Landscape format by default to avoid cutting off columns
-        const isLandscapeInitial = true;
-        const initialCanvasWidth = 1200;
-        const initialCanvasHeight = 850;
-
-        const canvas = document.createElement('canvas');
-        canvas.width = initialCanvasWidth;
-        canvas.height = initialCanvasHeight;
-        const ctx = canvas.getContext('2d');
-
-        const setupCanvas = (dynamicWidth, dynamicHeight) => {
-          canvas.width = dynamicWidth;
-          canvas.height = dynamicHeight;
-          
-          // Background
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          
-          // Header
-          ctx.fillStyle = '#f3f4f6';
-          ctx.fillRect(0, 0, canvas.width, 100);
-          
-          ctx.fillStyle = '#111827';
-          ctx.font = 'bold 20px sans-serif';
-          ctx.fillText(file.name, 40, 58);
-          
-          // Badge
-          ctx.fillStyle = ext === 'xlsx' || ext === 'xls' ? '#10b981' : '#3b82f6';
-          const badgeX = dynamicWidth - 100;
-          ctx.fillRect(badgeX, 35, 60, 30);
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 12px sans-serif';
-          ctx.fillText(ext.toUpperCase(), badgeX + 15, 54);
-          
-          // Border
-          ctx.strokeStyle = '#e5e7eb';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(0, 0, canvas.width, canvas.height);
-        };
-
-        const drawStaticSpreadsheetFallback = (errorMessage = "") => {
-          setupCanvas(initialCanvasWidth, initialCanvasHeight);
-
-          ctx.fillStyle = '#374151';
-          ctx.font = '16px sans-serif';
-          ctx.fillText("Planilha de Dados (Visualização do Arquivo)", 40, 160);
-          ctx.fillStyle = '#6b7280';
-          ctx.font = '14px sans-serif';
-          ctx.fillText(`Tamanho do Arquivo: ${(file.size / 1024).toFixed(2)} KB`, 40, 190);
-          ctx.fillText("Este arquivo XLSX/XLS foi migrado para WebP.", 40, 220);
-          ctx.fillText("Os dados originais foram preservados no fluxo de processamento.", 40, 250);
-          if (errorMessage) {
-            ctx.fillStyle = '#ef4444';
-            ctx.fillText(errorMessage, 40, 280);
-          }
-          
-          // Draw grid mockup to make it look like a spreadsheet image
-          ctx.strokeStyle = '#d1d5db';
-          ctx.lineWidth = 1;
-          let y = 300;
-          for (let r = 0; r < 15; r++) {
-            ctx.beginPath();
-            ctx.moveTo(40, y);
-            ctx.lineTo(initialCanvasWidth - 40, y);
-            ctx.stroke();
-            y += 30;
-          }
-          const numCols = 6;
-          const colWidth = Math.floor((initialCanvasWidth - 80) / numCols);
-          for (let c = 0; c <= numCols; c++) {
-            ctx.beginPath();
-            ctx.moveTo(40 + c * colWidth, 300);
-            ctx.lineTo(40 + c * colWidth, 720);
-            ctx.stroke();
-          }
-          
-          ctx.fillStyle = '#10b981';
-          ctx.font = 'bold 14px sans-serif';
-          ctx.fillText("Visualização de planilha gerada automaticamente na migração", 40, initialCanvasHeight - 40);
-        };
-
-        const drawTable = (headers, rows) => {
-          const clientAges = {
-            "SYLVIA REGINA VIEIRA MORAIS": 73,
-            "MARIA CECILIA SOUZA RAFFO": 81,
-            "LUCIANA DE PINHO MARTINS": 50,
-            "MARIA HELENA MACIEL SENA DOS SANTOS": 54,
-            "MARIA CRISTINA BITTENCOURT DE PINHO": 74,
-            "TANIA DONATI PAES RIOS": 76,
-            "DANIEL JORGE DONATI RIOS": 51,
-            "VILMA GOMES MOREIRA": 79,
-            "MARCO ANTONIO DA COSTA": 73,
-            "ALMIRO CONDE BASTOS": 65,
-            "ADRIANO MACIEL TAVARES": 78,
-            "ORLANDO JULIAO": 86,
-            "LUIZA THEREZA FERNANDES JULIAO": 85,
-            "LISE FERNANDA SEDREZ": 57,
-            "ROBERTO GIOVANNI DELPIANO": 73,
-            "NOELI RODRIGUES DE MATTOS ZOUAIN": 83,
-            "MARIA CAMILA PEREIRA COUTINHO": 83,
-            "NESTOR GUILHERME PRESTES BEYRODT": 59,
-            "IDA SANTORO AVOLIO": 90,
-            "ELIZABETH VIEIRA DA SILVA": 71,
-            "CARLOS FICO DA SILVA JUNIOR": 67,
-            "ROSANGELA DE FATIMA PEREIRA GONCALVES": 67,
-            "MAURO EIRAS GUIMARAES": 85,
-            "MARIA APARECIDA DIAS": 80
-          };
-
-          const getIdade = (cliente) => {
-            const c = String(cliente || '').toUpperCase().trim();
-            for (const [key, age] of Object.entries(clientAges)) {
-              if (c.includes(key)) return age;
-            }
-            let hash = 0;
-            for (let i = 0; i < c.length; i++) {
-              hash = c.charCodeAt(i) + ((hash << 5) - hash);
-            }
-            return 50 + Math.abs(hash % 41);
-          };
-
-          const getProduto = (cliente, comissao) => {
-            const c = String(cliente || '').toUpperCase();
-            if (c.includes("VILMA GOMES MOREIRA") || 
-                c.includes("NESTOR GUILHERME PRESTES") || 
-                c.includes("ROSANGELA DE FATIMA PEREIRA") || 
-                c.includes("MAURO EIRAS") || 
-                c.includes("MARIA APARECIDA DIAS")) {
-              return "PREVENT MA+S ENFERMARIA";
-            }
-            const com = parseFloat(comissao);
-            if (com === 458.93 || com === 348.78 || com === 1529.75 || com === 764.88 || com === 458 || com === 348 || com === 1529 || com === 764) {
-              return "PREVENT MA+S ENFERMARIA";
-            }
-            return "PREVENT MA+S APARTAMENTO";
-          };
-
-          const getValorProvento = (val) => {
-            const num = parseFloat(val);
-            if (isNaN(num)) return 0;
-            const integerPart = Math.floor(num);
-            if (integerPart === 914) return 914.22;
-            if (integerPart === 1389) return 1389.60;
-            if (integerPart === 1828) return 1828.43;
-            if (integerPart === 694) return 694.80;
-            if (integerPart === 458) return 458.93;
-            if (integerPart === 348) return 348.78;
-            if (integerPart === 1529) return 1529.75;
-            if (integerPart === 764) return 764.88;
-            return num;
-          };
-
-          const getParcelaAndTipoComissao = (cliente, storedParcela, comissao) => {
-            const c = String(cliente || '').toUpperCase();
-            if (c.includes("DANIEL JORGE DONATI RIOS") || 
-                c.includes("VILMA GOMES MOREIRA") || 
-                c.includes("NESTOR GUILHERME PRESTES") || 
-                c.includes("MAURO EIRAS")) {
-              return { parcela: "Parcela extra 50%", tipoComissao: "Parcela extra 50%" };
-            }
-            if (c.includes("TANIA DONATI PAES RIOS")) {
-              return { parcela: "4", tipoComissao: "Parcela extra 50%" };
-            }
-            if (c.includes("ROSANGELA DE FATIMA PEREIRA")) {
-              return { parcela: "3", tipoComissao: "1º Parcela adsão" };
-            }
-            const pStr = String(storedParcela || '1').trim();
-            if (pStr === '1') {
-              return { parcela: "1", tipoComissao: "1º Parcela adesão" };
-            } else if (pStr === '2') {
-              return { parcela: "2", tipoComissao: "24" };
-            } else if (pStr === '3') {
-              return { parcela: "3", tipoComissao: "34" };
-            } else if (pStr === '4') {
-              return { parcela: "4", tipoComissao: "Parcela extra 50%" };
-            }
-            return { parcela: pStr, tipoComissao: pStr === '1' ? "1º Parcela adesão" : pStr === '2' ? "24" : pStr === '3' ? "34" : "Parcela extra 50%" };
-          };
-
-          const formatPreventValue = (num) => {
-            if (num === null || num === undefined || num === '') return '';
-            const n = parseFloat(num);
-            if (isNaN(n)) return String(num);
-            if (n === 0) return '0';
-            
-            const str = n.toFixed(2);
-            if (str.endsWith('.00')) {
-              return str.substring(0, str.length - 3);
-            }
-            if (str.endsWith('0')) {
-              return n.toFixed(1).replace('.', ',');
-            }
-            return str.replace('.', ',');
-          };
-
-          const formatDate = (dateStr) => {
-            if (!dateStr) return '';
-            if (dateStr.includes('-')) {
-              const parts = dateStr.split('T')[0].split('-');
-              if (parts.length === 3) {
-                return `${parts[2]}/${parts[1]}/${parts[0]}`;
-              }
-            }
-            return dateStr;
-          };
-
-          const findValue = (row, possibleKeys) => {
-            for (const k of possibleKeys) {
-              const foundKey = Object.keys(row).find(key => key.toLowerCase() === k.toLowerCase());
-              if (foundKey !== undefined) return row[foundKey];
-            }
-            return '';
-          };
-
-          // 1. Prepare Table Data & Columns
-          let finalHeaders = [];
-          let finalRows = [];
-          let colWidths = [];
-          let colPositions = [40];
-
-          const isPrevent = file.name.toUpperCase().includes("PREVENT") || 
-                            headers.some(h => {
-                              const sh = String(h).toLowerCase();
-                              return sh === 'beneficiario' || sh === 'valor provento' || sh.includes('provento');
-                            }) ||
-                            rows.some(row => 
-                              Object.values(row).some(val => String(val).toUpperCase().includes("PREVENT"))
-                            );
-          const isAssim = file.name.toUpperCase().includes("ASSIM") || 
-                          headers.some(h => {
-                            const sh = String(h).toLowerCase();
-                            return sh === 'contrato' || sh === 'vidas' || sh === 'comissão' || sh === 'valor total' || sh.includes('assim');
-                          }) ||
-                          rows.some(row => 
-                            Object.values(row).some(val => String(val).toUpperCase().includes("ASSIM"))
-                          );
-          // Spreadsheets are rendered in landscape format to fit multiple columns beautifully
-          const isLandscape = true;
-          const currentCanvasWidth = 1200;
-
-          const formatCurrency = (val) => {
-            if (val === null || val === undefined || val === '') return '';
-            const num = parseFloat(val);
-            if (isNaN(num)) return String(val);
-            return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-          };
-
-          if (isPrevent) {
-            finalHeaders = [
-              'beneficiario',
-              'Data Assin',
-              'produto',
-              'Valor Provento',
-              'Valor Estorno',
-              'parcela',
-              'Tipo Comissão',
-              'Data Envio',
-              'idade'
-            ];
-
-            finalRows = rows.map(row => {
-              const name = findValue(row, ['beneficiario', 'cliente', 'nome']);
-              const proventoRaw = findValue(row, ['valor provento', 'comissao', 'valorTotal']);
-              const provento = getValorProvento(proventoRaw);
-              const rawParcela = findValue(row, ['parcela']);
-              const { parcela, tipoComissao } = getParcelaAndTipoComissao(name, rawParcela, provento);
-              const rawDate = findValue(row, ['data envio', 'data', 'inicioVigencia']);
-
-              return {
-                'beneficiario': name,
-                'Data Assin': '########',
-                'produto': getProduto(name, provento),
-                'Valor Provento': provento,
-                'Valor Estorno': 0,
-                'parcela': parcela,
-                'Tipo Comissão': tipoComissao,
-                'Data Envio': formatDate(rawDate || '04/01/2026'),
-                'idade': getIdade(name)
-              };
-            });
-
-            colWidths = [240, 80, 220, 100, 100, 80, 150, 100, 50];
-          } else if (isAssim) {
-            finalHeaders = [
-              'Contrato',
-              'Cliente',
-              'Cód.',
-              'Parcela',
-              'Vidas',
-              'Data',
-              'Valor Total',
-              '%',
-              'Comissão',
-              'Situação',
-              'Nota Fiscal'
-            ];
-
-            finalRows = rows.map(row => {
-              const getVal = (possibleKeys) => findValue(row, possibleKeys);
-              return {
-                'Contrato': getVal(['contrato']),
-                'Cliente': getVal(['cliente']),
-                'Cód.': getVal(['cod']),
-                'Parcela': getVal(['parcela']),
-                'Vidas': getVal(['vidas']),
-                'Data': formatDate(getVal(['data', 'inicioVigencia'])),
-                'Valor Total': parseFloat(getVal(['valorTotal', 'valor'])) || 0,
-                '%': parseFloat(getVal(['comissaoPorcentagem'])) || 0,
-                'Comissão': parseFloat(getVal(['comissao'])) || 0,
-                'Situação': getVal(['situacao', 'status']),
-                'Nota Fiscal': getVal(['notaFiscal', 'nfe'])
-              };
-            });
-
-            colWidths = [100, 250, 80, 60, 50, 90, 100, 50, 100, 150, 90];
-          } else {
-            finalHeaders = headers;
-            finalRows = rows;
-            const numCols = headers.length;
-            const defaultColWidth = Math.max(80, Math.floor((currentCanvasWidth - 80) / numCols));
-            for (let i = 0; i < numCols; i++) {
-              colWidths.push(defaultColWidth);
-            }
-          }
-
-          for (let i = 0; i < colWidths.length; i++) {
-            colPositions.push(colPositions[i] + colWidths[i]);
-          }
-
-          const startY = 230;
-          const headerHeight = 35;
-          const rowHeight = 28;
-          const totalRowsHeight = (finalRows.length + ((isPrevent || isAssim) ? 1 : 0)) * rowHeight;
-          const footerSpace = 100;
-          const neededHeight = startY + headerHeight + totalRowsHeight + footerSpace;
-          const finalHeight = Math.max(isLandscape ? 850 : 1000, neededHeight);
-          
-          setupCanvas(currentCanvasWidth, finalHeight);
-
-          // Draw layout
-          ctx.fillStyle = '#374151';
-          ctx.font = 'bold 16px sans-serif';
-          ctx.fillText(isPrevent ? "Demonstrativo Prevent Senior (Fidelidade Absoluta)" : (isAssim ? "Demonstrativo ASSIM Saúde (Fidelidade Absoluta)" : "Planilha de Dados (Visualização do Arquivo)"), 40, 150);
-          
-          ctx.fillStyle = '#6b7280';
-          ctx.font = '14px sans-serif';
-          ctx.fillText(`Tamanho do Arquivo: ${(file.size / 1024).toFixed(2)} KB | Total de Registros: ${finalRows.length}`, 40, 180);
-          
-          let y = startY;
-          ctx.fillStyle = '#f3f4f6';
-          ctx.fillRect(40, y, currentCanvasWidth - 80, 35);
-          
-          ctx.strokeStyle = '#d1d5db';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(40, y, currentCanvasWidth - 80, 35);
-          
-          ctx.fillStyle = '#111827';
-          ctx.font = 'bold 11px sans-serif';
-          for (let c = 0; c < finalHeaders.length; c++) {
-            let align = 'left';
-            if (isPrevent) {
-              if (c === 3 || c === 4) align = 'right';
-              if (c === 1 || c === 5 || c === 7 || c === 8) align = 'center';
-            } else if (isAssim) {
-              if (c === 4 || c === 5 || c === 7 || c === 10) align = 'center';
-              if (c === 6 || c === 8) align = 'right';
-            }
-            
-            let xOffset = 8;
-            if (align === 'right') {
-              ctx.textAlign = 'right';
-              xOffset = colWidths[c] - 8;
-            } else if (align === 'center') {
-              ctx.textAlign = 'center';
-              xOffset = colWidths[c] / 2;
-            } else {
-              ctx.textAlign = 'left';
-            }
-            ctx.fillText(finalHeaders[c], colPositions[c] + xOffset, y + 22);
-          }
-          
-          y += 35;
-          
-          let totalProvento = 0;
-          let totalEstorno = 0;
-          let totalValorTotal = 0;
-          let totalComissao = 0;
-          let totalVidasCount = 0;
-
-          ctx.font = '11px sans-serif';
-          ctx.fillStyle = '#111827';
-          
-          finalRows.forEach((row, rIdx) => {
-            if (isPrevent) {
-              totalProvento += row['Valor Provento'] || 0;
-              totalEstorno += row['Valor Estorno'] || 0;
-            } else if (isAssim) {
-              totalValorTotal += row['Valor Total'] || 0;
-              totalComissao += row['Comissão'] || 0;
-              totalVidasCount += parseInt(row['Vidas']) || 0;
-            }
-
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(40, y, currentCanvasWidth - 80, 28);
-            
-            ctx.strokeStyle = '#e5e7eb';
-            ctx.strokeRect(40, y, currentCanvasWidth - 80, 28);
-            
-            ctx.fillStyle = '#111827';
-            for (let c = 0; c < finalHeaders.length; c++) {
-              let val = '';
-              if (isPrevent) {
-                if (c === 3) val = formatPreventValue(row['Valor Provento']);
-                else if (c === 4) val = '';
-                else val = String(row[finalHeaders[c]] !== undefined ? row[finalHeaders[c]] : '');
-              } else if (isAssim) {
-                const rawVal = row[finalHeaders[c]];
-                if (c === 6) val = formatCurrency(rawVal);
-                else if (c === 7) val = `${rawVal}%`;
-                else if (c === 8) val = formatCurrency(rawVal);
-                else val = String(rawVal !== undefined && rawVal !== null ? rawVal : '');
-              } else {
-                val = row[finalHeaders[c]] !== undefined ? String(row[finalHeaders[c]]) : '';
-              }
-
-              let align = 'left';
-              if (isPrevent) {
-                if (c === 3 || c === 4) align = 'right';
-                if (c === 1 || c === 5 || c === 7 || c === 8) align = 'center';
-              } else if (isAssim) {
-                if (c === 4 || c === 5 || c === 7 || c === 10) align = 'center';
-                if (c === 6 || c === 8) align = 'right';
-              }
-
-              let xOffset = 8;
-              if (align === 'right') {
-                ctx.textAlign = 'right';
-                xOffset = colWidths[c] - 8;
-              } else if (align === 'center') {
-                ctx.textAlign = 'center';
-                xOffset = colWidths[c] / 2;
-              } else {
-                ctx.textAlign = 'left';
-              }
-              ctx.fillText(val, colPositions[c] + xOffset, y + 18);
-            }
-            
-            y += 28;
-          });
-
-          if (isPrevent || isAssim) {
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(40, y, currentCanvasWidth - 80, 28);
-            ctx.strokeStyle = '#d1d5db';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(40, y, currentCanvasWidth - 80, 28);
-
-            ctx.fillStyle = '#111827';
-            ctx.font = 'bold 11px sans-serif';
-
-            for (let c = 0; c < finalHeaders.length; c++) {
-              let val = '';
-              let align = 'left';
-
-              if (isPrevent) {
-                if (c === 3) val = formatPreventValue(totalProvento);
-                else if (c === 4) val = '0';
-                if (c === 3 || c === 4) align = 'right';
-                if (c === 1 || c === 5 || c === 7 || c === 8) align = 'center';
-              } else if (isAssim) {
-                if (c === 1) val = 'Total Geral';
-                else if (c === 4) val = String(totalVidasCount);
-                else if (c === 6) val = formatCurrency(totalValorTotal);
-                else if (c === 8) val = formatCurrency(totalComissao);
-
-                if (c === 4 || c === 5 || c === 7 || c === 10) align = 'center';
-                if (c === 6 || c === 8) align = 'right';
-              }
-
-              let xOffset = 8;
-              if (align === 'right') {
-                ctx.textAlign = 'right';
-                xOffset = colWidths[c] - 8;
-              } else if (align === 'center') {
-                ctx.textAlign = 'center';
-                xOffset = colWidths[c] / 2;
-              } else {
-                ctx.textAlign = 'left';
-              }
-              ctx.fillText(val, colPositions[c] + xOffset, y + 18);
-            }
-            y += 28;
-          }
-          
-          ctx.strokeStyle = '#d1d5db';
-          for (let c = 1; c < finalHeaders.length; c++) {
-            ctx.beginPath();
-            ctx.moveTo(colPositions[c], startY);
-            ctx.lineTo(colPositions[c], y);
-            ctx.stroke();
-          }
-
-          ctx.textAlign = 'left';
-          
-          ctx.fillStyle = '#6b7280';
-          ctx.font = 'italic 11px sans-serif';
-          ctx.fillText(`Exibindo todas as ${finalRows.length} linhas de dados extraídos da planilha original (Fidelidade Absoluta).`, 40, y + 25);
-          
-          ctx.fillStyle = '#10b981';
-          ctx.font = 'bold 14px sans-serif';
-          ctx.fillText(isPrevent ? "Visualização de planilha original Prevent Senior com fidelidade absoluta" : (isAssim ? "Visualização de planilha original ASSIM com fidelidade absoluta" : "Visualização de planilha original"), 40, finalHeight - 40);
-        };
-
-        if (ext === 'xlsx' || ext === 'xls') {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            try {
-              const arrayBuffer = e.target.result;
-              const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
-              const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-              const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
-              
-              let headers = [];
-              if (rows.length > 0) {
-                headers = Object.keys(rows[0]);
-              } else {
-                headers = ["A", "B", "C", "D", "E", "F"];
-              }
-              
-              drawTable(headers, rows);
-            } catch (err) {
-              console.error("Erro ao desenhar planilha:", err);
-              drawStaticSpreadsheetFallback("Erro ao ler dados da planilha.");
-            }
-            canvas.toBlob(resolve, 'image/webp', 0.85);
-          };
-          reader.readAsArrayBuffer(file);
-        } else if (ext === 'csv') {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            try {
-              const text = e.target.result;
-              const workbook = XLSX.read(text, { type: 'string' });
-              const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-              const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
-              
-              let headers = [];
-              if (rows.length > 0) {
-                headers = Object.keys(rows[0]);
-              } else {
-                headers = ["A", "B", "C", "D", "E", "F"];
-              }
-              
-              drawTable(headers, rows);
-            } catch (err) {
-              console.error("Erro ao desenhar CSV:", err);
-              drawStaticSpreadsheetFallback("Erro ao ler dados do CSV.");
-            }
-            canvas.toBlob(resolve, 'image/webp', 0.85);
-          };
-          reader.readAsText(file);
-        }
-      }
-    });
-  };
-
   useEffect(() => {
     const handleCorrigirSulamAmerica = async () => {
       if (window.__MIGRATED_SULAMERICA__) return;
       window.__MIGRATED_SULAMERICA__ = true;
       console.log("Running one-time Sulamérica migration...");
 
+      let atualizacoesRealizadas = 0;
+
       try {
         const { data: allV, error: fetchErr } = await supabase.from('vendas').select('*');
         if (fetchErr || !allV) throw fetchErr;
-        window.allV = allV;
 
         const formatDateForInputLocal = (value) => {
           if (!value && value !== 0) return "";
@@ -1140,22 +403,21 @@ export default function App() {
           if (!ini || !fim) return 0;
           const a = new Date(`${ini}T00:00:00`);
           const b = new Date(`${fim}T00:00:00`);
-          if (isNaN(a) || isNaN(b)) return 0;
-          return (
-            (b.getFullYear() - a.getFullYear()) * 12 +
-            (b.getMonth() - a.getMonth())
-          );
+          if (a >= b) return 0;
+          return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
         };
 
-        const sulamericaVendas = allV.filter(
-          (v) =>
-            (v.operadora && v.operadora.includes("SULAMERICA")) ||
-            (v.codigoOperadora && v.codigoOperadora.includes("SULAMERICA")),
-        ).sort(
-          (a, b) =>
-            new Date(a.dataVenda || a.data || 0) -
-            new Date(b.dataVenda || b.data || 0),
-        );
+        const sulamericaVendas = allV
+          .filter(
+            (v) =>
+              (v.operadora && v.operadora.includes("SULAMERICA")) ||
+              (v.codigoOperadora && v.codigoOperadora.includes("SULAMERICA")),
+          )
+          .sort(
+            (a, b) =>
+              new Date(a.dataVenda || a.data || 0) -
+              new Date(b.dataVenda || b.data || 0),
+          );
 
         const mapped = sulamericaVendas.map((v, i) => ({ ...v, _index: i }));
         const vendasParaSalvar = [];
@@ -1216,17 +478,32 @@ export default function App() {
           return;
         }
 
-        console.log(`Corrigindo ${vendasParaSalvar.length} parcelas da Sulamerica...`);
-        for (const v of vendasParaSalvar) {
-          await supabase.from('vendas').update({ parcela: v.parcela }).eq('id', v.id);
+        const total = vendasParaSalvar.length;
+        console.log(`Corrigindo ${total} parcelas da Sulamerica...`);
+        let madeChanges = false;
+        
+        for (let i = 0; i < total; i++) {
+          const v = vendasParaSalvar[i];
+          const sanitized = { parcela: v.parcela };
+          try {
+            await supabase.from('vendas').update(sanitized).eq('id', v.id);
+            madeChanges = true;
+          } catch(err) {
+            console.error("Failed to update " + v.id, err);
+          }
         }
-        console.log("Correção concluída!");
-      } catch (e) { console.error(e); }
+
+        console.log("Correção concluída.");
+        if (madeChanges) {
+           window.location.reload();
+        }
+      } catch (e) {
+        console.error("Erro na migração sulamerica", e);
+      }
     };
 
     handleCorrigirSulamAmerica();
   }, []);
-
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem("protetta_theme");
     return saved ? saved === "dark" : true;
@@ -1328,7 +605,6 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
 
-
   const [dbReports, setDbReports] = useState([]);
   const [selectedExtratos, setSelectedExtratos] = useState([]);
   const [currentPath, setCurrentPath] = useState([]);
@@ -1395,147 +671,6 @@ export default function App() {
     tipo: "Todos",
     situacao: "Todos",
   });
-
-  const [rollbackLogs, setRollbackLogs] = useState([]);
-  const [isRollingBack, setIsRollingBack] = useState(false);
-
-  const runImageToPdfRollback = async () => {
-    if (isRollingBack) return;
-    if (!confirm("Isso irá converter TODOS os arquivos em 'migrados_webp' e 'migrados_jpg' de volta para PDF e movê-los para a raiz da pasta 'arquivos_extratos'. Deseja continuar?")) return;
-
-    setIsRollingBack(true);
-    setRollbackLogs([]);
-    setRollbackLogs(prev => [...prev, { type: 'info', text: 'Iniciando varredura das pastas migrados_webp e migrados_jpg...' }]);
-
-    try {
-      const { data: webpFiles, error: webpError } = await supabase.storage.from("arquivos_extratos").list("migrados_webp", { limit: 10000 });
-      const { data: jpgFiles, error: jpgError } = await supabase.storage.from("arquivos_extratos").list("migrados_jpg", { limit: 10000 });
-
-      if (webpError) {
-        setRollbackLogs(prev => [...prev, { type: 'error', text: `Erro ao listar migrados_webp: ${webpError.message}` }]);
-      }
-      if (jpgError) {
-        setRollbackLogs(prev => [...prev, { type: 'error', text: `Erro ao listar migrados_jpg: ${jpgError.message}` }]);
-      }
-
-      const targets = [];
-      if (webpFiles) {
-        webpFiles.forEach(f => {
-          if (f.name !== '.emptyFolderPlaceholder' && f.name) {
-            targets.push({
-              folder: 'migrados_webp',
-              fileName: f.name,
-              fullPath: `migrados_webp/${f.name}`,
-              ext: 'webp'
-            });
-          }
-        });
-      }
-      if (jpgFiles) {
-        jpgFiles.forEach(f => {
-          if (f.name !== '.emptyFolderPlaceholder' && f.name) {
-            targets.push({
-              folder: 'migrados_jpg',
-              fileName: f.name,
-              fullPath: `migrados_jpg/${f.name}`,
-              ext: 'jpg'
-            });
-          }
-        });
-      }
-
-      setRollbackLogs(prev => [...prev, { type: 'info', text: `Encontrados ${targets.length} arquivos para converter.` }]);
-
-      if (targets.length === 0) {
-        setRollbackLogs(prev => [...prev, { type: 'warn', text: 'Nenhum arquivo encontrado nas pastas de migração.' }]);
-        setIsRollingBack(false);
-        alert("Nenhum arquivo encontrado nas pastas de migração!");
-        return;
-      }
-
-      const { data: dbReps, error: errDb } = await supabase.from('reports').select('*');
-      if (errDb) {
-        setRollbackLogs(prev => [...prev, { type: 'error', text: `Erro ao buscar relatórios do BD: ${errDb.message}` }]);
-      }
-
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (const target of targets) {
-        try {
-          setRollbackLogs(prev => [...prev, { type: 'info', text: `Baixando ${target.fullPath}...` }]);
-          
-          const { data: blob, error: downloadErr } = await supabase.storage.from("arquivos_extratos").download(target.fullPath);
-          if (downloadErr) {
-            throw new Error(`Falha no download: ${downloadErr.message}`);
-          }
-
-          setRollbackLogs(prev => [...prev, { type: 'info', text: `Convertendo ${target.fileName} para PDF...` }]);
-
-          const pdfBlob = await convertImageBlobToPdfBlob(blob);
-
-          const nameWithoutExt = target.fileName.substring(0, target.fileName.lastIndexOf('.')) || target.fileName;
-          const newFileName = `${nameWithoutExt}.pdf`;
-          const newFilePath = newFileName;
-
-          setRollbackLogs(prev => [...prev, { type: 'info', text: `Enviando ${newFilePath} para a raiz do bucket...` }]);
-
-          const { error: uploadErr } = await supabase.storage.from("arquivos_extratos").upload(newFilePath, pdfBlob, { upsert: true });
-          if (uploadErr) {
-            throw new Error(`Falha no upload: ${uploadErr.message}`);
-          }
-
-          if (dbReps && dbReps.length > 0) {
-            const matchingReports = dbReps.filter(r => 
-              String(r.filePath).toLowerCase() === String(target.fullPath).toLowerCase() ||
-              String(r.filePath).toLowerCase() === String(target.fileName).toLowerCase()
-            );
-
-            if (matchingReports.length > 0) {
-              setRollbackLogs(prev => [...prev, { type: 'info', text: `Atualizando ${matchingReports.length} registros no banco de dados...` }]);
-              for (const rep of matchingReports) {
-                let cleanDocName = rep.fileName || '';
-                cleanDocName = cleanDocName.replace(/\.(webp|jpg|jpeg)$/i, '.pdf');
-                
-                const { error: updateErr } = await supabase.from("reports").update({
-                  filePath: newFilePath,
-                  fileName: cleanDocName
-                }).eq("id", rep.id);
-
-                if (updateErr) {
-                  setRollbackLogs(prev => [...prev, { type: 'warn', text: `Erro ao atualizar relatório ID ${rep.id} no BD: ${updateErr.message}` }]);
-                }
-              }
-            }
-          }
-
-          setRollbackLogs(prev => [...prev, { type: 'info', text: `Excluindo arquivo antigo ${target.fullPath}...` }]);
-          const { error: removeErr } = await supabase.storage.from("arquivos_extratos").remove([target.fullPath]);
-          if (removeErr) {
-            setRollbackLogs(prev => [...prev, { type: 'warn', text: `Erro ao remover arquivo original: ${removeErr.message}` }]);
-          }
-
-          setRollbackLogs(prev => [...prev, { type: 'success', text: `Sucesso! Arquivo ${target.fileName} convertido e movido para ${newFilePath}.` }]);
-          successCount++;
-        } catch (err) {
-          errorCount++;
-          setRollbackLogs(prev => [...prev, { type: 'error', text: `Falha ao processar ${target.fileName}: ${err.message || err}` }]);
-        }
-      }
-
-      setRollbackLogs(prev => [...prev, { type: 'success', text: `Processo concluído! Sucessos: ${successCount}, Falhas: ${errorCount}` }]);
-      alert(`Processo concluído!\nSucesso: ${successCount}\nFalhas: ${errorCount}`);
-      
-      if (typeof fetchReports === 'function') {
-        fetchReports();
-      }
-    } catch (generalErr) {
-      setRollbackLogs(prev => [...prev, { type: 'error', text: `Erro geral no processo: ${generalErr.message || generalErr}` }]);
-      alert(`Erro geral: ${generalErr.message}`);
-    } finally {
-      setIsRollingBack(false);
-    }
-  };
 
   // Empresas Gestão
   const [rawEmpresasList, setRawEmpresasList] = useState(() => {
@@ -1650,12 +785,12 @@ export default function App() {
     setSelectedEmpresaOverride(empName);
     if (empName) {
       localStorage.setItem("protetta_selected_empresa", empName);
-      setEmpresasList((prevRaw) =>
-        prevRaw.map((e) => ({
+      setEmpresasList((prevList) => {
+        return prevList.map((e) => ({
           ...e,
           isDefault: e.nome.toUpperCase() === empName.toUpperCase(),
-        }))
-      );
+        }));
+      });
     } else {
       localStorage.removeItem("protetta_selected_empresa");
     }
@@ -1773,8 +908,12 @@ export default function App() {
   );
   const [backupList, setBackupList] = useState([]);
   const [loadingBackups, setLoadingBackups] = useState(false);
-  const [backupEnabled, setBackupEnabled] = useState(false);
-  const [backupDestination, setBackupDestination] = useState("nuvem");
+  const [isAutoBackupActive, setIsAutoBackupActive] = useState(() => {
+    return localStorage.getItem("protetta_autobackup_active") === "true";
+  });
+  const [backupDestination, setBackupDestination] = useState(() => {
+    return localStorage.getItem("protetta_backup_destination") || "cloud";
+  });
   const tabelaPdfRef = useRef(null);
   const [editRowIndex, setEditRowIndex] = useState(-1);
   const [editRowData, setEditRowData] = useState({});
@@ -2126,72 +1265,7 @@ export default function App() {
     return (currentUser.permissions || []).includes(module);
   };
 
-  const fetchBackups = async () => {
-    if (!supabase) return;
-    setLoadingBackups(true);
-    try {
-      // 1. Carrega backups da Nuvem (Storage)
-      let cloudList = [];
-      try {
-        const { data, error } = await supabase.storage
-          .from("arquivos_extratos")
-          .list("backups", {
-            sortBy: { column: "created_at", order: "desc" },
-          });
-        if (!error && data) {
-          const empStr = nomeEmpresaUpper.replace(/[^A-Z0-9]/gi, "_");
-          cloudList = data
-            .filter((f) => f.name && f.name.includes(empStr) && f.name.endsWith(".zip"))
-            .map((f) => ({
-              id: f.id || f.name,
-              name: f.name,
-              created_at: f.created_at || new Date(),
-              type: "cloud",
-            }));
-        }
-      } catch (storageErr) {
-        console.warn("Erro ao buscar backups do storage:", storageErr);
-      }
 
-      // 2. Carrega backups do Banco de Dados (savedReports)
-      let dbList = [];
-      try {
-        const { data, error } = await supabase
-          .from("savedReports")
-          .select("id, nome, dataCriacao")
-          .like("nome", "___BACKUP_DB_%")
-          .order("dataCriacao", { ascending: false })
-          .limit(10);
-        if (!error && data) {
-          dbList = data.map((r) => ({
-            id: r.id,
-            name: r.nome,
-            created_at: r.dataCriacao || new Date(),
-            type: "database",
-          }));
-        }
-      } catch (dbErr) {
-        console.warn("Erro ao buscar backups do banco:", dbErr);
-      }
-
-      const combined = [...cloudList, ...dbList].sort(
-        (a, b) => new Date(b.created_at) - new Date(a.created_at)
-      );
-      setBackupList(combined.slice(0, 10));
-    } catch (err) {
-      let msg = err.message || String(err);
-      setBackupList([
-        {
-          id: "error",
-          name: "ERRO ao buscar lista unificada de backups: " + msg,
-          created_at: new Date(),
-          type: "error",
-        },
-      ]);
-    } finally {
-      setLoadingBackups(false);
-    }
-  };
 
   const loadFromDB = async () => {
     if (!supabase) return;
@@ -2230,17 +1304,6 @@ export default function App() {
         setCustomOpSeg(parsed);
         localStorage.setItem("protetta_custom_op_seg", JSON.stringify(parsed));
       }
-
-      // Carregar configurações de backup
-      const isBackupOn = sysConfig.hasOwnProperty("backup_enabled")
-        ? !!sysConfig.backup_enabled
-        : (localStorage.getItem("backup_enabled") === "true");
-      const destBackup = sysConfig.backup_destination || localStorage.getItem("backup_destination") || "nuvem";
-
-      setBackupEnabled(isBackupOn);
-      setBackupDestination(destBackup);
-      localStorage.setItem("backup_enabled", String(isBackupOn));
-      localStorage.setItem("backup_destination", destBackup);
 
       // Reconstruct and update companies list based on data
       setRawEmpresasList((prev) => {
@@ -2979,140 +2042,159 @@ export default function App() {
     }
   }, [currentUser, nomeEmpresaUpper]);
 
-  // CONFIGURAÇÕES E FLUXO DE BACKUP
-  const backupParamsRef = useRef({
+  // BACKUP AUTOMÁTICO
+  const backupDataRef = useRef({
     clientes,
     savedReportsList,
     vendasList,
     usersList,
     dbReports,
-    backupDestination,
-    nomeEmpresaUpper,
-    currentUser,
   });
-
   useEffect(() => {
-    backupParamsRef.current = {
+    backupDataRef.current = {
       clientes,
       savedReportsList,
       vendasList,
       usersList,
       dbReports,
-      backupDestination,
-      nomeEmpresaUpper,
-      currentUser,
     };
-  }, [clientes, savedReportsList, vendasList, usersList, dbReports, backupDestination, nomeEmpresaUpper, currentUser]);
+  }, [clientes, savedReportsList, vendasList, usersList, dbReports]);
 
-  const updateBackupConfig = async (enabled, destination) => {
-    setBackupEnabled(enabled);
-    setBackupDestination(destination);
-    localStorage.setItem("backup_enabled", String(enabled));
-    localStorage.setItem("backup_destination", destination);
-    await syncGlobalSysConfigToDB(null, null, null);
-  };
-
-  const createBackup = async (destinationToUse, isAuto = false) => {
-    const params = backupParamsRef.current;
-    const data = {
-      clientes: params.clientes,
-      savedReportsList: params.savedReportsList.filter((r) => r.nome !== "___LOCAL_SYS_CONFIG___" && !r.nome.startsWith("___BACKUP_DB_")),
-      vendasList: params.vendasList,
-      usersList: params.usersList.map((u) => ({ username: u.username, role: u.role })),
-      dbReports: params.dbReports,
-    };
-
-    if (data.clientes.length === 0 && data.savedReportsList.length === 0 && data.vendasList.length === 0) {
-      if (!isAuto) showAlert("Não existem dados suficientes para backup.");
-      return;
-    }
-
-    const now = new Date();
-    const dateStr = dataDeHojeInterna();
-    const timeStr = `${String(now.getHours()).padStart(2, "0")}h${String(now.getMinutes()).padStart(2, "0")}m`;
-    const empStr = params.nomeEmpresaUpper.replace(/[^A-Z0-9]/gi, "_");
-    const zipName = `${empStr}_Backup_${isAuto ? "Auto_" : ""}${dateStr}_${timeStr}.zip`;
-
-    if (destinationToUse === "local") {
-      try {
-        const zip = new JSZip();
-        zip.file("clientes.json", JSON.stringify(data.clientes, null, 2));
-        zip.file("historico_relatorios.json", JSON.stringify(data.savedReportsList, null, 2));
-        zip.file("vendas_servicos.json", JSON.stringify(data.vendasList, null, 2));
-        zip.file("utilizadores.json", JSON.stringify(data.usersList, null, 2));
-        zip.file("arquivos_extratos.json", JSON.stringify(data.dbReports, null, 2));
-
-        const content = await zip.generateAsync({ type: "blob" });
-        const url = URL.createObjectURL(content);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = zipName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        if (!isAuto) showAlert("Backup local transferido com sucesso!");
-      } catch (err) {
-        if (!isAuto) showAlert("Erro ao gerar backup local: " + err.message);
-      }
-    } else if (destinationToUse === "banco") {
-      try {
-        const payload = {
-          nome: `___BACKUP_DB_${empStr}_${isAuto ? "Auto_" : ""}${dateStr}_${timeStr}___`,
-          dados: data,
-          empresa: params.nomeEmpresaUpper,
-          periodo: isAuto ? "Backup_Auto" : "Backup",
-          dataCriacao: now.toISOString(),
-          criadoPor: isAuto ? "System_Auto" : (params.currentUser?.username || "System"),
-        };
-        const { error } = await supabase.from("savedReports").insert([payload]);
-        if (error) throw error;
-        if (!isAuto) showAlert("Backup salvo no banco de dados com sucesso!");
-        fetchBackups();
-      } catch (err) {
-        if (!isAuto) showAlert("Erro ao salvar backup no banco de dados: " + err.message);
-      }
-    } else {
-      try {
-        const zip = new JSZip();
-        zip.file("clientes.json", JSON.stringify(data.clientes, null, 2));
-        zip.file("historico_relatorios.json", JSON.stringify(data.savedReportsList, null, 2));
-        zip.file("vendas_servicos.json", JSON.stringify(data.vendasList, null, 2));
-        zip.file("utilizadores.json", JSON.stringify(data.usersList, null, 2));
-        zip.file("arquivos_extratos.json", JSON.stringify(data.dbReports, null, 2));
-
-        const content = await zip.generateAsync({ type: "blob" });
-        const filename = `backups/${zipName}`;
-        const { error: uploadErr } = await supabase.storage
-          .from("arquivos_extratos")
-          .upload(filename, content, {
-            contentType: "application/zip",
-            upsert: true,
-          });
-        if (uploadErr) throw uploadErr;
-        if (!isAuto) showAlert("Backup salvo na nuvem com sucesso!");
-        fetchBackups();
-      } catch (err) {
-        if (!isAuto) showAlert("Erro ao salvar backup na nuvem: " + err.message);
-      }
-    }
-  };
-
-  // BACKUP AUTOMÁTICO REATIVO E ATIVÁVEL
+  // Intervalo de Backup Automático (15 minutos)
   useEffect(() => {
-    if (!currentUser || !backupEnabled) return;
-
-    console.log(`[Auto Backup] Agendando rotina periódica a cada 15 min. Destino: ${backupDestination}`);
+    if (!currentUser || !isAutoBackupActive) return;
     const interval = setInterval(
       async () => {
-        console.log(`[Auto Backup] Iniciando salvamento automático... Destino: ${backupDestination}`);
-        await createBackup(backupDestination, true);
+        const data = backupDataRef.current;
+        if (
+          data.clientes.length === 0 &&
+          data.savedReportsList.length === 0 &&
+          data.vendasList.length === 0
+        )
+          return;
+        try {
+          const now = new Date();
+          const timeStr = `${String(now.getHours()).padStart(2, "0")}h${String(now.getMinutes()).padStart(2, "0")}m`;
+          const dateStr = dataDeHojeInterna();
+          const empStr = nomeEmpresaUpper.replace(/[^A-Z0-9]/gi, "_");
+
+          if (backupDestination === "database") {
+            // Backup automático no Banco de Dados
+            const backupName = `___DB_BACKUP_${empStr}_AutoBackup_${dateStr}_${timeStr}___`;
+            const payload = {
+              nome: backupName,
+              dados: {
+                clientes: data.clientes,
+                savedReportsList: data.savedReportsList,
+                vendasList: data.vendasList,
+                usersList: data.usersList.map((u) => ({
+                  username: u.username,
+                  role: u.role,
+                })),
+                dbReports: data.dbReports,
+              },
+              empresa: nomeEmpresaUpper,
+              periodo: "System",
+              dataCriacao: now.toISOString(),
+              criadoPor: "System",
+            };
+            if (supabase) {
+              await supabase.from("savedReports").insert([payload]);
+              console.log("Backup automático salvo no Banco de Dados:", backupName);
+            }
+          } else if (backupDestination === "local") {
+            // Backup automático local (Download)
+            const zip = new JSZip();
+            zip.file("clientes.json", JSON.stringify(data.clientes, null, 2));
+            zip.file(
+              "historico_relatorios.json",
+              JSON.stringify(data.savedReportsList, null, 2),
+            );
+            zip.file(
+              "vendas_servicos.json",
+              JSON.stringify(data.vendasList, null, 2),
+            );
+            zip.file(
+              "utilizadores.json",
+              JSON.stringify(
+                data.usersList.map((u) => ({
+                  username: u.username,
+                  role: u.role,
+                })),
+                null,
+                2,
+              ),
+            );
+            zip.file(
+              "arquivos_extratos.json",
+              JSON.stringify(data.dbReports, null, 2),
+            );
+
+            const content = await zip.generateAsync({ type: "blob" });
+            const url = URL.createObjectURL(content);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `DonGestao_AutoBackup_${empStr}_${dateStr}_${timeStr}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            console.log("Backup automático baixado localmente.");
+          } else {
+            // Backup automático na Nuvem (Supabase Storage)
+            const zip = new JSZip();
+            zip.file("clientes.json", JSON.stringify(data.clientes, null, 2));
+            zip.file(
+              "historico_relatorios.json",
+              JSON.stringify(data.savedReportsList, null, 2),
+            );
+            zip.file(
+              "vendas_servicos.json",
+              JSON.stringify(data.vendasList, null, 2),
+            );
+            zip.file(
+              "utilizadores.json",
+              JSON.stringify(
+                data.usersList.map((u) => ({
+                  username: u.username,
+                  role: u.role,
+                })),
+                null,
+                2,
+              ),
+            );
+            zip.file(
+              "arquivos_extratos.json",
+              JSON.stringify(data.dbReports, null, 2),
+            );
+
+            const content = await zip.generateAsync({ type: "blob" });
+            const filename = `backups/${empStr}_AutoBackup_${dateStr}_${timeStr}.zip`;
+
+            if (supabase) {
+              const { error: uploadErr } = await supabase.storage
+                .from("arquivos_extratos")
+                .upload(filename, content, {
+                  contentType: "application/zip",
+                  upsert: true,
+                });
+              if (uploadErr) {
+                console.error("Auto backup upload falhou", uploadErr);
+              } else {
+                console.log("Backup automático guardado na nuvem:", filename);
+              }
+            }
+          }
+          fetchBackups();
+        } catch (err) {
+          console.error("Auto backup falhou", err);
+        }
       },
       15 * 60 * 1000,
-    );
+    ); // 15 minutos
 
     return () => clearInterval(interval);
-  }, [currentUser, backupEnabled, backupDestination]);
+  }, [currentUser, nomeEmpresaUpper, supabase, isAutoBackupActive, backupDestination]);
 
   useEffect(() => {
     if (currentView === "settings") {
@@ -3120,44 +2202,232 @@ export default function App() {
     }
   }, [currentView, nomeEmpresaUpper, supabase]);
 
+  // Carregar os backups das duas fontes (Nuvem e Banco de Dados)
+  const fetchBackups = async () => {
+    if (!supabase) return;
+    setLoadingBackups(true);
+    try {
+      const empStr = nomeEmpresaUpper.replace(/[^A-Z0-9]/gi, "_");
+
+      // 1. Carregar do Supabase Storage (Nuvem)
+      let storageList = [];
+      try {
+        const { data, error } = await supabase.storage
+          .from("arquivos_extratos")
+          .list("backups", {
+            sortBy: { column: "created_at", order: "desc" },
+          });
+        if (!error && data) {
+          storageList = data
+            .filter(
+              (f) => f.name && f.name.includes(empStr) && f.name.endsWith(".zip"),
+            )
+            .map((f) => ({
+              id: `cloud-${f.name}-${f.created_at}`,
+              type: "cloud",
+              name: f.name,
+              created_at: f.created_at,
+              rawName: f.name,
+            }));
+        }
+      } catch (storageErr) {
+        console.warn("Aviso ao carregar do Storage:", storageErr);
+      }
+
+      // 2. Carregar do PostgreSQL (Banco de Dados)
+      let dbList = [];
+      try {
+        const { data, error } = await supabase
+          .from("savedReports")
+          .select("id, nome, dataCriacao, criadoPor")
+          .ilike("nome", `___DB_BACKUP_${empStr}_%`)
+          .order("dataCriacao", { ascending: false });
+
+        if (!error && data) {
+          dbList = data.map((item) => ({
+            id: `db-${item.id}`,
+            type: "database",
+            dbId: item.id,
+            name: item.nome.replace("___DB_BACKUP_", "").replace("___", "") + ".json",
+            created_at: item.dataCriacao,
+            rawName: item.nome,
+          }));
+        }
+      } catch (dbErr) {
+        console.warn("Aviso ao carregar do Banco:", dbErr);
+      }
+
+      // Combinar e ordenar por data de criação decrescente (limite 10)
+      const combined = [...storageList, ...dbList]
+        .sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        )
+        .slice(0, 10);
+
+      setBackupList(combined);
+    } catch (err) {
+      console.warn("Erro ao buscar backups:", err);
+      setBackupList([]);
+    } finally {
+      setLoadingBackups(false);
+    }
+  };
+
+  // Criar backup manual completo
+  const handleCreateBackup = async (destinationType) => {
+    if (
+      clientes.length === 0 &&
+      savedReportsList.length === 0 &&
+      vendasList.length === 0
+    ) {
+      return showAlert("Não existem dados suficientes para backup.");
+    }
+
+    setLoading(true);
+    setLoadingMsg("A gerar backup...");
+
+    try {
+      const data = {
+        clientes,
+        savedReportsList: savedReportsList.filter((r) => r.nome !== "___LOCAL_SYS_CONFIG___"),
+        vendasList,
+        usersList: usersList.map((u) => ({
+          username: u.username,
+          role: u.role,
+        })),
+        dbReports,
+      };
+
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, "0")}h${String(now.getMinutes()).padStart(2, "0")}m`;
+      const dateStr = dataDeHojeInterna();
+      const empStr = nomeEmpresaUpper.replace(/[^A-Z0-9]/gi, "_");
+
+      if (destinationType === "database") {
+        // Opção 1: Banco de Dados
+        setLoadingMsg("A salvar no banco de dados...");
+        const backupName = `___DB_BACKUP_${empStr}_ManualBackup_${dateStr}_${timeStr}___`;
+        
+        const payload = {
+          nome: backupName,
+          dados: data,
+          empresa: nomeEmpresaUpper,
+          periodo: "System",
+          dataCriacao: now.toISOString(),
+          criadoPor: currentUser?.username || "System",
+        };
+
+        const { error } = await supabase.from("savedReports").insert([payload]);
+        if (error) throw error;
+        showAlert("Backup salvo com sucesso no Banco de Dados!");
+      } else if (destinationType === "local") {
+        // Opção 2: Local (Download)
+        setLoadingMsg("A gerar arquivo compactado...");
+        const zip = new JSZip();
+        zip.file("clientes.json", JSON.stringify(data.clientes, null, 2));
+        zip.file(
+          "historico_relatorios.json",
+          JSON.stringify(data.savedReportsList, null, 2),
+        );
+        zip.file(
+          "vendas_servicos.json",
+          JSON.stringify(data.vendasList, null, 2),
+        );
+        zip.file(
+          "utilizadores.json",
+          JSON.stringify(data.usersList, null, 2),
+        );
+        zip.file(
+          "arquivos_extratos.json",
+          JSON.stringify(data.dbReports, null, 2),
+        );
+
+        const content = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(content);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `DonGestao_ManualBackup_${empStr}_${dateStr}_${timeStr}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showAlert("Backup baixado com sucesso!");
+      } else {
+        // Opção 3: Nuvem (Supabase Storage)
+        setLoadingMsg("A enviar para a nuvem...");
+        const zip = new JSZip();
+        zip.file("clientes.json", JSON.stringify(data.clientes, null, 2));
+        zip.file(
+          "historico_relatorios.json",
+          JSON.stringify(data.savedReportsList, null, 2),
+        );
+        zip.file(
+          "vendas_servicos.json",
+          JSON.stringify(data.vendasList, null, 2),
+        );
+        zip.file(
+          "utilizadores.json",
+          JSON.stringify(data.usersList, null, 2),
+        );
+        zip.file(
+          "arquivos_extratos.json",
+          JSON.stringify(data.dbReports, null, 2),
+        );
+
+        const content = await zip.generateAsync({ type: "blob" });
+        const filename = `backups/${empStr}_ManualBackup_${dateStr}_${timeStr}.zip`;
+
+        if (supabase) {
+          const { error: uploadErr } = await supabase.storage
+            .from("arquivos_extratos")
+            .upload(filename, content, {
+              contentType: "application/zip",
+              upsert: true,
+            });
+          if (uploadErr) throw uploadErr;
+          showAlert("Backup enviado com sucesso para a nuvem!");
+        }
+      }
+
+      await fetchBackups();
+    } catch (err) {
+      console.error("Backup falhou", err);
+      showAlert("Erro ao criar backup: " + (err.message || String(err)));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Restaurar dados completos do backup (da Nuvem ou do Banco)
   const handleRestoreBackup = (backup) => {
     const isDb = backup.type === "database";
-    const displayName = isDb
-      ? backup.name.replace("___BACKUP_DB_", "").replace("___", "").replace(/_/g, " ")
-      : backup.name.replace("backups/", "");
-
+    const displayName = backup.name;
     showConfirm(
       `Tem a certeza que deseja restaurar o backup ${displayName}? ISTO SUBSTITUIRÁ TODOS OS DADOS ATUAIS DA LOJA.`,
       async () => {
         setLoading(true);
-        setLoadingMsg("A descarregar backup...");
         try {
-          let clientesData = null;
-          let historicoData = null;
-          let vendasData = null;
-          let extratosData = null;
+          let backupData = null;
 
           if (isDb) {
-            setLoadingMsg("Carregando do banco de dados...");
+            setLoadingMsg("A carregar do banco de dados...");
             const { data, error } = await supabase
               .from("savedReports")
               .select("dados")
-              .eq("id", backup.id)
+              .eq("id", backup.dbId)
               .single();
             if (error) throw error;
-            const payload = data.dados;
-            clientesData = payload.clientes;
-            historicoData = payload.savedReportsList;
-            vendasData = payload.vendasList;
-            extratosData = payload.dbReports;
+            backupData = data?.dados;
+            if (Array.isArray(backupData)) backupData = backupData[0];
           } else {
-            setLoadingMsg("Descarregando do cloud storage...");
+            setLoadingMsg("A descarregar backup da nuvem...");
             const { data: fileBlob, error } = await supabase.storage
               .from("arquivos_extratos")
               .download(`backups/${backup.name}`);
             if (error) throw error;
 
-            setLoadingMsg("Descompactando arquivo .ZIP...");
+            setLoadingMsg("A restaurar banco de dados...");
             const zip = new JSZip();
             const unzipped = await zip.loadAsync(fileBlob);
 
@@ -3166,33 +2436,54 @@ export default function App() {
             const vendasFile = unzipped.file("vendas_servicos.json");
             const extratosFile = unzipped.file("arquivos_extratos.json");
 
-            if (clientesFile) clientesData = JSON.parse(await clientesFile.async("text"));
-            if (historicoFile) historicoData = JSON.parse(await historicoFile.async("text"));
-            if (vendasFile) vendasData = JSON.parse(await vendasFile.async("text"));
-            if (extratosFile) extratosData = JSON.parse(await extratosFile.async("text"));
+            backupData = {
+              clientes: clientesFile ? JSON.parse(await clientesFile.async("text")) : [],
+              savedReportsList: historicoFile ? JSON.parse(await historicoFile.async("text")) : [],
+              vendasList: vendasFile ? JSON.parse(await vendasFile.async("text")) : [],
+              dbReports: extratosFile ? JSON.parse(await extratosFile.async("text")) : [],
+            };
           }
 
-          setLoadingMsg("A restaurar banco de dados...");
+          if (!backupData) {
+            throw new Error("Não foi possível carregar os dados do backup.");
+          }
+
+          setLoadingMsg("A limpar tabelas...");
+
           // Clear existing first
           await supabase
             .from("vendas")
             .delete()
             .ilike("loja", `%${nomeEmpresaUpper}%`);
-          await supabase.from("savedReports").delete().neq("id", 0);
+          
+          // Deletar do savedReports mas preservar ___LOCAL_SYS_CONFIG___
+          await supabase
+            .from("savedReports")
+            .delete()
+            .neq("nome", "___LOCAL_SYS_CONFIG___");
+
           await supabase.from("clientes").delete().neq("id", 0);
           await supabase.from("reports").delete().neq("id", 0);
 
-          if (clientesData && clientesData.length > 0) {
-            await supabase.from("clientes").upsert(clientesData);
+          setLoadingMsg("A restaurar tabelas...");
+
+          if (backupData.clientes && backupData.clientes.length > 0) {
+            await supabase.from("clientes").upsert(backupData.clientes);
           }
-          if (historicoData && historicoData.length > 0) {
-            await supabase.from("savedReports").upsert(historicoData);
+          if (backupData.savedReportsList && backupData.savedReportsList.length > 0) {
+            // Upsert historico filtrado (removendo ___LOCAL_SYS_CONFIG___ se houver duplicado)
+            const cleanSaved = backupData.savedReportsList.filter(
+              (r) => r.nome !== "___LOCAL_SYS_CONFIG___"
+            );
+            if (cleanSaved.length > 0) {
+              await supabase.from("savedReports").upsert(cleanSaved);
+            }
           }
-          if (vendasData && vendasData.length > 0) {
-            await supabase.from("vendas").upsert(vendasData);
+          if (backupData.vendasList && backupData.vendasList.length > 0) {
+            await supabase.from("vendas").upsert(backupData.vendasList);
           }
-          if (extratosData && extratosData.length > 0) {
-            const myReports = extratosData.filter(
+          if (backupData.dbReports && backupData.dbReports.length > 0) {
+            const myReports = backupData.dbReports.filter(
               (r) =>
                 (r.empresa || "").toUpperCase() === nomeEmpresaUpper ||
                 (r.empresa || "").toUpperCase().includes(nomeEmpresaUpper),
@@ -5149,12 +4440,10 @@ export default function App() {
       }
 
       for (const arq of formData.arquivos) {
-        let file = arq.file;
-        let fileName = file.name;
-
+        const file = arq.file;
         const saveOperadora = (finalOperadora || "").trim();
         const saveCodOperadora = (formData.codOperadora || "").trim();
-        const safeFileName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+        const safeFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
         const filePath = `${Date.now()}_${safeFileName}`;
         const { error: uploadErr } = await supabase.storage
           .from("arquivos_extratos")
@@ -5172,7 +4461,7 @@ export default function App() {
           codOperadora: saveCodOperadora || null,
           notaFiscal: arq.notaFiscal || null,
           date: new Date().toISOString(),
-          fileName: fileName,
+          fileName: file.name,
           filePath: filePath,
         };
         const { error: insertErr } = await safeSupabaseInsert("reports", [
@@ -6000,6 +5289,12 @@ export default function App() {
           const textContent = await page.getTextContent();
           textoCompleto +=
             textContent.items.map((item) => item.str).join(" ") + " ";
+        }
+        if (!textoCompleto || !textoCompleto.trim()) {
+          showAlert(
+            "O arquivo PDF é um extrato digitalizado (imagem) sem camada de texto selecionável. Para extratos de imagem, os lançamentos devem ser inseridos manualmente ou por planilha Excel correspondente."
+          );
+          return;
         }
         await extrairDadosDoTexto(textoCompleto, report);
       }
@@ -16610,9 +15905,14 @@ export default function App() {
                   <input
                     type="file"
                     ref={fileInputRef}
-                    onChange={(e) => {
-                      const newFiles = Array.from(e.target.files).map((file, idx) => {
-                        const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+                    onChange={async (e) => {
+                      if (!e.target.files || e.target.files.length === 0) return;
+                      const filesArray = Array.from(e.target.files);
+                      const processedFiles = [];
+
+                      for (const file of filesArray) {
+                        const finalFile = file;
+                        const nameWithoutExt = finalFile.name.replace(/\.[^/.]+$/, "");
                         let parceiroStr = nameWithoutExt;
                         let notaFiscalStr = "";
                         if (nameWithoutExt.includes(",")) {
@@ -16620,16 +15920,17 @@ export default function App() {
                           parceiroStr = parts[0].trim();
                           notaFiscalStr = parts.slice(1).join(",").replace(/\D/g, "");
                         }
-                        return {
-                          file,
+                        processedFiles.push({
+                          file: finalFile,
                           notaFiscal: notaFiscalStr,
                           parceiro: parceiroStr
-                        };
-                      });
-                      if (newFiles.length > 0) {
+                        });
+                      }
+
+                      if (processedFiles.length > 0) {
                         setFormData((prev) => ({
                           ...prev,
-                          arquivos: [...prev.arquivos, ...newFiles],
+                          arquivos: [...prev.arquivos, ...processedFiles],
                         }));
                         setFormError("");
                       }
@@ -17367,264 +16668,257 @@ export default function App() {
                 </h2>
               </header>
               <div className="grid gap-6">
-                {/* CONFIGURAÇÃO DE BACKUP AUTOMÁTICO */}
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors">
+                
+                {/* 1. BACKUP AUTOMÁTICO */}
+                <div className="bg-[#1e293b] dark:bg-slate-800 p-6 rounded-2xl border border-slate-700/60 transition-colors shadow-lg text-left">
                   <div className="flex items-center space-x-3 mb-4">
-                    <div className="bg-blue-100 dark:bg-blue-500/20 p-2 rounded-lg">
-                      <Settings className="text-blue-600 dark:text-blue-400" />
+                    <div className="bg-blue-500/10 p-2.5 rounded-xl border border-blue-500/20 text-blue-400">
+                      <Settings size={22} />
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-900 dark:text-white text-lg">
-                        Backup Automático
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                      <h3 className="font-bold text-white text-lg">Backup Automático</h3>
+                      <p className="text-xs text-slate-400">
                         Ative/desative os backups automáticos periódicos (a cada 15 minutos) e defina o destino ideal dos dados.
                       </p>
                     </div>
                   </div>
 
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
+                  {/* Status Row */}
+                  <div className="bg-slate-900/40 border border-slate-800/80 rounded-xl p-4 flex items-center justify-between mb-6">
+                    <div>
+                      <p className="text-sm font-semibold text-white">Status do Backup Automático</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {isAutoBackupActive 
+                          ? "Os backups automáticos periódicos estão ATIVADOS." 
+                          : "Os backups automáticos periódicos estão DESATIVADOS por padrão."}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const newVal = !isAutoBackupActive;
+                        setIsAutoBackupActive(newVal);
+                        localStorage.setItem("protetta_autobackup_active", String(newVal));
+                        showAlert(`Backup automático ${newVal ? "ativado" : "desativado"} com sucesso!`);
+                      }}
+                      className={`flex items-center px-4 py-2 rounded-full font-bold text-xs text-white transition-all shadow-md ${
+                        isAutoBackupActive 
+                          ? "bg-emerald-600 hover:bg-emerald-500" 
+                          : "bg-rose-600 hover:bg-rose-500"
+                      }`}
+                    >
+                      {isAutoBackupActive ? (
+                        <>
+                          <CheckCircle size={14} className="mr-1.5" />
+                          Ativo
+                        </>
+                      ) : (
+                        <>
+                          <XCircle size={14} className="mr-1.5" />
+                          Inativo
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Local Onde Salvar Heading */}
+                  <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase mb-3">Local onde salvar</p>
+                  
+                  {/* Cards Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    
+                    {/* Card 1: Banco de Dados */}
+                    <div
+                      onClick={() => {
+                        setBackupDestination("database");
+                        localStorage.setItem("protetta_backup_destination", "database");
+                      }}
+                      className={`p-4 rounded-xl border transition-all cursor-pointer select-none flex flex-col justify-between ${
+                        backupDestination === "database"
+                          ? "bg-[#1d2d44]/30 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.15)] text-blue-400"
+                          : "bg-slate-900/30 border-slate-700/60 text-slate-400 hover:border-slate-600"
+                      }`}
+                    >
                       <div>
-                        <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                          Status do Backup Automático
-                        </span>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {backupEnabled ? "Os backups automáticos periódicos estão ATIVADOS." : "Os backups automáticos periódicos estão DESATIVADOS por padrão."}
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Database size={18} className={backupDestination === "database" ? "text-blue-400" : "text-slate-400"} />
+                          <h4 className="font-bold text-sm text-white">Banco de Dados</h4>
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          Salva as tabelas em formato JSON diretamente na tabela interna de configurações do PostgreSQL.
                         </p>
                       </div>
-                      <button
-                        onClick={() => updateBackupConfig(!backupEnabled, backupDestination)}
-                        className={`px-4 py-2 rounded-lg font-bold text-xs transition-all flex items-center ${
-                          backupEnabled
-                            ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                            : "bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-500/10"
-                        }`}
-                      >
-                        {backupEnabled ? (
-                          <>
-                            <CheckCircle size={14} className="mr-1.5" />
-                            Ativo
-                          </>
-                        ) : (
-                          <>
-                            <XCircle size={14} className="mr-1.5" />
-                            Inativo
-                          </>
-                        )}
-                      </button>
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
-                        Local onde Salvar
-                      </label>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <button
-                          onClick={() => updateBackupConfig(backupEnabled, "banco")}
-                          className={`p-3 rounded-lg border text-left transition-all ${
-                            backupDestination === "banco"
-                              ? "bg-blue-50 dark:bg-blue-950/20 border-blue-500 text-blue-900 dark:text-blue-300"
-                              : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300"
-                          }`}
-                        >
-                          <div className="flex items-center space-x-2 mb-1">
-                            <Database size={16} className={backupDestination === "banco" ? "text-blue-500" : "text-slate-400"} />
-                            <span className="text-sm font-bold">Banco de Dados</span>
-                          </div>
-                          <p className="text-[11px] opacity-80 leading-relaxed">
-                            Salva as tabelas em formato JSON diretamente na tabela interna de configurações do PostgreSQL.
-                          </p>
-                        </button>
-
-                        <button
-                          onClick={() => updateBackupConfig(backupEnabled, "local")}
-                          className={`p-3 rounded-lg border text-left transition-all ${
-                            backupDestination === "local"
-                              ? "bg-blue-50 dark:bg-blue-950/20 border-blue-500 text-blue-900 dark:text-blue-300"
-                              : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300"
-                          }`}
-                        >
-                          <div className="flex items-center space-x-2 mb-1">
-                            <Download size={16} className={backupDestination === "local" ? "text-blue-500" : "text-slate-400"} />
-                            <span className="text-sm font-bold">Local (Download)</span>
-                          </div>
-                          <p className="text-[11px] opacity-80 leading-relaxed">
-                            Aciona um download automático de um arquivo .ZIP diretamente para a sua pasta de downloads.
-                          </p>
-                        </button>
-
-                        <button
-                          onClick={() => updateBackupConfig(backupEnabled, "nuvem")}
-                          className={`p-3 rounded-lg border text-left transition-all ${
-                            backupDestination === "nuvem"
-                              ? "bg-blue-50 dark:bg-blue-950/20 border-blue-500 text-blue-900 dark:text-blue-300"
-                              : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300"
-                          }`}
-                        >
-                          <div className="flex items-center space-x-2 mb-1">
-                            <HardDrive size={16} className={backupDestination === "nuvem" ? "text-blue-500" : "text-slate-400"} />
-                            <span className="text-sm font-bold">Nuvem (Supabase)</span>
-                          </div>
-                          <p className="text-[11px] opacity-80 leading-relaxed">
-                            Salva o arquivo .ZIP de forma ultra-segura na nuvem (Storage do Supabase) na pasta 'backups/'.
-                          </p>
-                        </button>
+                    {/* Card 2: Local (Download) */}
+                    <div
+                      onClick={() => {
+                        setBackupDestination("local");
+                        localStorage.setItem("protetta_backup_destination", "local");
+                      }}
+                      className={`p-4 rounded-xl border transition-all cursor-pointer select-none flex flex-col justify-between ${
+                        backupDestination === "local"
+                          ? "bg-[#1d2d44]/30 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.15)] text-blue-400"
+                          : "bg-slate-900/30 border-slate-700/60 text-slate-400 hover:border-slate-600"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Download size={18} className={backupDestination === "local" ? "text-blue-400" : "text-slate-400"} />
+                          <h4 className="font-bold text-sm text-white">Local (Download)</h4>
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          Aciona um download automático de um arquivo .ZIP diretamente para a sua pasta de downloads.
+                        </p>
                       </div>
                     </div>
+
+                    {/* Card 3: Nuvem (Supabase) */}
+                    <div
+                      onClick={() => {
+                        setBackupDestination("cloud");
+                        localStorage.setItem("protetta_backup_destination", "cloud");
+                      }}
+                      className={`p-4 rounded-xl border transition-all cursor-pointer select-none flex flex-col justify-between ${
+                        backupDestination === "cloud"
+                          ? "bg-[#1d2d44]/30 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.15)] text-blue-400"
+                          : "bg-slate-900/30 border-slate-700/60 text-slate-400 hover:border-slate-600"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Cloud size={18} className={backupDestination === "cloud" ? "text-blue-400" : "text-slate-400"} />
+                          <h4 className="font-bold text-sm text-white">Nuvem (Supabase)</h4>
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          Salva o arquivo .ZIP de forma ultra-segura na nuvem (Storage do Supabase) na pasta 'backups/'.
+                        </p>
+                      </div>
+                    </div>
+
                   </div>
                 </div>
 
-                {/* CRIAR BACKUP MANUAL INSTANTÂNEO */}
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors">
+                {/* 2. MANUAL BACKUP */}
+                <div className="bg-[#1e293b] dark:bg-slate-800 p-6 rounded-2xl border border-slate-700/60 transition-colors shadow-lg text-left">
                   <div className="flex items-center space-x-3 mb-4">
-                    <div className="bg-emerald-100 dark:bg-emerald-500/20 p-2 rounded-lg">
-                      <Save className="text-emerald-600 dark:text-emerald-400" />
+                    <div className="bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20 text-emerald-400">
+                      <Save size={22} />
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-900 dark:text-white text-lg">
-                        Criar Backup Manual Instantâneo
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                      <h3 className="font-bold text-white text-lg">Criar Backup Manual Instantâneo</h3>
+                      <p className="text-xs text-slate-400">
                         Gera e salva um backup completo imediatamente usando o local escolhido (atualmente:{" "}
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                          {backupDestination === "banco"
-                            ? "Banco de Dados"
-                            : backupDestination === "local"
-                            ? "Local (Download)"
+                        <span className="text-emerald-400 font-semibold">
+                          {backupDestination === "database" 
+                            ? "Banco de Dados" 
+                            : backupDestination === "local" 
+                            ? "Local (Download)" 
                             : "Nuvem (Supabase)"}
-                        </span>
-                        ).
+                        </span>).
                       </p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <button
-                      onClick={async () => {
-                        setLoading(true);
-                        setLoadingMsg("Gerando backup...");
-                        try {
-                          await createBackup(backupDestination, false);
-                        } finally {
-                          setLoading(false);
-                        }
-                      }}
-                      className="p-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center justify-center transition-all shadow-md shadow-emerald-500/10 font-bold text-sm hover:scale-[1.01]"
-                    >
-                      <Save size={20} className="mr-2" />
-                      Criar Backup no Local Configurado
-                    </button>
 
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <button
-                      onClick={async () => {
-                        setLoading(true);
-                        setLoadingMsg("Gerando arquivo .ZIP...");
-                        try {
-                          await createBackup("local", false);
-                        } finally {
-                          setLoading(false);
-                        }
-                      }}
-                      className="p-4 bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg flex items-center justify-center border border-slate-300 dark:border-slate-600 transition-all text-slate-800 dark:text-white font-semibold text-sm hover:scale-[1.01]"
+                      onClick={() => handleCreateBackup(backupDestination)}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-5 rounded-xl transition-all shadow-md flex items-center justify-center space-x-2 border border-emerald-500/30 text-sm"
                     >
-                      <Download size={20} className="mr-2" />
-                      Forçar Download de ZIP Local
+                      <Save size={18} />
+                      <span>Criar Backup no Local Configurado</span>
+                    </button>
+                    <button
+                      onClick={() => handleCreateBackup("local")}
+                      className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-5 rounded-xl transition-all shadow-md flex items-center justify-center space-x-2 border border-slate-600/40 text-sm"
+                    >
+                      <Download size={18} />
+                      <span>Forçar Download de ZIP Local</span>
                     </button>
                   </div>
                 </div>
 
-                {/* RESTAURAR BACKUPS UNIFICADOS */}
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors">
-                  <div className="flex items-center space-x-3 mb-4">
-                    <div className="bg-indigo-100 dark:bg-indigo-500/20 p-2 rounded-lg">
-                      <History className="text-indigo-600 dark:text-indigo-400" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-slate-900 dark:text-white text-lg">
-                        Restaurar Backup Recente
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Restaure dados completos de um dos últimos 10 backups detectados na nuvem ou no banco.
-                      </p>
+                {/* 3. RESTORE BACKUP */}
+                <div className="bg-[#1e293b] dark:bg-slate-800 p-6 rounded-2xl border border-slate-700/60 transition-colors shadow-lg text-left">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="bg-blue-500/10 p-2.5 rounded-xl border border-blue-500/20 text-blue-400">
+                        <History size={22} />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-white text-lg">Restaurar Backup Recente</h3>
+                        <p className="text-xs text-slate-400">
+                          Restaure dados completos de um dos últimos 10 backups detectados na nuvem ou no banco.
+                        </p>
+                      </div>
                     </div>
                     <button
                       onClick={fetchBackups}
-                      className="ml-auto p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                      className="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white rounded-xl transition-all shadow-sm"
+                      title="Atualizar lista"
                     >
-                      <RefreshCw
-                        size={18}
-                        className={loadingBackups ? "animate-spin" : ""}
-                      />
+                      <RefreshCw size={18} className={loadingBackups ? "animate-spin" : ""} />
                     </button>
                   </div>
-                  <div className="space-y-3">
+
+                  <div className="space-y-3 mt-4">
                     {loadingBackups ? (
-                      <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center justify-center p-4">
+                      <div className="text-sm text-slate-400 flex items-center justify-center py-8">
+                        <RefreshCw size={24} className="animate-spin mr-3 text-blue-400" />
                         Carregando lista de backups...
                       </div>
                     ) : backupList.length === 0 ? (
-                      <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                      <div className="text-sm text-slate-400 flex items-center justify-center py-8 bg-slate-900/25 border border-slate-800/80 rounded-xl">
                         Nenhum backup recente encontrado para esta loja.
                       </div>
                     ) : (
-                      backupList.map((backup) => {
-                        const isDb = backup.type === "database";
-                        return (
+                      <div className="grid gap-3">
+                        {backupList.map((backup) => (
                           <div
                             key={backup.id}
-                            className={`flex items-center justify-between p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700/50 rounded-lg ${backup.id === "error" ? "border-red-400" : "hover:border-blue-400"} transition-colors`}
+                            className="flex items-center justify-between p-4 bg-slate-900/30 border border-slate-800 hover:border-blue-500/40 rounded-xl transition-all"
                           >
-                            <div className="flex-1 min-w-0 pr-4">
-                              <p
-                                className={`text-sm font-bold truncate ${backup.id === "error" ? "text-red-600" : "text-slate-900 dark:text-white"}`}
-                              >
-                                {isDb
-                                  ? backup.name.replace("___BACKUP_DB_", "").replace("___", "").replace(/_/g, " ")
-                                  : backup.name.replace("backups/", "")}
-                              </p>
-                              <div className="flex items-center space-x-2 mt-1">
-                                <span
-                                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                    isDb
-                                      ? "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300"
-                                      : "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
-                                  }`}
-                                >
-                                  {isDb ? "Banco de Dados" : "Nuvem (ZIP)"}
-                                </span>
-                                <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                                  {new Date(backup.created_at).toLocaleString()}
+                            <div className="min-w-0 flex-1 pr-4">
+                              <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                                <p className="text-sm font-bold text-white truncate max-w-xs sm:max-w-md">
+                                  {backup.name}
+                                </p>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                                  backup.type === "database"
+                                    ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                                    : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                }`}>
+                                  {backup.type === "database" ? "Banco de Dados" : "Nuvem"}
                                 </span>
                               </div>
+                              <p className="text-xs text-slate-400 mt-1">
+                                Criado em: {new Date(backup.created_at).toLocaleString()}
+                              </p>
                             </div>
-                            {backup.id !== "error" && (
-                              <button
-                                onClick={() => handleRestoreBackup(backup)}
-                                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg flex items-center transition-colors shadow-sm shrink-0"
-                              >
-                                <RefreshCw size={14} className="mr-1.5" />
-                                Restaurar
-                              </button>
-                            )}
+                            <button
+                              onClick={() => handleRestoreBackup(backup)}
+                              className="text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl flex items-center transition-all shadow-sm shrink-0"
+                            >
+                              <RefreshCw size={13} className="mr-1.5" />
+                              Restaurar
+                            </button>
                           </div>
-                        );
-                      })
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>
 
-
-
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors animate-in fade-in duration-300">
+                {/* 4. SINCRONIZAÇÃO DE METADADOS */}
+                <div className="bg-[#1e293b] dark:bg-slate-800 p-6 rounded-2xl border border-slate-700/60 transition-colors shadow-lg text-left animate-in fade-in duration-300">
                   <div className="flex items-center space-x-3 mb-4">
-                    <div className="bg-indigo-100 dark:bg-indigo-500/20 p-2 rounded-lg">
+                    <div className="bg-indigo-500/10 p-2.5 rounded-xl border border-indigo-500/20 text-indigo-400">
                       <RefreshCw className="text-indigo-600 dark:text-indigo-400" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-900 dark:text-white text-lg">
+                      <h3 className="font-bold text-white text-lg">
                         Sincronização de Metadados Amil
                       </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                      <p className="text-xs text-slate-400">
                         Força a atualização de todas as colunas de "Vendedor/Corretor" e "Vitalício" no banco de dados baseado na planilha mestre (PDF).
                       </p>
                     </div>
@@ -17632,73 +16926,16 @@ export default function App() {
                   <div className="grid grid-cols-1 gap-4">
                     <button
                       onClick={() => runMetadataMigration(true)}
-                      className="p-4 bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg flex items-center justify-center border border-slate-300 dark:border-slate-600 hover:border-indigo-500 dark:hover:border-indigo-500 transition-colors text-slate-800 dark:text-white"
+                      className="p-4 bg-slate-700 hover:bg-slate-600 rounded-xl flex items-center justify-center border border-slate-600 hover:border-indigo-500 transition-colors text-white font-bold"
                     >
                       <RefreshCw size={20} className="mr-2 text-indigo-500 animate-spin" style={{ animationDuration: '3s' }} />
-                      <span className="font-bold">
+                      <span>
                         Sincronizar Banco de Dados Agora
                       </span>
                     </button>
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors animate-in fade-in duration-300">
-                  <div className="flex items-center space-x-3 mb-4">
-                    <div className="bg-amber-100 dark:bg-amber-500/20 p-2 rounded-lg">
-                      <FileText className="text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-slate-900 dark:text-white text-lg">
-                        Reversão de Imagens para PDF
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Varre as pastas "migrados_webp" and "migrados_jpg", converte todas as imagens de volta para formato PDF com alta fidelidade, move-as de volta para a raiz do bucket e atualiza as referências no banco de dados.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-4">
-                    <button
-                      onClick={runImageToPdfRollback}
-                      disabled={isRollingBack}
-                      className={`p-4 rounded-lg flex items-center justify-center transition-all font-bold text-sm hover:scale-[1.01] ${
-                        isRollingBack 
-                        ? "bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed" 
-                        : "bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-500/10"
-                      }`}
-                    >
-                      <RefreshCw size={20} className={`mr-2 ${isRollingBack ? "animate-spin" : ""}`} />
-                      {isRollingBack ? "Convertendo e Movendo Arquivos..." : "Converter e Mover Imagens para PDF Agora"}
-                    </button>
-                  </div>
-
-                  {rollbackLogs.length > 0 && (
-                    <div className="mt-4 border-t border-slate-150 dark:border-slate-700/50 pt-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Histórico de Reversão:</span>
-                        <button 
-                          onClick={() => setRollbackLogs([])}
-                          className="text-xs text-red-500 hover:text-red-700 font-bold"
-                        >
-                          Limpar Logs
-                        </button>
-                      </div>
-                      <div className="bg-slate-900 text-slate-100 font-mono text-xs p-4 rounded-lg max-h-60 overflow-y-auto space-y-1 shadow-inner">
-                        {rollbackLogs.map((log, idx) => (
-                          <div 
-                            key={idx} 
-                            className={
-                              log.type === 'success' ? 'text-emerald-400' :
-                              log.type === 'error' ? 'text-red-400' :
-                              log.type === 'warn' ? 'text-amber-400' : 'text-slate-300'
-                            }
-                          >
-                            {log.text}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
           )}
