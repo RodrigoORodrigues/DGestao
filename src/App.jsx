@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import DoubleScrollWrapper from "./components/DoubleScrollWrapper";
 import DatePicker, { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import ptBR from "date-fns/locale/pt-BR";
@@ -10371,7 +10372,7 @@ export default function App() {
                           </div>
                         </div>
                         {contratosAtivos.length > 0 ? (
-                          <div className="overflow-x-auto">
+                          <DoubleScrollWrapper>
                             <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
                               <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-200 font-semibold border-b border-slate-200 dark:border-slate-700">
                                 <tr>
@@ -10435,7 +10436,7 @@ export default function App() {
                                   ))}
                               </tbody>
                             </table>
-                          </div>
+                          </DoubleScrollWrapper>
                         ) : (
                           <div className="bg-slate-50 dark:bg-slate-800/50 border border-dashed border-slate-300 dark:border-slate-700 p-8 rounded-xl text-center text-slate-500 dark:text-slate-400">
                             <CheckCircle
@@ -10474,7 +10475,7 @@ export default function App() {
                       Ver todos
                     </button>
                   </div>
-                  <div className="overflow-x-auto">
+                  <DoubleScrollWrapper>
                     <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
                       <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-200 font-semibold border-b border-slate-200 dark:border-slate-700">
                         <tr>
@@ -10513,7 +10514,7 @@ export default function App() {
                           ))}
                       </tbody>
                     </table>
-                  </div>
+                  </DoubleScrollWrapper>
                 </div>
               )}
 
@@ -11196,7 +11197,7 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <div className="-mx-4 md:mx-0 bg-white dark:bg-slate-800 border-y md:border border-slate-200 dark:border-slate-700 md:rounded-lg shadow-sm overflow-x-auto transition-colors duration-200">
+              <DoubleScrollWrapper className="-mx-4 md:mx-0 bg-white dark:bg-slate-800 border-y md:border border-slate-200 dark:border-slate-700 md:rounded-lg shadow-sm transition-colors duration-200">
                 <table className="w-full text-left border-collapse text-sm whitespace-nowrap min-w-max">
                   <thead>
                     <tr className="border-b-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750/50 transition-colors duration-200">
@@ -11668,7 +11669,7 @@ export default function App() {
                     )}
                   </tbody>
                 </table>
-              </div>
+              </DoubleScrollWrapper>
 
               {displayedVendas.length > 0 && (
                 <div className="mt-4 flex flex-col md:flex-row items-center justify-between bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm gap-4">
@@ -11859,7 +11860,7 @@ export default function App() {
                   )}
                 </div>
               </div>
-              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm overflow-x-auto transition-colors duration-200">
+              <DoubleScrollWrapper className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm transition-colors duration-200">
                 <table className="w-full text-left border-collapse text-sm whitespace-nowrap">
                   <thead>
                     <tr className="border-b-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750/50 transition-colors duration-200">
@@ -12035,7 +12036,7 @@ export default function App() {
                     )}
                   </tbody>
                 </table>
-              </div>
+              </DoubleScrollWrapper>
 
               {clientesFiltrados.length > 0 && (
                 <div className="mt-4 flex flex-col md:flex-row items-center justify-between bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm gap-4">
@@ -12415,7 +12416,7 @@ export default function App() {
                 );
               })()}
 
-              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm overflow-x-auto transition-colors duration-200 w-full">
+              <DoubleScrollWrapper className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm transition-colors duration-200 w-full">
                 <table className="w-full text-left border-collapse text-sm whitespace-nowrap">
                   <thead>
                     <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750 text-slate-600 dark:text-slate-300 transition-colors duration-200 align-middle">
@@ -13213,7 +13214,7 @@ export default function App() {
                     </tfoot>
                   )}
                 </table>
-              </div>
+              </DoubleScrollWrapper>
             </div>
           )}
 
@@ -13323,7 +13324,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                <DoubleScrollWrapper className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700">
                   <table className="w-full text-left border-collapse min-w-[900px]">
                     <thead className="bg-slate-100 dark:bg-slate-800/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700 shadow-sm">
                       <tr>
@@ -13585,7 +13586,7 @@ export default function App() {
                       })()}
                     </tbody>
                   </table>
-                </div>
+                </DoubleScrollWrapper>
               </div>
             </div>
           )}
@@ -13617,7 +13618,7 @@ export default function App() {
                     onChange={(e) => setRelatorioVendasSearch(e.target.value)}
                   />
                 </div>
-                <div className="flex-1 overflow-auto border border-slate-200 dark:border-slate-700 rounded-lg relative">
+                <DoubleScrollWrapper className="flex-1 overflow-auto border border-slate-200 dark:border-slate-700 rounded-lg relative">
                   <table className="w-full text-left text-sm whitespace-nowrap">
                     <thead className="sticky top-0 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 z-10 shadow-sm shadow-slate-200/50 dark:shadow-black/50">
                       <tr>
@@ -13745,7 +13746,7 @@ export default function App() {
                       )}
                     </tbody>
                   </table>
-                </div>
+                </DoubleScrollWrapper>
                 <div className="mt-6 flex justify-between items-center">
                   <span className="text-sm font-bold text-slate-500 dark:text-slate-400">
                     {relatorioVendasSelected.size} selecionadas
@@ -14590,7 +14591,7 @@ export default function App() {
                 </div>
               </header>
 
-              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm overflow-x-auto transition-colors duration-200">
+              <DoubleScrollWrapper className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm transition-colors duration-200">
                 <table className="w-full text-left border-collapse text-sm whitespace-nowrap">
                   <thead>
                     <tr className="border-b-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750/50 transition-colors duration-200">
@@ -14903,7 +14904,7 @@ export default function App() {
                     )}
                   </tbody>
                 </table>
-              </div>
+              </DoubleScrollWrapper>
 
               {displayedReports.length > 0 && (
                 <div className="mt-4 flex flex-col md:flex-row items-center justify-between bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm gap-4">

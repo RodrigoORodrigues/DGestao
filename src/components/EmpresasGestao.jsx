@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Building, Plus, Trash2, Edit2, CheckCircle, Circle, Save, X } from 'lucide-react';
+import DoubleScrollWrapper from './DoubleScrollWrapper';
 
 export default function EmpresasGestao({ empresasList, setEmpresasList, showAlert, showConfirm }) {
     const [isEditing, setIsEditing] = useState(false);
@@ -218,7 +219,7 @@ export default function EmpresasGestao({ empresasList, setEmpresasList, showAler
                 </div>
             )}
 
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+            <DoubleScrollWrapper className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm transition-colors duration-200">
                 <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
                     <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-200 font-semibold border-b border-slate-200 dark:border-slate-700">
                         <tr>
@@ -283,7 +284,7 @@ export default function EmpresasGestao({ empresasList, setEmpresasList, showAler
                         )}
                     </tbody>
                 </table>
-            </div>
+            </DoubleScrollWrapper>
         </div>
     );
 }

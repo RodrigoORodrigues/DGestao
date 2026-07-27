@@ -3,6 +3,7 @@ import { supabase } from '../config/supabase.js';
 import { generateSHA256Hash, formatarDataVisivel } from '../utils/helpers.js';
 import { Shield, FileText, Download, Users, CheckCircle, Search, Edit3, Plus, X, Eye } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
+import DoubleScrollWrapper from './DoubleScrollWrapper';
 
 const TermosLGPDGestao = ({ currentUser }) => {
     const [view, setView] = useState('list'); // 'list', 'new_version', 'view_acceptance'
@@ -209,7 +210,7 @@ const TermosLGPDGestao = ({ currentUser }) => {
                                 />
                             </div>
                         </div>
-                        <div className="overflow-x-auto">
+                        <DoubleScrollWrapper>
                             <table className="w-full text-sm text-left">
                                 <thead className="text-xs text-slate-500 uppercase bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
                                     <tr>
@@ -243,7 +244,7 @@ const TermosLGPDGestao = ({ currentUser }) => {
                                     )}
                                 </tbody>
                             </table>
-                        </div>
+                        </DoubleScrollWrapper>
                     </div>
                 </div>
             ) : view === 'new_version' ? (

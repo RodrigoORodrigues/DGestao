@@ -5,6 +5,7 @@ import ChartDataLabels from 'chartjs-plugin-datalabels';
 import html2pdf from 'html2pdf.js';
 import { CheckCircle, X, TrendingUp, DollarSign, Users, Award, BarChart3, ArrowUpRight } from 'lucide-react';
 import { findClientMetadata } from '../utils/clientMetadata';
+import DoubleScrollWrapper from './DoubleScrollWrapper';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler, ChartDataLabels);
 
@@ -1010,7 +1011,7 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {}, isDarkMode }) => {
                         </select>
                     </div>
                 </div>
-                <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
+                <DoubleScrollWrapper className="max-h-[300px] overflow-y-auto">
                     <table className="w-full text-left text-sm">
                         <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 sticky top-0 z-10 shadow-[inset_0_-1px_0_rgba(0,0,0,0.1)]">
                             <tr><th className="px-6 py-2 uppercase font-semibold text-xs">Período</th><th className="px-6 py-2 uppercase font-semibold text-xs">Status</th><th className="px-6 py-2 uppercase font-semibold text-xs text-right">Part. Anual</th><th className="px-6 py-2 uppercase font-semibold text-xs text-right text-emerald-600 dark:text-emerald-400">Valor</th></tr>
@@ -1036,7 +1037,7 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {}, isDarkMode }) => {
                             ))}
                         </tbody>
                     </table>
-                </div>
+                </DoubleScrollWrapper>
             </div>
 
             {/* Modal de Detalhes dos Gráficos */}
@@ -1112,7 +1113,7 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {}, isDarkMode }) => {
                                         <p className="text-[10px] text-slate-500 mt-1">Este gráfico representa o somatório consolidado de extratos importados para a competência indicada ou filtro de busca.</p>
                                     </div>
                                 ) : (
-                                    <div className="overflow-x-auto border border-slate-100 dark:border-slate-800 rounded-xl max-h-[300px] overflow-y-auto">
+                                    <DoubleScrollWrapper className="border border-slate-100 dark:border-slate-800 rounded-xl max-h-[300px] overflow-y-auto">
                                         <table className="w-full text-left text-xs">
                                             <thead className="bg-slate-50 dark:bg-slate-950/50 text-slate-400 uppercase font-bold text-[10px] tracking-wider sticky top-0 border-b border-slate-100 dark:border-slate-800 z-10">
                                                 <tr>
@@ -1156,7 +1157,7 @@ const DashboardControle = ({ vendasList, defaultEmpresa = {}, isDarkMode }) => {
                                                 ))}
                                             </tbody>
                                         </table>
-                                    </div>
+                                    </DoubleScrollWrapper>
                                 )}
                             </div>
 
