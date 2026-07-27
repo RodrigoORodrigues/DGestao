@@ -7,6 +7,7 @@ registerLocale("pt-BR", ptBR);
 import { supabase } from "./config/supabase";
 import { findClientMetadata } from "./utils/clientMetadata";
 import { PJ_CLIENTS_LIST } from "./utils/pj_clients_list";
+import { parsePreventCommissionRule, calculatePreventValorTotal } from "./utils/preventExtractor";
 
 export async function safeSupabaseInsert(table, dataArray) {
   if (!dataArray || (Array.isArray(dataArray) && dataArray.length === 0))
@@ -5967,9 +5968,17 @@ export default function App() {
     };
 
     const processPreventRows = (rows) => {
-      if (!Array.isArray(rows) || rows.length === 0) return false;
+      let sourceRows = Array.isArray(rows) && rows.length > 0 ? rows : [];
+      if (sourceRows.length === 0 && typeof texto === "string" && texto.trim()) {
+        if (texto.includes(";")) {
+          sourceRows = parseCsvLikeRows(texto, ";");
+        } else if (texto.includes("\t")) {
+          sourceRows = parseCsvLikeRows(texto, "\t");
+        }
+      }
+      if (!Array.isArray(sourceRows) || sourceRows.length === 0) return false;
       let count = 0;
-      rows.forEach((row) => {
+      sourceRows.forEach((row) => {
         const lowerKeys = Object.keys(row || {}).reduce((acc, key) => {
           acc[String(key).trim().toLowerCase()] = row[key];
           return acc;
@@ -5985,22 +5994,29 @@ export default function App() {
           lowerKeys["contrato"];
         const produto = lowerKeys["produto"] || "";
         const tipoComissao =
-          lowerKeys["tipo comissão"] || lowerKeys["tipo comissao"] || "";
+          lowerKeys["tipo comissão"] || lowerKeys["tipo comissao"] || lowerKeys["comissao"] || "";
         const provento = parseCurrencyValue(lowerKeys["valor provento"]);
         const estorno = parseCurrencyValue(lowerKeys["valor estorno"]);
         const valorComissao =
           provento !== 0 ? provento : estorno !== 0 ? -Math.abs(estorno) : 0;
         if (!beneficiario || !matricula || valorComissao === 0) return;
+
+        const rule = parsePreventCommissionRule(tipoComissao);
+        const calcTotal = calculatePreventValorTotal(valorComissao, rule.comissaoPorcentagem);
+
         const inserted = pushRegistroExtraido({
           contrato: matricula,
           cliente: beneficiario,
-          parcela: extractInstallment(tipoComissao) || "1",
+          parcela: rule.parcela || extractInstallment(tipoComissao) || "1",
           inicioVigencia: lowerKeys["data assinatura"],
           data: lowerKeys["data envio"],
           formatoDataBR: true,
-          valorTotal: Math.abs(valorComissao),
+          valorTotal: calcTotal,
           comissao: valorComissao,
-          vitalicio: /vital/i.test(String(tipoComissao)) ? "Sim" : "Não",
+          comissaoPorcentagem: rule.comissaoPorcentagem || "",
+          vitalicio: rule.vitalicio,
+          vendedor: rule.vendedor,
+          corretor: rule.corretor,
           servico: /odonto|dental/i.test(String(produto))
             ? "Plano Dental"
             : "Plano de Saúde",
@@ -8696,6 +8712,14 @@ export default function App() {
       return { ...r, comissaoPorcentagem };
     });
 
+    if (extratoOperadora === "PREVENT") {
+      comissaoPreenchida = comissaoPreenchida.map((reg) => ({
+        ...reg,
+        corretor: "PROTETTA",
+        vendedor: "PROTETTA",
+      }));
+    }
+
     if (
       extratoOperadora.includes("PORTO") ||
       extratoOperadora === "PORTO SEGURO"
@@ -8854,6 +8878,19 @@ export default function App() {
       }
       return reg;
     });
+
+    if (extratoOperadora === "PREVENT") {
+      comissaoPreenchida = comissaoPreenchida.map((reg) => {
+        const pctNum = parseFloat(String(reg.comissaoPorcentagem || "").replace(",", "."));
+        const isTwoPercent = pctNum === 2;
+        return {
+          ...reg,
+          corretor: "PROTETTA",
+          vendedor: "PROTETTA",
+          vitalicio: isTwoPercent || reg.vitalicio === "Sim" ? "Sim" : (reg.vitalicio || "Não"),
+        };
+      });
+    }
 
     setPdfData(comissaoPreenchida);
     showAlert(
