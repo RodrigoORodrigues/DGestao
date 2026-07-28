@@ -64,8 +64,16 @@ export default function DoubleScrollWrapper({ children, className = "", style = 
     }
   };
 
+  // Strip overflow classes from outer wrapper so it doesn't create duplicate scrollbars
+  const outerClasses = className
+    .replace(/\boverflow-(x|y|auto|scroll|hidden)\b/g, "")
+    .trim();
+
   return (
-    <div className="w-full flex flex-col min-w-0">
+    <div
+      className={`w-full flex flex-col min-w-0 min-h-0 overflow-hidden ${outerClasses}`}
+      style={style}
+    >
       {needsScroll && (
         <div
           ref={topScrollRef}
@@ -79,8 +87,7 @@ export default function DoubleScrollWrapper({ children, className = "", style = 
       <div
         ref={bottomScrollRef}
         onScroll={handleBottomScroll}
-        className={`overflow-x-auto w-full ${className}`}
-        style={style}
+        className="w-full flex-1 min-h-0 min-w-0 overflow-auto"
       >
         {children}
       </div>

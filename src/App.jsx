@@ -13272,7 +13272,7 @@ export default function App() {
                 >
                   <X size={24} />
                 </button>
-                <div className={`${inconsistenciasReduzido ? "mb-2" : "mb-4"} pr-8`}>
+                <div className={`${inconsistenciasReduzido ? "mb-2" : "mb-4"} pr-8 shrink-0`}>
                   <div className={`flex flex-col md:flex-row md:items-center justify-between gap-2 ${inconsistenciasReduzido ? "mb-2" : "mb-4"}`}>
                     <h2 className={`${inconsistenciasReduzido ? "text-lg" : "text-2xl"} font-bold font-sans tracking-tight text-slate-800 dark:text-white flex items-center`}>
                       <AlertTriangle className="mr-2 text-orange-500" size={inconsistenciasReduzido ? 20 : 28} /> Painel de Inconsistências
