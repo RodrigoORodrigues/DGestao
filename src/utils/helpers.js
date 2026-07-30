@@ -28,9 +28,17 @@ export const formatarMoeda = (valor) => {
 };
 
 export const formatarDataVisivel = (dataString) => {
-    if(!dataString) return '--/--/----';
-    const partes = dataString.split('-');
-    return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : dataString;
+    if (!dataString) return "";
+    let str = String(dataString).trim();
+    if (str.includes("T")) str = str.split("T")[0];
+    if (str.includes("/")) return str;
+    if (str.includes("-")) {
+        const partes = str.split("-");
+        if (partes.length === 3 && partes[0].length === 4) {
+            return `${partes[2]}/${partes[1]}/${partes[0]}`;
+        }
+    }
+    return str;
 };
 
 export const printColLabels = {

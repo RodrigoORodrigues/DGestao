@@ -8970,6 +8970,14 @@ export default function App() {
     setNfeTab("emitir");
   };
 
+  const updatePdfRow = (idx, fields) => {
+    setPdfData((prev) => {
+      const arr = [...prev];
+      arr[idx] = { ...arr[idx], ...fields };
+      return arr;
+    });
+  };
+
   const startEditingRow = (idx, linha) => {
     setEditRowIndex(idx);
     setEditRowData({
@@ -12511,26 +12519,27 @@ export default function App() {
                                 className="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] px-2 py-1 rounded focus:outline-none transition-colors"
                                 onClick={() => {
                                   if (!globalDateInput) return;
+                                  const dataBr = globalDateInput.includes("-")
+                                    ? globalDateInput.split("-").reverse().join("/")
+                                    : globalDateInput;
                                   showConfirm(
-                                    `Deseja alterar a data de TODAS as linhas para ${globalDateInput.split("-").reverse().join("/")}?`,
+                                    `Deseja alterar a data de TODAS as linhas para ${dataBr}?`,
                                     () => {
                                       setPdfData((prev) =>
                                         prev.map((l) => {
                                           const calcParcela =
                                             calcularParcelaDaVigencia(
                                               l.inicioVigencia,
-                                              globalDateInput,
+                                              dataBr,
                                             );
                                           return {
                                             ...l,
-                                            data: globalDateInput,
+                                            data: dataBr,
                                             parcela: calcParcela || l.parcela,
                                           };
                                         }),
                                       );
-                                      setReportName(
-                                        `Relatório ${globalDateInput.split("-").reverse().join("/")}`,
-                                      );
+                                      setReportName(`Relatório ${dataBr}`);
                                     },
                                   );
                                 }}
@@ -12621,576 +12630,403 @@ export default function App() {
                         </td>
                       </tr>
                     ) : (
-                      pdfData.map((linha, idx) =>
-                        editRowIndex === idx ? (
-                          <tr
-                            key={idx}
-                            className="border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 transition-colors"
-                          >
-                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700 text-center">
+                      pdfData.map((linha, idx) => (
+                        <tr
+                          key={idx}
+                          className={
+                            linha.selected !== false
+                              ? "border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                              : "border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/30 opacity-50 grayscale transition-all"
+                          }
+                        >
+                          <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700 text-center">
+                            <input
+                              type="checkbox"
+                              checked={linha.selected !== false}
+                              onChange={() => toggleSelectRow(idx)}
+                              className="w-4 h-4 accent-blue-500 rounded cursor-pointer"
+                            />
+                          </td>
+                          {reportTableCols.cod && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
                               <input
-                                type="checkbox"
-                                checked={linha.selected}
-                                onChange={() => toggleSelectRow(idx)}
-                                className="w-4 h-4 accent-blue-500 rounded cursor-pointer"
+                                type="text"
+                                value={linha.cod || ""}
+                                onChange={(e) =>
+                                  updatePdfRow(idx, { cod: e.target.value })
+                                }
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 w-16 text-center font-medium"
+                                placeholder="Cód. Op."
                               />
                             </td>
-                            {reportTableCols.cod && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <input
-                                  type="text"
-                                  value={editRowData.cod || ""}
-                                  onChange={(e) =>
-                                    setEditRowData({
-                                      ...editRowData,
-                                      cod: e.target.value,
-                                    })
-                                  }
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[10px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 w-16 text-center"
-                                  placeholder="Cód. Op."
-                                />
-                              </td>
-                            )}
-                            {reportTableCols.contrato && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <input
-                                  type="text"
-                                  value={editRowData.contrato}
-                                  onChange={(e) =>
-                                    setEditRowData({
-                                      ...editRowData,
-                                      contrato: e.target.value,
-                                    })
-                                  }
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 w-16"
-                                  placeholder="Contrato"
-                                />
-                              </td>
-                            )}
-                            {reportTableCols.op && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <input
-                                  type="text"
-                                  value={editRowData.codigoOperadora}
-                                  onChange={(e) =>
-                                    setEditRowData({
-                                      ...editRowData,
-                                      codigoOperadora: e.target.value,
-                                    })
-                                  }
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 w-12 text-center"
-                                  placeholder={currentReportOperadora || "AMIL"}
-                                />
-                              </td>
-                            )}
-                            {reportTableCols.vidas && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <input
-                                  type="number"
-                                  value={editRowData.vidas}
-                                  onChange={(e) =>
-                                    setEditRowData({
-                                      ...editRowData,
-                                      vidas: e.target.value,
-                                    })
-                                  }
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 text-center w-8"
-                                  placeholder="1"
-                                />
-                              </td>
-                            )}
-                            {reportTableCols.cliente && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <input
-                                  type="text"
-                                  value={editRowData.cliente}
-                                  onChange={(e) =>
-                                    setEditRowData({
-                                      ...editRowData,
-                                      cliente: e.target.value,
-                                    })
-                                  }
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-blue-500 min-w-[120px]"
-                                />
-                              </td>
-                            )}
-                            {reportTableCols.data && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <input
-                                  type="text"
-                                  value={editRowData.data}
-                                  onChange={(e) => {
-                                    const novaData = e.target.value;
-                                    const calcParcela =
-                                      calcularParcelaDaVigencia(
-                                        editRowData.inicioVigencia,
-                                        novaData,
-                                      );
-                                    setEditRowData({
-                                      ...editRowData,
-                                      data: novaData,
-                                      parcela:
-                                        calcParcela || editRowData.parcela,
-                                    });
-                                  }}
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-blue-500 text-center w-14"
-                                />
-                              </td>
-                            )}
-                            {reportTableCols.loja && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <input
-                                  type="text"
-                                  value={editRowData.loja}
-                                  onChange={(e) =>
-                                    setEditRowData({
-                                      ...editRowData,
-                                      loja: e.target.value,
-                                    })
-                                  }
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-blue-500 text-center w-16"
-                                />
-                              </td>
-                            )}
-                            {reportTableCols.servico && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <select
-                                  value={editRowData.servico || ""}
-                                  onChange={(e) =>
-                                    setEditRowData({
-                                      ...editRowData,
-                                      servico: e.target.value,
-                                    })
-                                  }
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-amber-500 min-w-[100px]"
-                                >
-                                  <option value=""></option>
-                                  <option>Plano de Saúde</option>
-                                  <option>Plano Dental</option>
-                                  <option>Seguro</option>
-                                  <option>Bonificação</option>
-                                </select>
-                              </td>
-                            )}
-                            {reportTableCols.desconto && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <input
-                                  type="text"
-                                  value={editRowData.desconto || ""}
-                                  onChange={(e) => {
-                                    let rawDesconto = e.target.value;
-                                    let baseVal = editRowData.comissaoBase || 0;
-                                    let descValue = 0;
-                                    if (rawDesconto.includes("%")) {
-                                      let pct = parseFloat(
-                                        rawDesconto
-                                          .replace("%", "")
-                                          .replace(",", "."),
-                                      );
-                                      if (!isNaN(pct))
-                                        descValue = baseVal * (pct / 100);
-                                    } else {
-                                      descValue =
-                                        parseFloat(
-                                          rawDesconto.replace(",", "."),
-                                        ) || 0;
-                                    }
-                                    setEditRowData({
-                                      ...editRowData,
-                                      desconto: rawDesconto,
-                                      comissao: Number(
-                                        (baseVal - descValue).toFixed(2),
-                                      ),
-                                    });
-                                  }}
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-amber-500 w-12 text-center"
-                                  placeholder="R$ ou %"
-                                />
-                              </td>
-                            )}
-                            {reportTableCols.corretor && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <select
-                                  value={editRowData.vendedor || nomeEmpresa}
-                                  onChange={(e) =>
-                                    setEditRowData({
-                                      ...editRowData,
-                                      vendedor: e.target.value,
-                                    })
-                                  }
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 min-w-[80px]"
-                                >
-                                  <option>{nomeEmpresa}</option>
-                                  <option>Proper</option>
-                                  <option>Assessoria</option>
-                                  <option>Corretor Interno</option>
-                                </select>
-                              </td>
-                            )}
-                            {reportTableCols.parc && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <input
-                                  type="text"
-                                  value={editRowData.parcela}
-                                  onChange={(e) =>
-                                    setEditRowData({
-                                      ...editRowData,
-                                      parcela: e.target.value,
-                                    })
-                                  }
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 text-center w-8"
-                                  placeholder="1"
-                                />
-                              </td>
-                            )}
-                            {reportTableCols.inicioVig && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <input
-                                  type="date"
-                                  value={editRowData.inicioVigencia || ""}
-                                  onChange={(e) => {
-                                    const novaVig = e.target.value;
-                                    const calcParcela =
-                                      calcularParcelaDaVigencia(
-                                        novaVig,
-                                        editRowData.data,
-                                      );
-                                    setEditRowData({
-                                      ...editRowData,
-                                      inicioVigencia: novaVig,
-                                      parcela:
-                                        calcParcela || editRowData.parcela,
-                                    });
-                                  }}
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[10px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 text-center w-24"
-                                />
-                              </td>
-                            )}
-                            {reportTableCols.nfe && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <input
-                                  type="text"
-                                  value={editRowData.notaFiscal || ""}
-                                  onChange={(e) =>
-                                    setEditRowData({
-                                      ...editRowData,
-                                      notaFiscal: e.target.value,
-                                    })
-                                  }
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-rose-500 text-center font-bold text-rose-600 dark:text-rose-400 w-16"
-                                  placeholder="Nº NF"
-                                />
-                              </td>
-                            )}
-                            {reportTableCols.vitalicio && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <select
-                                  value={editRowData.vitalicio || ""}
-                                  onChange={(e) =>
-                                    setEditRowData({
-                                      ...editRowData,
-                                      vitalicio: e.target.value,
-                                    })
-                                  }
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-indigo-500"
-                                >
-                                  <option value=""></option>
-                                  <option>Sim</option>
-                                  <option>Não</option>
-                                </select>
-                              </td>
-                            )}
-                            {reportTableCols.pagamento && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <select
-                                  value={editRowData.formaPagamento || ""}
-                                  onChange={(e) =>
-                                    setEditRowData({
-                                      ...editRowData,
-                                      formaPagamento: e.target.value,
-                                    })
-                                  }
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 min-w-[90px]"
-                                >
-                                  <option value=""></option>
-                                  <option>Crédito em conta</option>
-                                  <option>Dinheiro à vista</option>
-                                </select>
-                              </td>
-                            )}
-                            {reportTableCols.valorTotal && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={editRowData.valorTotal}
-                                  onChange={(e) => {
-                                    const newVal = e.target.value;
-                                    const t = parseFloat(newVal) || 0;
-                                    const c =
-                                      parseFloat(editRowData.comissao) || 0;
-                                    let newPct =
-                                      editRowData.comissaoPorcentagem;
-                                    if (t > 0 && c > 0) {
-                                      newPct = Math.round((c / t) * 100);
-                                    } else {
-                                      newPct = "";
-                                    }
-                                    setEditRowData({
-                                      ...editRowData,
-                                      valorTotal: newVal,
-                                      comissaoPorcentagem: newPct,
-                                    });
-                                  }}
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500 text-right w-16"
-                                />
-                              </td>
-                            )}
-                            {reportTableCols.comissaoPorcentagem && (
-                              <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={editRowData.comissaoPorcentagem || ""}
-                                  onChange={(e) => {
-                                    const rawVal = e.target.value;
-                                    const pct = parseFloat(rawVal);
-                                    const t =
-                                      parseFloat(editRowData.valorTotal) || 0;
-                                    let newComissao = editRowData.comissao;
-                                    if (!isNaN(pct) && t > 0) {
-                                      newComissao = Number(
-                                        (t * (pct / 100)).toFixed(2),
-                                      );
-                                    }
-                                    setEditRowData({
-                                      ...editRowData,
-                                      comissaoPorcentagem: rawVal,
-                                      comissao: newComissao,
-                                    });
-                                  }}
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-sky-500 text-center w-12"
-                                  placeholder="%"
-                                />
-                              </td>
-                            )}
-                            {reportTableCols.comissao && (
-                              <td className="py-1 px-1">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={editRowData.comissao}
-                                  onChange={(e) => {
-                                    const rawVal = e.target.value;
-                                    const numVal = parseFloat(rawVal) || 0;
-                                    let rawDesconto = String(
-                                      editRowData.desconto || "",
-                                    );
-                                    let descValue = 0;
-                                    let newBase = numVal;
-                                    if (rawDesconto.includes("%")) {
-                                      let pct = parseFloat(
-                                        rawDesconto
-                                          .replace("%", "")
-                                          .replace(",", "."),
-                                      );
-                                      if (!isNaN(pct) && pct !== 100) {
-                                        newBase = numVal / (1 - pct / 100);
-                                      }
-                                    } else {
-                                      descValue =
-                                        parseFloat(
-                                          rawDesconto.replace(",", "."),
-                                        ) || 0;
-                                      newBase = numVal + descValue;
-                                    }
-                                    let newPct =
-                                      editRowData.comissaoPorcentagem;
-                                    const t =
-                                      parseFloat(editRowData.valorTotal) || 0;
-                                    if (t > 0 && numVal > 0) {
-                                      newPct = Math.round((numVal / t) * 100);
-                                    } else {
-                                      newPct = "";
-                                    }
-                                    setEditRowData({
-                                      ...editRowData,
-                                      comissao: rawVal,
-                                      comissaoBase: newBase,
-                                      comissaoPorcentagem: newPct,
-                                    });
-                                  }}
-                                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded px-1 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-sky-500 text-right w-16"
-                                />
-                              </td>
-                            )}
-                            <td className="py-1 px-1 text-center no-print">
-                              <div className="flex gap-1 justify-center">
-                                <button
-                                  onClick={saveRowEdit}
-                                  className="text-emerald-500 hover:text-emerald-400 p-1"
-                                  title="Guardar Edição"
-                                >
-                                  <CheckCircle size={16} />
-                                </button>
-                                <button
-                                  onClick={cancelRowEdit}
-                                  className="text-rose-500 hover:text-rose-400 p-1"
-                                  title="Cancelar Edição"
-                                >
-                                  <XCircle size={16} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ) : (
-                          <tr
-                            key={idx}
-                            className={
-                              linha.selected
-                                ? "border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-750/30"
-                                : "border-b border-slate-100 dark:border-slate-700/50 bg-slate-200/50 dark:bg-slate-800/50 opacity-50 grayscale transition-all"
-                            }
-                          >
-                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700 text-center">
+                          )}
+                          {reportTableCols.contrato && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
                               <input
-                                type="checkbox"
-                                checked={linha.selected}
-                                onChange={() => toggleSelectRow(idx)}
-                                className="w-4 h-4 accent-blue-500 rounded cursor-pointer"
+                                type="text"
+                                value={linha.contrato || ""}
+                                onChange={(e) =>
+                                  updatePdfRow(idx, { contrato: e.target.value })
+                                }
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 w-20 font-medium"
+                                placeholder="Contrato"
                               />
                             </td>
-                            {reportTableCols.cod && (
-                              <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-[10px] text-center">
-                                {linha.cod || "-"}
-                              </td>
-                            )}
-                            {reportTableCols.contrato && (
-                              <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 font-bold text-indigo-600 dark:text-indigo-400 text-xs">
-                                {linha.contrato || "-"}
-                              </td>
-                            )}
-                            {reportTableCols.op && (
-                              <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 font-medium text-slate-600 dark:text-slate-300 text-center text-xs">
-                                {linha.codigoOperadora ||
-                                  currentReportOperadora ||
-                                  "AMIL"}
-                              </td>
-                            )}
-                            {reportTableCols.vidas && (
-                              <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-slate-700 dark:text-slate-300 text-xs">
-                                {linha.vidas || "-"}
-                              </td>
-                            )}
-                            {reportTableCols.cliente && (
-                              <td
-                                className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs truncate max-w-[150px]"
-                                title={linha.cliente}
+                          )}
+                          {reportTableCols.op && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
+                              <input
+                                type="text"
+                                value={linha.codigoOperadora !== undefined ? linha.codigoOperadora : (currentReportOperadora || "AMIL")}
+                                onChange={(e) =>
+                                  updatePdfRow(idx, { codigoOperadora: e.target.value })
+                                }
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 w-16 text-center font-medium"
+                                placeholder={currentReportOperadora || "AMIL"}
+                              />
+                            </td>
+                          )}
+                          {reportTableCols.vidas && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
+                              <input
+                                type="number"
+                                value={linha.vidas || ""}
+                                onChange={(e) =>
+                                  updatePdfRow(idx, { vidas: e.target.value })
+                                }
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 text-center w-10 font-medium"
+                                placeholder="1"
+                              />
+                            </td>
+                          )}
+                          {reportTableCols.cliente && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
+                              <input
+                                type="text"
+                                value={linha.cliente || ""}
+                                onChange={(e) =>
+                                  updatePdfRow(idx, { cliente: e.target.value })
+                                }
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-blue-500 min-w-[130px]"
+                              />
+                            </td>
+                          )}
+                          {reportTableCols.data && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
+                              <input
+                                type="text"
+                                value={formatarDataVisivel(linha.data)}
+                                onChange={(e) => {
+                                  const novaData = e.target.value;
+                                  const calcParcela = calcularParcelaDaVigencia(
+                                    linha.inicioVigencia,
+                                    novaData,
+                                  );
+                                  updatePdfRow(idx, {
+                                    data: novaData,
+                                    parcela: calcParcela || linha.parcela,
+                                  });
+                                }}
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-blue-500 text-center w-24 font-medium"
+                                placeholder="DD/MM/AAAA"
+                              />
+                            </td>
+                          )}
+                          {reportTableCols.loja && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
+                              <input
+                                type="text"
+                                value={linha.loja || ""}
+                                onChange={(e) =>
+                                  updatePdfRow(idx, { loja: e.target.value })
+                                }
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-blue-500 text-center w-20"
+                              />
+                            </td>
+                          )}
+                          {reportTableCols.servico && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
+                              <select
+                                value={linha.servico || ""}
+                                onChange={(e) =>
+                                  updatePdfRow(idx, { servico: e.target.value })
+                                }
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-amber-500 min-w-[110px]"
                               >
-                                {linha.cliente}
-                              </td>
-                            )}
-                            {reportTableCols.data && (
-                              <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center text-slate-500 dark:text-slate-400 text-[11px]">
-                                {linha.data
-                                  ? formatarDataVisivel(linha.data)
-                                  : ""}
-                              </td>
-                            )}
-                            {reportTableCols.loja && (
-                              <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center text-slate-500 dark:text-slate-400 text-xs">
-                                {linha.loja}
-                              </td>
-                            )}
-                            {reportTableCols.servico && (
-                              <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[11px]">
-                                {linha.servico || "-"}
-                              </td>
-                            )}
-                            {reportTableCols.desconto && (
-                              <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-rose-500 dark:text-rose-400 text-[11px]">
-                                {linha.desconto || "-"}
-                              </td>
-                            )}
-                            {reportTableCols.corretor && (
-                              <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-indigo-600 dark:text-indigo-400 text-xs">
-                                {linha.vendedor || "-"}
-                              </td>
-                            )}
-                            {reportTableCols.parc && (
-                              <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-slate-700 dark:text-slate-300 text-xs">
-                                {linha.parcela || "-"}
-                              </td>
-                            )}
-                            {reportTableCols.inicioVig && (
-                              <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[10px]">
-                                {linha.inicioVigencia
-                                  ? formatarDataVisivel(linha.inicioVigencia)
-                                  : "--/--/----"}
-                              </td>
-                            )}
-                            {reportTableCols.nfe && (
-                              <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-rose-600 dark:text-rose-400 text-[11px]">
-                                {linha.notaFiscal || "-"}
-                              </td>
-                            )}
-                            {reportTableCols.vitalicio && (
-                              <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[11px]">
-                                {linha.vitalicio || "-"}
-                              </td>
-                            )}
-                            {reportTableCols.pagamento && (
-                              <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-medium text-slate-700 dark:text-slate-300 text-[11px]">
-                                {linha.formaPagamento || "-"}
-                              </td>
-                            )}
-                            {reportTableCols.valorTotal && (
-                              <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-right font-medium text-slate-700 dark:text-slate-300 text-xs">
-                                {formatarMoeda(linha.valorTotal)}
-                              </td>
-                            )}
-                            {reportTableCols.comissaoPorcentagem && (
-                              <td className="py-1 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-sky-600 dark:text-sky-400 text-[11px]">
-                                {linha.comissaoPorcentagem
-                                  ? `${linha.comissaoPorcentagem}%`
-                                  : "-"}
-                              </td>
-                            )}
-                            {reportTableCols.comissao && (
-                              <td className="py-1 px-2 text-right font-bold text-sky-600 dark:text-sky-400 text-xs">
-                                {formatarMoeda(linha.comissao)}
-                              </td>
-                            )}
-                            <td className="py-1 px-1 text-center no-print">
-                              <div className="flex gap-1 justify-center">
-                                <button
-                                  onClick={() =>
-                                    duplicateRowInReport(idx, linha)
-                                  }
-                                  className="text-blue-500 hover:text-blue-400 p-1 transition-colors"
-                                  title="Duplicar Linha"
-                                >
-                                  <Copy size={14} />
-                                </button>
-                                <button
-                                  onClick={() => startEditingRow(idx, linha)}
-                                  className="text-amber-500 hover:text-amber-400 p-1 transition-colors"
-                                  title="Editar Linha"
-                                >
-                                  <Edit size={14} />
-                                </button>
-                                <button
-                                  onClick={() => deleteRowFromReport(idx)}
-                                  className="text-rose-500 hover:text-rose-400 p-1 transition-colors"
-                                  title="Apagar Linha"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
+                                <option value=""></option>
+                                <option>Plano de Saúde</option>
+                                <option>Plano Dental</option>
+                                <option>Seguro</option>
+                                <option>Bonificação</option>
+                              </select>
                             </td>
-                          </tr>
-                        ),
-                      )
+                          )}
+                          {reportTableCols.desconto && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
+                              <input
+                                type="text"
+                                value={linha.desconto || ""}
+                                onChange={(e) => {
+                                  let rawDesconto = e.target.value;
+                                  let baseVal =
+                                    linha.comissaoBase !== undefined
+                                      ? linha.comissaoBase
+                                      : parseFloat(linha.comissao) || 0;
+                                  let descValue = 0;
+                                  if (rawDesconto.includes("%")) {
+                                    let pct = parseFloat(
+                                      rawDesconto
+                                        .replace("%", "")
+                                        .replace(",", "."),
+                                    );
+                                    if (!isNaN(pct))
+                                      descValue = baseVal * (pct / 100);
+                                  } else {
+                                    descValue =
+                                      parseFloat(
+                                        rawDesconto.replace(",", "."),
+                                      ) || 0;
+                                  }
+                                  updatePdfRow(idx, {
+                                    desconto: rawDesconto,
+                                    comissaoBase: baseVal,
+                                    comissao: Number(
+                                      (baseVal - descValue).toFixed(2),
+                                    ),
+                                  });
+                                }}
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-amber-500 w-16 text-center"
+                                placeholder="R$ ou %"
+                              />
+                            </td>
+                          )}
+                          {reportTableCols.corretor && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
+                              <select
+                                value={linha.vendedor || linha.corretor || nomeEmpresa}
+                                onChange={(e) =>
+                                  updatePdfRow(idx, {
+                                    vendedor: e.target.value,
+                                    corretor: e.target.value,
+                                  })
+                                }
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 min-w-[100px] font-medium"
+                              >
+                                <option>{nomeEmpresa}</option>
+                                <option>Proper</option>
+                                <option>PROTETTA</option>
+                                <option>Assessoria</option>
+                                <option>Corretor Interno</option>
+                                {linha.vendedor &&
+                                  ![
+                                    "Proper",
+                                    "PROTETTA",
+                                    "Assessoria",
+                                    "Corretor Interno",
+                                    nomeEmpresa,
+                                  ].includes(linha.vendedor) && (
+                                    <option value={linha.vendedor}>
+                                      {linha.vendedor}
+                                    </option>
+                                  )}
+                              </select>
+                            </td>
+                          )}
+                          {reportTableCols.parc && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
+                              <input
+                                type="text"
+                                value={linha.parcela || ""}
+                                onChange={(e) =>
+                                  updatePdfRow(idx, { parcela: e.target.value })
+                                }
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 text-center w-10 font-medium"
+                                placeholder="1"
+                              />
+                            </td>
+                          )}
+                          {reportTableCols.inicioVig && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
+                              <input
+                                type="text"
+                                value={formatarDataVisivel(linha.inicioVigencia)}
+                                onChange={(e) => {
+                                  const novaVig = e.target.value;
+                                  const calcParcela = calcularParcelaDaVigencia(
+                                    novaVig,
+                                    linha.data,
+                                  );
+                                  updatePdfRow(idx, {
+                                    inicioVigencia: novaVig,
+                                    parcela: calcParcela || linha.parcela,
+                                  });
+                                }}
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 text-center w-24 font-medium"
+                                placeholder="DD/MM/AAAA"
+                              />
+                            </td>
+                          )}
+                          {reportTableCols.nfe && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
+                              <input
+                                type="text"
+                                value={linha.notaFiscal || ""}
+                                onChange={(e) =>
+                                  updatePdfRow(idx, { notaFiscal: e.target.value })
+                                }
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-rose-500 text-center font-bold text-rose-600 dark:text-rose-400 w-16"
+                                placeholder="Nº NF"
+                              />
+                            </td>
+                          )}
+                          {reportTableCols.vitalicio && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
+                              <select
+                                value={linha.vitalicio || ""}
+                                onChange={(e) =>
+                                  updatePdfRow(idx, { vitalicio: e.target.value })
+                                }
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 w-16"
+                              >
+                                <option value=""></option>
+                                <option>Sim</option>
+                                <option>Não</option>
+                              </select>
+                            </td>
+                          )}
+                          {reportTableCols.pagamento && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
+                              <select
+                                value={linha.formaPagamento || ""}
+                                onChange={(e) =>
+                                  updatePdfRow(idx, { formaPagamento: e.target.value })
+                                }
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-[11px] text-slate-900 dark:text-white outline-none focus:border-indigo-500 min-w-[110px]"
+                              >
+                                <option value=""></option>
+                                <option>Crédito em conta</option>
+                                <option>Dinheiro à vista</option>
+                              </select>
+                            </td>
+                          )}
+                          {reportTableCols.valorTotal && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={linha.valorTotal !== undefined ? linha.valorTotal : ""}
+                                onChange={(e) => {
+                                  const newVal = e.target.value;
+                                  const t = parseFloat(newVal) || 0;
+                                  const c = parseFloat(linha.comissao) || 0;
+                                  let newPct = linha.comissaoPorcentagem;
+                                  if (t > 0 && c > 0) {
+                                    newPct = Math.round((c / t) * 100);
+                                  } else {
+                                    newPct = "";
+                                  }
+                                  updatePdfRow(idx, {
+                                    valorTotal: newVal,
+                                    comissaoPorcentagem: newPct,
+                                  });
+                                }}
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500 text-right w-20 font-medium"
+                              />
+                            </td>
+                          )}
+                          {reportTableCols.comissaoPorcentagem && (
+                            <td className="py-1 px-1 border-r border-slate-200 dark:border-slate-700">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={linha.comissaoPorcentagem !== undefined ? linha.comissaoPorcentagem : ""}
+                                onChange={(e) => {
+                                  const rawVal = e.target.value;
+                                  const pct = parseFloat(rawVal);
+                                  const t = parseFloat(linha.valorTotal) || 0;
+                                  let newComissao = linha.comissao;
+                                  if (!isNaN(pct) && t > 0) {
+                                    newComissao = Number(
+                                      (t * (pct / 100)).toFixed(2),
+                                    );
+                                  }
+                                  updatePdfRow(idx, {
+                                    comissaoPorcentagem: rawVal,
+                                    comissao: newComissao,
+                                  });
+                                }}
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-sky-500 text-center w-14 font-medium"
+                                placeholder="%"
+                              />
+                            </td>
+                          )}
+                          {reportTableCols.comissao && (
+                            <td className="py-1 px-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={linha.comissao !== undefined ? linha.comissao : ""}
+                                onChange={(e) => {
+                                  const rawVal = e.target.value;
+                                  const numVal = parseFloat(rawVal) || 0;
+                                  let rawDesconto = String(linha.desconto || "");
+                                  let descValue = 0;
+                                  let newBase = numVal;
+                                  if (rawDesconto.includes("%")) {
+                                    let pct = parseFloat(
+                                      rawDesconto
+                                        .replace("%", "")
+                                        .replace(",", "."),
+                                    );
+                                    if (!isNaN(pct) && pct !== 100) {
+                                      newBase = numVal / (1 - pct / 100);
+                                    }
+                                  } else {
+                                    descValue =
+                                      parseFloat(
+                                        rawDesconto.replace(",", "."),
+                                      ) || 0;
+                                    newBase = numVal + descValue;
+                                  }
+                                  let newPct = linha.comissaoPorcentagem;
+                                  const t = parseFloat(linha.valorTotal) || 0;
+                                  if (t > 0 && numVal > 0) {
+                                    newPct = Math.round((numVal / t) * 100);
+                                  } else {
+                                    newPct = "";
+                                  }
+                                  updatePdfRow(idx, {
+                                    comissao: rawVal,
+                                    comissaoBase: newBase,
+                                    comissaoPorcentagem: newPct,
+                                  });
+                                }}
+                                className="w-full bg-slate-50 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-xs text-slate-900 dark:text-white outline-none focus:border-sky-500 text-right w-20 font-bold text-sky-600 dark:text-sky-400"
+                              />
+                            </td>
+                          )}
+                          <td className="py-1 px-1 text-center no-print">
+                            <div className="flex gap-1 justify-center">
+                              <button
+                                onClick={() =>
+                                  duplicateRowInReport(idx, linha)
+                                }
+                                className="text-blue-500 hover:text-blue-400 p-1 transition-colors"
+                                title="Duplicar Linha"
+                              >
+                                <Copy size={14} />
+                              </button>
+                              <button
+                                onClick={() => deleteRowFromReport(idx)}
+                                className="text-rose-500 hover:text-rose-400 p-1 transition-colors"
+                                title="Apagar Linha"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
                     )}
                   </tbody>
                   {pdfData.length > 0 && (
