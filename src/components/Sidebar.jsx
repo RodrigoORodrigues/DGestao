@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
     Home, ShoppingCart, Users, FileCheck, History, Receipt, 
     Plus, FolderTree, Shield, Settings, User, Moon, Sun, LogOut, Layers,
-    ChevronLeft, ChevronRight, GripVertical, Building, HelpCircle, ChevronDown
+    ChevronLeft, ChevronRight, GripVertical, Building, HelpCircle, ChevronDown, DollarSign
 } from 'lucide-react';
 
 const SidebarItem = ({ icon: Icon, label, active, onClick, collapsed }) => (
@@ -185,6 +185,7 @@ export default function Sidebar({ currentUser, currentView, setCurrentView, hasA
                 {hasAccess('dashboard') && <SidebarItem collapsed={collapsed} icon={Layers} label="Painel" active={currentView === 'painel'} onClick={() => setCurrentView('painel')} />}
                 {hasAccess('vendas') && <SidebarItem collapsed={collapsed} icon={ShoppingCart} label="Vendas de Serviços" active={currentView === 'vendas'} onClick={() => setCurrentView('vendas')} />}
                 {hasAccess('clientes') && <SidebarItem collapsed={collapsed} icon={Users} label="Clientes" active={currentView === 'clientes'} onClick={() => setCurrentView('clientes')} />}
+                {hasAccess('financeiro') && <SidebarItem collapsed={collapsed} icon={DollarSign} label="Financeiro" active={currentView === 'financeiro'} onClick={() => setCurrentView('financeiro')} />}
                 {hasAccess('processar') && <SidebarItem collapsed={collapsed} icon={FileCheck} label="Relatório Comissão" active={currentView === 'processar'} onClick={() => setCurrentView('processar')} />}
                 {hasAccess('historico') && <SidebarItem collapsed={collapsed} icon={History} label="Relatórios Salvos" active={currentView === 'historico'} onClick={() => setCurrentView('historico')} />}
                 

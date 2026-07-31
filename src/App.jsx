@@ -8,6 +8,7 @@ import { supabase } from "./config/supabase";
 import { findClientMetadata } from "./utils/clientMetadata";
 import { PJ_CLIENTS_LIST } from "./utils/pj_clients_list";
 import { parsePreventCommissionRule, calculatePreventValorTotal } from "./utils/preventExtractor";
+import Financeiro from "./components/Financeiro/Financeiro";
 
 export async function safeSupabaseInsert(table, dataArray) {
   if (!dataArray || (Array.isArray(dataArray) && dataArray.length === 0))
@@ -263,6 +264,7 @@ import {
   ArrowUp,
   ArrowDown,
   FileEdit,
+  MessageSquare,
 } from "lucide-react";
 
 import * as XLSX from "xlsx";
@@ -979,6 +981,11 @@ export default function App() {
 
   const [modalViewNfOpen, setModalViewNfOpen] = useState(false);
   const [viewNfData, setViewNfData] = useState(null);
+
+  const [obsModalOpen, setObsModalOpen] = useState(false);
+  const [obsTarget, setObsTarget] = useState(null);
+  const [obsText, setObsText] = useState("");
+  const [savingObs, setSavingObs] = useState(false);
 
   const [vendasList, setVendasList] = useState([]);
   const [showVendasFilter, setShowVendasFilter] = useState(false);
@@ -3508,12 +3515,120 @@ export default function App() {
     return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
   };
 
+  const abrirModalObs = (item, type, index = null) => {
+    setObsTarget({ item, type, index });
+    const currentObs = item.notas || item.observacao || item.obs || "";
+    setObsText(currentObs);
+    setObsModalOpen(true);
+  };
+
+  const salvarObs = async () => {
+    if (!obsTarget) return;
+    setSavingObs(true);
+    try {
+      const { item, type, index } = obsTarget;
+      const textoLimpo = obsText.trim();
+
+      if (type === "pdfRow") {
+        const novosDados = [...pdfData];
+        if (novosDados[index] !== undefined) {
+          novosDados[index] = {
+            ...novosDados[index],
+            notas: textoLimpo,
+            observacao: textoLimpo,
+            obs: textoLimpo,
+          };
+          setPdfData(novosDados);
+        }
+
+        if (currentReportId) {
+          const rep = savedReportsList.find((r) => r.id === currentReportId);
+          if (rep && rep.dados) {
+            const dadosAtualizados = [...rep.dados];
+            if (dadosAtualizados[index] !== undefined) {
+              dadosAtualizados[index] = {
+                ...dadosAtualizados[index],
+                notas: textoLimpo,
+                observacao: textoLimpo,
+                obs: textoLimpo,
+              };
+              await safeSupabaseUpdate(
+                "savedReports",
+                { dados: dadosAtualizados },
+                "id",
+                currentReportId,
+              );
+            }
+          }
+        }
+        showAlert("Observação guardada no extrato com sucesso!", "success");
+      } else if (type === "venda") {
+        if (item.isFromReport && item.reportId) {
+          const rep = savedReportsList.find((r) => r.id === item.reportId);
+          if (rep && rep.dados) {
+            const dadosAtualizados = [...rep.dados];
+            if (dadosAtualizados[item.reportRowIndex] !== undefined) {
+              dadosAtualizados[item.reportRowIndex] = {
+                ...dadosAtualizados[item.reportRowIndex],
+                notas: textoLimpo,
+                observacao: textoLimpo,
+                obs: textoLimpo,
+              };
+              await safeSupabaseUpdate(
+                "savedReports",
+                { dados: dadosAtualizados },
+                "id",
+                rep.id,
+              );
+            }
+          }
+        } else if (item.id) {
+          await safeSupabaseUpdate(
+            "vendas",
+            {
+              notas: textoLimpo,
+              observacao: textoLimpo,
+            },
+            "id",
+            item.id,
+          );
+        }
+
+        await loadFromDB();
+
+        // Se a modal "Detalhes da Venda" estiver aberta para esta venda, atualiza a vendaForm também
+        if (modalVendaOpen && vendaForm) {
+          if (
+            (item.id && vendaForm.id === item.id) ||
+            (item.reportId && vendaForm.reportId === item.reportId && vendaForm.reportRowIndex === item.reportRowIndex)
+          ) {
+            setVendaForm((prev) => ({
+              ...prev,
+              notas: textoLimpo,
+              observacao: textoLimpo,
+              obs: textoLimpo,
+            }));
+          }
+        }
+
+        showAlert("Observação atrelada à venda com sucesso!", "success");
+      }
+      setObsModalOpen(false);
+    } catch (err) {
+      console.error("Erro ao salvar observação:", err);
+      showAlert("Erro ao guardar observação: " + (err.message || String(err)));
+    } finally {
+      setSavingObs(false);
+    }
+  };
+
   const abrirModalVenda = (venda = null) => {
     if (venda) {
       const safeVenda = { ...venda };
       Object.keys(safeVenda).forEach((k) => {
         if (safeVenda[k] === null) safeVenda[k] = "";
       });
+      safeVenda.notas = venda.notas || venda.observacao || venda.obs || "";
       setVendaForm(safeVenda);
     } else
       setVendaForm({
@@ -5329,8 +5444,13 @@ export default function App() {
     setCurrentReportId(null);
     setCurrentReportEmpresa(empresaContexto);
     setCurrentReportOperadora(extratoOperadora);
-    setReportName("Relatório ");
-    setReportPeriod("");
+    
+    let docReportName = (reportDoc?.nome || reportDoc?.fileName || reportDoc?.name || "").replace(/\.(pdf|xlsx|xls|csv|txt|ret|dat)$/i, "").trim();
+    if (!docReportName) {
+      docReportName = `Relatório ${extratoOperadora}`;
+    }
+    setReportName(docReportName);
+    setReportPeriod(reportDoc?.periodo || "");
 
     let textoNormalizado = texto.replace(/\s+/g, " ").trim();
     const textoUpper = textoNormalizado.toUpperCase();
@@ -8893,11 +9013,99 @@ export default function App() {
     }
 
     setPdfData(comissaoPreenchida);
-    showAlert(
-      registosParaProcessar.length > 0
-        ? `Extrato processado com sucesso! ${registosParaProcessar.length} lançamento(s) extraído(s).`
-        : "Nenhum lançamento foi extraído. Verifique se o modelo e os campos do extrato estão corretos.",
-    );
+
+    let extractedPeriod = reportDoc?.periodo || "";
+    if (!extractedPeriod && comissaoPreenchida.length > 0) {
+      const datas = comissaoPreenchida.map((r) => r.data).filter(Boolean);
+      if (datas.length > 0) {
+        datas.sort();
+        const first = datas[0];
+        const last = datas[datas.length - 1];
+        extractedPeriod = first === last ? first : `${first} até ${last}`;
+      }
+    }
+    if (extractedPeriod) {
+      setReportPeriod(extractedPeriod);
+    }
+
+    // Verificação inteligente e abrangente de relatório duplicado já salvo
+    const cleanFileName = (reportDoc?.fileName || reportDoc?.filePath || reportDoc?.nome || "").replace(/\.(pdf|xlsx|xls|csv|txt|ret|dat)$/i, "").trim().toLowerCase();
+    const docNameClean = (docReportName || "").replace(/\.(pdf|xlsx|xls|csv|txt|ret|dat)$/i, "").trim().toLowerCase();
+
+    const totalComissaoExtraida = comissaoPreenchida.reduce((sum, r) => sum + (parseFloat(r.comissao) || parseFloat(r.valorTotal) || 0), 0);
+    const firstClientExt = comissaoPreenchida[0]?.cliente ? comissaoPreenchida[0].cliente.trim().toLowerCase() : "";
+    const firstContractExt = comissaoPreenchida[0]?.contrato ? String(comissaoPreenchida[0].contrato).trim().toLowerCase() : "";
+
+    const existingSaved = savedReportsList.find((rep) => {
+      // 1. ID direto (relatório salvo previamente)
+      if (rep.id && ((reportDoc?.id && String(rep.id) === String(reportDoc.id)) || (currentReportId && String(rep.id) === String(currentReportId)))) return true;
+
+      const repNomeClean = (rep.nome || "").replace(/\.(pdf|xlsx|xls|csv|txt|ret|dat)$/i, "").trim().toLowerCase();
+      const repFileClean = (rep.fileName || "").replace(/\.(pdf|xlsx|xls|csv|txt|ret|dat)$/i, "").trim().toLowerCase();
+
+      // 2. Correspondência de nome do relatório ou nome do arquivo
+      if (docNameClean && repNomeClean) {
+        if (repNomeClean === docNameClean) return true;
+        if (repNomeClean.length >= 4 && docNameClean.length >= 4 && (repNomeClean.includes(docNameClean) || docNameClean.includes(repNomeClean))) return true;
+      }
+      if (cleanFileName && repNomeClean) {
+        if (repNomeClean === cleanFileName) return true;
+        if (cleanFileName.length >= 4 && repNomeClean.length >= 4 && (repNomeClean.includes(cleanFileName) || cleanFileName.includes(repNomeClean))) return true;
+      }
+      if (cleanFileName && repFileClean && cleanFileName === repFileClean) return true;
+
+      // 3. Correspondência pelos dados/lançamentos extraídos (mesmo conteúdo/contratos)
+      if (rep.dados && Array.isArray(rep.dados) && rep.dados.length > 0 && comissaoPreenchida.length > 0) {
+        const repCount = rep.dados.length;
+        const extCount = comissaoPreenchida.length;
+
+        if (repCount === extCount) {
+          const repFirstClient = (rep.dados[0]?.cliente || "").trim().toLowerCase();
+          const repFirstContract = (rep.dados[0]?.contrato || "").trim().toLowerCase();
+
+          if ((firstClientExt && repFirstClient && firstClientExt === repFirstClient) ||
+              (firstContractExt && repFirstContract && firstContractExt === repFirstContract)) {
+            return true;
+          }
+
+          const totalComissaoRep = rep.dados.reduce((sum, r) => sum + (parseFloat(r.comissao) || parseFloat(r.valorTotal) || 0), 0);
+          if (totalComissaoRep > 0 && Math.abs(totalComissaoRep - totalComissaoExtraida) < 0.01) {
+            return true;
+          }
+        }
+
+        if (firstContractExt) {
+          const contractsRep = new Set(rep.dados.map(r => String(r.contrato || "").trim().toLowerCase()).filter(Boolean));
+          if (contractsRep.has(firstContractExt)) return true;
+        }
+      }
+
+      // 4. Período e contagem de registros idênticos
+      if (rep.periodo && extractedPeriod && rep.periodo.trim().toLowerCase() === extractedPeriod.trim().toLowerCase() && rep.dados?.length === comissaoPreenchida.length) {
+        return true;
+      }
+
+      return false;
+    });
+
+    if (comissaoPreenchida.length > 0) {
+      if (existingSaved) {
+        setCurrentReportId(existingSaved.id);
+        setReportName(existingSaved.nome || docReportName);
+        if (existingSaved.periodo) setReportPeriod(existingSaved.periodo);
+        showAlert(
+          `Extrato processado com sucesso! ${comissaoPreenchida.length} lançamento(s) extraído(s).\n\n⚠️ AVISO DE RELATÓRIO JÁ SALVO: Este relatório já consta como salvo no sistema ("${existingSaved.nome}"${existingSaved.periodo ? ` - Período: ${existingSaved.periodo}` : ""}). O registro (${existingSaved.id}) foi associado para atualizar e evitar duplicados ao salvar.`
+        );
+      } else {
+        showAlert(
+          `Extrato processado com sucesso! ${comissaoPreenchida.length} lançamento(s) extraído(s).`
+        );
+      }
+    } else {
+      showAlert(
+        "Nenhum lançamento foi extraído. Verifique se o modelo e os campos do extrato estão corretos."
+      );
+    }
   };
 
   const toggleSelectAll = (e) => {
@@ -9202,13 +9410,54 @@ export default function App() {
     setLoading(true);
     setLoadingMsg("Guardando relatório na cloud...");
     try {
+      let isDuplicateSave = false;
       let savedId = currentReportId;
-      if (currentReportId) {
+
+      if (!savedId) {
+        const targetNameClean = (reportName || "").replace(/\.(pdf|xlsx|xls|csv|txt|ret|dat)$/i, "").trim().toLowerCase();
+        const targetFirstClient = (dadosParaSalvar[0]?.cliente || "").trim().toLowerCase();
+        const targetFirstContract = (dadosParaSalvar[0]?.contrato || "").trim().toLowerCase();
+        const totalComissaoToSave = dadosParaSalvar.reduce((sum, r) => sum + (parseFloat(r.comissao) || parseFloat(r.valorTotal) || 0), 0);
+
+        const duplicateReport = savedReportsList.find((rep) => {
+          const repNomeClean = (rep.nome || "").replace(/\.(pdf|xlsx|xls|csv|txt|ret|dat)$/i, "").trim().toLowerCase();
+          if (repNomeClean && targetNameClean && repNomeClean === targetNameClean) return true;
+
+          if (rep.dados && Array.isArray(rep.dados) && rep.dados.length > 0 && rep.dados.length === dadosParaSalvar.length) {
+            const repFirstClient = (rep.dados[0]?.cliente || "").trim().toLowerCase();
+            const repFirstContract = (rep.dados[0]?.contrato || "").trim().toLowerCase();
+
+            if ((targetFirstClient && repFirstClient && repFirstClient === targetFirstClient) ||
+                (targetFirstContract && repFirstContract && repFirstContract === targetFirstContract)) {
+              return true;
+            }
+
+            const totalComissaoRep = rep.dados.reduce((sum, r) => sum + (parseFloat(r.comissao) || parseFloat(r.valorTotal) || 0), 0);
+            if (totalComissaoRep > 0 && Math.abs(totalComissaoRep - totalComissaoToSave) < 0.01) {
+              return true;
+            }
+          }
+
+          if (rep.periodo && reportPeriod && rep.periodo.trim().toLowerCase() === reportPeriod.trim().toLowerCase() && rep.dados?.length === dadosParaSalvar.length) {
+            return true;
+          }
+
+          return false;
+        });
+
+        if (duplicateReport) {
+          savedId = duplicateReport.id;
+          setCurrentReportId(savedId);
+          isDuplicateSave = true;
+        }
+      }
+
+      if (savedId) {
         const { error } = await safeSupabaseUpdate(
           "savedReports",
           dataToSave,
           "id",
-          currentReportId,
+          savedId,
         );
         if (error) throw error;
       } else {
@@ -9331,7 +9580,9 @@ export default function App() {
 
         await loadFromDB();
 
-        let finalMsg = "Relatório salvo e clientes registrados com sucesso!";
+        let finalMsg = isDuplicateSave
+          ? `O relatório "${reportName}" já existia no sistema e foi ATUALIZADO com sucesso para não gerar duplicidade!`
+          : "Relatório salvo e clientes registrados com sucesso!";
         showAlert(finalMsg, "success");
       } catch (e) {
         console.error("ERRO NO SALVAMENTO DE CLIENTES:", e, "Tabela:", e.table);
@@ -9352,17 +9603,24 @@ export default function App() {
   };
 
   const carregarRelatorioSalvo = (report) => {
+    if (!report) return;
     setPdfData((report.dados || []).map((r) => ({ ...r, selected: true })));
-    setReportName(report.nome);
+    setReportName(report.nome || "Relatório");
     setReportPeriod(report.periodo || "");
     setCurrentReportId(report.id);
     setCurrentReportEmpresa(report.empresa || nomeEmpresa);
     setCurrentReportOperadora(
       report.dados && report.dados.length > 0
-        ? report.dados[0].codigoOperadora || "AMIL"
+        ? report.dados[0].codigoOperadora || report.dados[0].operadora || "AMIL"
         : "AMIL",
     );
+    setModalArquivosOpen(false);
     setCurrentView("processar");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    showAlert(
+      `Relatório "${report.nome || "Relatório"}" carregado com sucesso no painel de processamento com ${report.dados?.length || 0} lançamento(s).`,
+      "success"
+    );
   };
   const apagarRelatorioSalvo = (id) => {
     showConfirm(
@@ -10528,35 +10786,108 @@ export default function App() {
                             Data de Criação
                           </th>
                           <th className="py-3 px-4">Nome do Relatório</th>
-                          <th className="py-3 px-4 rounded-tr-lg">Período</th>
+                          <th className="py-3 px-4">Op. | Seg.</th>
+                          <th className="py-3 px-4">NF</th>
+                          <th className="py-3 px-4">Período</th>
+                          <th className="py-3 px-4">Lançamentos</th>
+                          <th className="py-3 px-4">Valor Total</th>
+                          <th className="py-3 px-4 rounded-tr-lg text-right">
+                            Ação
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
                         {[...savedReportsList]
-                          .reverse()
+                          .sort((a, b) => {
+                            const timeA = new Date(a.dataCriacao || a.created_at || a.createdAt || 0).getTime();
+                            const timeB = new Date(b.dataCriacao || b.created_at || b.createdAt || 0).getTime();
+                            return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
+                          })
                           .slice(0, 5)
-                          .map((rep) => (
-                            <tr
-                              key={rep.id}
-                              className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                            >
-                              <td className="py-3 px-4">
-                                {new Date(rep.dataCriacao).toLocaleDateString(
-                                  "pt-BR",
-                                )}{" "}
-                                às{" "}
-                                {new Date(rep.dataCriacao)
-                                  .toLocaleTimeString("pt-BR")
-                                  .slice(0, 5)}
-                              </td>
-                              <td className="py-3 px-4 font-medium text-slate-900 dark:text-white">
-                                {rep.nome}
-                              </td>
-                              <td className="py-3 px-4">
-                                {rep.periodo || "-"}
-                              </td>
-                            </tr>
-                          ))}
+                          .map((rep) => {
+                            const qtdLancamentos = rep.dados ? rep.dados.length : 0;
+                            const valorTotal = (rep.dados || []).reduce(
+                              (sum, item) =>
+                                sum +
+                                (parseFloat(item.comissao) ||
+                                  parseFloat(item.valorTotal) ||
+                                  0),
+                              0,
+                            );
+
+                            const dObj = new Date(rep.dataCriacao || rep.created_at || rep.createdAt);
+                            const dataFormatada = !isNaN(dObj.getTime())
+                              ? `${dObj.toLocaleDateString("pt-BR")} às ${dObj.toLocaleTimeString("pt-BR").slice(0, 5)}`
+                              : (rep.dataCriacao || "-");
+
+                            const nfsStr =
+                              rep.notaFiscal ||
+                              Array.from(
+                                new Set(
+                                  (rep.dados || [])
+                                    .map((d) => d.notaFiscal)
+                                    .filter(Boolean),
+                                ),
+                              ).join(", ") ||
+                              "-";
+
+                            const opsStr =
+                              rep.operadora ||
+                              Array.from(
+                                new Set(
+                                  (rep.dados || [])
+                                    .map((d) => d.codigoOperadora || d.operadora)
+                                    .filter(Boolean),
+                                ),
+                              ).join(", ") ||
+                              "-";
+
+                            return (
+                              <tr
+                                key={rep.id}
+                                onClick={() => carregarRelatorioSalvo(rep)}
+                                className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer group"
+                              >
+                                <td className="py-3 px-4">
+                                  {dataFormatada}
+                                </td>
+                                <td className="py-3 px-4 font-medium text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                  {rep.nome}
+                                </td>
+                                <td className="py-3 px-4 font-medium text-slate-700 dark:text-slate-300">
+                                  {opsStr}
+                                </td>
+                                <td className="py-3 px-4 font-bold text-rose-600 dark:text-rose-400">
+                                  {nfsStr}
+                                </td>
+                                <td className="py-3 px-4">
+                                  {rep.periodo || "-"}
+                                </td>
+                                <td className="py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
+                                    {qtdLancamentos} registro(s)
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4 font-bold text-emerald-600 dark:text-emerald-400">
+                                  {new Intl.NumberFormat("pt-BR", {
+                                    style: "currency",
+                                    currency: "BRL",
+                                  }).format(valorTotal)}
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      carregarRelatorioSalvo(rep);
+                                    }}
+                                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors inline-flex items-center gap-1 shadow-sm"
+                                  >
+                                    <Eye size={14} /> Abrir
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
                       </tbody>
                     </table>
                   </DoubleScrollWrapper>
@@ -11687,6 +12018,27 @@ export default function App() {
                                   <FileText size={14} />
                                 </button>
                               )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  abrirModalObs(venda, "venda");
+                                }}
+                                className={`p-1.5 rounded transition-all shadow-sm flex items-center justify-center relative ${
+                                  venda.notas || venda.observacao || venda.obs
+                                    ? "bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20"
+                                    : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200"
+                                }`}
+                                title={
+                                  venda.notas || venda.observacao || venda.obs
+                                    ? `Observação: ${venda.notas || venda.observacao || venda.obs}`
+                                    : "Adicionar Observação"
+                                }
+                              >
+                                <MessageSquare size={14} />
+                                {(venda.notas || venda.observacao || venda.obs) && (
+                                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-300 ring-2 ring-white dark:ring-slate-800 animate-pulse" />
+                                )}
+                              </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -13006,7 +13358,28 @@ export default function App() {
                             </td>
                           )}
                           <td className="py-1 px-1 text-center no-print">
-                            <div className="flex gap-1 justify-center">
+                            <div className="flex gap-1 justify-center items-center">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  abrirModalObs(linha, "pdfRow", idx)
+                                }
+                                className={`p-1 rounded transition-colors flex items-center justify-center relative ${
+                                  linha.notas || linha.observacao || linha.obs
+                                    ? "bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20"
+                                    : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200"
+                                }`}
+                                title={
+                                  linha.notas || linha.observacao || linha.obs
+                                    ? `Observação: ${linha.notas || linha.observacao || linha.obs}`
+                                    : "Adicionar Observação"
+                                }
+                              >
+                                <MessageSquare size={14} />
+                                {(linha.notas || linha.observacao || linha.obs) && (
+                                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-300 ring-1 ring-white dark:ring-slate-800 animate-pulse" />
+                                )}
+                              </button>
                               <button
                                 onClick={() =>
                                   duplicateRowInReport(idx, linha)
@@ -16814,6 +17187,11 @@ export default function App() {
             </div>
           )}
 
+          {/* ECRÃ FINANCEIRO */}
+          {currentView === "financeiro" && hasAccess("financeiro") && (
+            <Financeiro currentUser={currentUser} />
+          )}
+
           {modalMoverExtratosOpen && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
               <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-md relative mx-4 transition-colors">
@@ -18845,6 +19223,88 @@ export default function App() {
 
           {currentView === "lgpd" && hasAccess("lgpd") && (
             <TermosLGPDGestao currentUser={currentUser} />
+          )}
+
+          {obsModalOpen && obsTarget && (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-6 w-full max-w-lg relative flex flex-col">
+                <button
+                  type="button"
+                  onClick={() => setObsModalOpen(false)}
+                  className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+
+                <div className="flex items-center gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-700">
+                  <div className="p-2.5 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-xl">
+                    <MessageSquare size={22} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                      Observação da Venda
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                      {obsTarget.item?.cliente
+                        ? `Cliente: ${obsTarget.item.cliente}`
+                        : obsTarget.item?.contrato
+                        ? `Contrato: ${obsTarget.item.contrato}`
+                        : obsTarget.item?.notaFiscal
+                        ? `NF: ${obsTarget.item.notaFiscal}`
+                        : "Lançamento de Venda"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mb-5">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
+                    Digite a Observação / Nota:
+                  </label>
+                  <textarea
+                    rows={5}
+                    value={obsText}
+                    onChange={(e) => setObsText(e.target.value)}
+                    placeholder="Escreva aqui detalhes sobre esta venda, negociações, pendências ou observações importantes..."
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl p-3 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all resize-y"
+                    autoFocus
+                  />
+                  <div className="mt-1 flex justify-between text-xs text-slate-400">
+                    <span>A observação ficará salva e atrelada a esta venda.</span>
+                    <span>{obsText.length} caractere(s)</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+                  {obsText.trim() ? (
+                    <button
+                      type="button"
+                      onClick={() => setObsText("")}
+                      className="text-xs text-rose-500 hover:text-rose-600 font-bold hover:underline"
+                    >
+                      Limpar Texto
+                    </button>
+                  ) : <div />}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setObsModalOpen(false)}
+                      className="px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-xl transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={salvarObs}
+                      disabled={savingObs}
+                      className="px-5 py-2 text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-50 rounded-xl shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all"
+                    >
+                      <Save size={16} />
+                      {savingObs ? "Guardando..." : "Salvar Observação"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </main>
 
