@@ -1,16 +1,19 @@
 // Constantes do sistema
 export const SYSTEM_MODULES = [
     { id: 'dashboard', label: 'Visão Geral (Dashboard)' },
+    { id: 'painel', label: 'Painel de Indicadores' },
     { id: 'vendas', label: 'Vendas de Serviços' },
     { id: 'clientes', label: 'Gestão de Clientes' },
+    { id: 'financeiro', label: 'Financeiro' },
     { id: 'processar', label: 'Relatórios de Comissão (Processamento)' },
-    { id: 'nfe', label: 'Emissor NFS-e (Prefeitura)' },
     { id: 'historico', label: 'Histórico de Relatórios Salvos' },
+    { id: 'nfe', label: 'Emissor NFS-e (Prefeitura)' },
     { id: 'gestor', label: 'Gestor de Extratos (Arquivos Internos)' },
     { id: 'empresas', label: 'Gestão de Empresas' },
     { id: 'usuarios', label: 'Controle de Acessos e Permissões' },
     { id: 'settings', label: 'Configurações do Sistema e Backups' },
-    { id: 'lgpd', label: 'Governança LGPD e Termos Aceitos' }
+    { id: 'lgpd', label: 'Governança LGPD e Termos Aceitos' },
+    { id: 'ajuda', label: 'Ajuda e Suporte' }
 ];
 
 export const EMPRESAS_INTERNAS = ["Protetta"];

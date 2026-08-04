@@ -182,7 +182,7 @@ export default function Sidebar({ currentUser, currentView, setCurrentView, hasA
                     {collapsed ? '...' : 'Principal'}
                 </p>
                 {hasAccess('dashboard') && <SidebarItem collapsed={collapsed} icon={Home} label="Dashboard" active={currentView === 'dashboard'} onClick={() => setCurrentView('dashboard')} />}
-                {hasAccess('dashboard') && <SidebarItem collapsed={collapsed} icon={Layers} label="Painel" active={currentView === 'painel'} onClick={() => setCurrentView('painel')} />}
+                {hasAccess('painel') && <SidebarItem collapsed={collapsed} icon={Layers} label="Painel" active={currentView === 'painel'} onClick={() => setCurrentView('painel')} />}
                 {hasAccess('vendas') && <SidebarItem collapsed={collapsed} icon={ShoppingCart} label="Vendas de Serviços" active={currentView === 'vendas'} onClick={() => setCurrentView('vendas')} />}
                 {hasAccess('clientes') && <SidebarItem collapsed={collapsed} icon={Users} label="Clientes" active={currentView === 'clientes'} onClick={() => setCurrentView('clientes')} />}
                 {hasAccess('financeiro') && <SidebarItem collapsed={collapsed} icon={DollarSign} label="Financeiro" active={currentView === 'financeiro'} onClick={() => setCurrentView('financeiro')} />}
@@ -209,7 +209,7 @@ export default function Sidebar({ currentUser, currentView, setCurrentView, hasA
                 {hasAccess('usuarios') && <SidebarItem collapsed={collapsed} icon={Shield} label="Controle de Acessos" active={currentView === 'usuarios'} onClick={() => setCurrentView('usuarios')} />}
                 {hasAccess('settings') && <SidebarItem collapsed={collapsed} icon={Settings} label="Configurações" active={currentView === 'settings'} onClick={() => setCurrentView('settings')} />}
                 {hasAccess('lgpd') && <SidebarItem collapsed={collapsed} icon={FileCheck} label="Termos e LGPD" active={currentView === 'lgpd'} onClick={() => setCurrentView('lgpd')} />}
-                <SidebarItem collapsed={collapsed} icon={HelpCircle} label="Ajuda e Suporte" active={currentView === 'ajuda'} onClick={() => setCurrentView('ajuda')} />
+                {hasAccess('ajuda') && <SidebarItem collapsed={collapsed} icon={HelpCircle} label="Ajuda e Suporte" active={currentView === 'ajuda'} onClick={() => setCurrentView('ajuda')} />}
             </nav>
 
             <div className={`mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 space-y-2 pb-4 ${collapsed ? 'px-2' : 'px-4'}`}>

@@ -10,11 +10,9 @@ import {
   Trash2,
   Home
 } from "lucide-react";
-import ModalTransferencia from "./ModalTransferencia";
 
 export default function CaixasEContas({ caixas = [], setCaixas }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [nome, setNome] = useState("");
   const [banco, setBanco] = useState("Itaú Unibanco");
   const [agencia, setAgencia] = useState("");
@@ -123,8 +121,8 @@ export default function CaixasEContas({ caixas = [], setCaixas }) {
 
             <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <button
-                onClick={() => setIsTransferModalOpen(true)}
-                className="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded text-[11px] font-semibold transition-colors"
+                onClick={() => alert(`Transferência para a conta ${item.nome}`)}
+                className="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded text-[11px] font-semibold"
               >
                 <ArrowRightLeft size={12} />
                 <span>Transferir</span>
@@ -140,14 +138,6 @@ export default function CaixasEContas({ caixas = [], setCaixas }) {
           </div>
         ))}
       </div>
-
-      {/* Modal Transferencia */}
-      <ModalTransferencia
-        isOpen={isTransferModalOpen}
-        onClose={() => setIsTransferModalOpen(false)}
-        caixas={caixas}
-        setCaixas={setCaixas}
-      />
 
       {/* Modal Add Account */}
       {isModalOpen && (

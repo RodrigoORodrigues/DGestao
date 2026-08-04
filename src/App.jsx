@@ -1261,17 +1261,50 @@ export default function App() {
 
   const hasAccess = (module) => {
     if (!currentUser) return false;
-    if (module === "lgpd")
-      return currentUser.username === "Donfim" || currentUser.role === "master";
-    if (currentUser.role === "master") return true;
-    if (
-      module === "empresas" &&
-      currentUser.empresa &&
-      currentUser.empresa !== "Todas"
-    )
-      return false;
-    if (currentUser.role === "admin") return true;
-    return (currentUser.permissions || []).includes(module);
+    const usernameLower = currentUser.username ? currentUser.username.toLowerCase() : "";
+
+    // 1. Donfim has access to EVERYTHING
+    if (usernameLower === "donfim" || currentUser.role === "master")
+      return true;
+
+    // 2. Rodrigo, Fabiana, Elaine - specific list of modules
+    const specialUsers = ["rodrigo", "fabiana", "elaine"];
+    if (specialUsers.includes(usernameLower)) {
+      const SPECIAL_ALLOWED_MODULES = [
+        "dashboard",
+        "painel",
+        "vendas",
+        "clientes",
+        "processar",
+        "historico",
+        "gestor",
+        "usuarios",
+        "ajuda"
+      ];
+      return SPECIAL_ALLOWED_MODULES.includes(module);
+    }
+
+    // 3. Admin has access to these 10 modules
+    if (currentUser.role === "admin") {
+      const ADMIN_ALLOWED_MODULES = [
+        "dashboard",
+        "painel",
+        "vendas",
+        "clientes",
+        "processar",
+        "historico",
+        "gestor",
+        "empresas",
+        "usuarios",
+        "ajuda"
+      ];
+      return ADMIN_ALLOWED_MODULES.includes(module);
+    }
+
+    // 4. Any other user (including "Novo usuário" created as operator)
+    // has access to whatever is in their permissions list.
+    const allowed = currentUser.permissions || [];
+    return allowed.includes(module);
   };
 
 
@@ -3628,7 +3661,6 @@ export default function App() {
       Object.keys(safeVenda).forEach((k) => {
         if (safeVenda[k] === null) safeVenda[k] = "";
       });
-      safeVenda.notas = venda.notas || venda.observacao || venda.obs || "";
       setVendaForm(safeVenda);
     } else
       setVendaForm({
@@ -4045,7 +4077,20 @@ export default function App() {
         ...user,
         permissions:
           user.role === "admin"
-            ? SYSTEM_MODULES.map((m) => m.id)
+            ? (currentUser?.username?.toLowerCase() === "donfim" || currentUser?.role === "master"
+                ? SYSTEM_MODULES.map((m) => m.id)
+                : [
+                    "dashboard",
+                    "painel",
+                    "vendas",
+                    "clientes",
+                    "processar",
+                    "historico",
+                    "gestor",
+                    "empresas",
+                    "usuarios",
+                    "ajuda",
+                  ])
             : user.permissions || [],
       });
     } else
@@ -4093,7 +4138,20 @@ export default function App() {
         role: userForm.role,
         permissions:
           userForm.role === "admin"
-            ? SYSTEM_MODULES.map((m) => m.id)
+            ? (currentUser?.username?.toLowerCase() === "donfim" || currentUser?.role === "master"
+                ? SYSTEM_MODULES.map((m) => m.id)
+                : [
+                    "dashboard",
+                    "painel",
+                    "vendas",
+                    "clientes",
+                    "processar",
+                    "historico",
+                    "gestor",
+                    "empresas",
+                    "usuarios",
+                    "ajuda",
+                  ])
             : userForm.permissions,
         empresa: finalEmpresa,
       };
@@ -5444,13 +5502,8 @@ export default function App() {
     setCurrentReportId(null);
     setCurrentReportEmpresa(empresaContexto);
     setCurrentReportOperadora(extratoOperadora);
-    
-    let docReportName = (reportDoc?.nome || reportDoc?.fileName || reportDoc?.name || "").replace(/\.(pdf|xlsx|xls|csv|txt|ret|dat)$/i, "").trim();
-    if (!docReportName) {
-      docReportName = `Relatório ${extratoOperadora}`;
-    }
-    setReportName(docReportName);
-    setReportPeriod(reportDoc?.periodo || "");
+    setReportName("Relatório ");
+    setReportPeriod("");
 
     let textoNormalizado = texto.replace(/\s+/g, " ").trim();
     const textoUpper = textoNormalizado.toUpperCase();
@@ -9014,91 +9067,29 @@ export default function App() {
 
     setPdfData(comissaoPreenchida);
 
-    let extractedPeriod = reportDoc?.periodo || "";
-    if (!extractedPeriod && comissaoPreenchida.length > 0) {
-      const datas = comissaoPreenchida.map((r) => r.data).filter(Boolean);
-      if (datas.length > 0) {
-        datas.sort();
-        const first = datas[0];
-        const last = datas[datas.length - 1];
-        extractedPeriod = first === last ? first : `${first} até ${last}`;
-      }
-    }
-    if (extractedPeriod) {
-      setReportPeriod(extractedPeriod);
-    }
-
-    // Verificação inteligente e abrangente de relatório duplicado já salvo
-    const cleanFileName = (reportDoc?.fileName || reportDoc?.filePath || reportDoc?.nome || "").replace(/\.(pdf|xlsx|xls|csv|txt|ret|dat)$/i, "").trim().toLowerCase();
-    const docNameClean = (docReportName || "").replace(/\.(pdf|xlsx|xls|csv|txt|ret|dat)$/i, "").trim().toLowerCase();
-
-    const totalComissaoExtraida = comissaoPreenchida.reduce((sum, r) => sum + (parseFloat(r.comissao) || parseFloat(r.valorTotal) || 0), 0);
-    const firstClientExt = comissaoPreenchida[0]?.cliente ? comissaoPreenchida[0].cliente.trim().toLowerCase() : "";
-    const firstContractExt = comissaoPreenchida[0]?.contrato ? String(comissaoPreenchida[0].contrato).trim().toLowerCase() : "";
-
+    // Verificação de relatório duplicado já salvo
+    const nameToCheck = reportName || reportDoc?.fileName || reportDoc?.nome || "";
     const existingSaved = savedReportsList.find((rep) => {
-      // 1. ID direto (relatório salvo previamente)
-      if (rep.id && ((reportDoc?.id && String(rep.id) === String(reportDoc.id)) || (currentReportId && String(rep.id) === String(currentReportId)))) return true;
-
-      const repNomeClean = (rep.nome || "").replace(/\.(pdf|xlsx|xls|csv|txt|ret|dat)$/i, "").trim().toLowerCase();
-      const repFileClean = (rep.fileName || "").replace(/\.(pdf|xlsx|xls|csv|txt|ret|dat)$/i, "").trim().toLowerCase();
-
-      // 2. Correspondência de nome do relatório ou nome do arquivo
-      if (docNameClean && repNomeClean) {
-        if (repNomeClean === docNameClean) return true;
-        if (repNomeClean.length >= 4 && docNameClean.length >= 4 && (repNomeClean.includes(docNameClean) || docNameClean.includes(repNomeClean))) return true;
-      }
-      if (cleanFileName && repNomeClean) {
-        if (repNomeClean === cleanFileName) return true;
-        if (cleanFileName.length >= 4 && repNomeClean.length >= 4 && (repNomeClean.includes(cleanFileName) || cleanFileName.includes(repNomeClean))) return true;
-      }
-      if (cleanFileName && repFileClean && cleanFileName === repFileClean) return true;
-
-      // 3. Correspondência pelos dados/lançamentos extraídos (mesmo conteúdo/contratos)
-      if (rep.dados && Array.isArray(rep.dados) && rep.dados.length > 0 && comissaoPreenchida.length > 0) {
-        const repCount = rep.dados.length;
-        const extCount = comissaoPreenchida.length;
-
-        if (repCount === extCount) {
-          const repFirstClient = (rep.dados[0]?.cliente || "").trim().toLowerCase();
-          const repFirstContract = (rep.dados[0]?.contrato || "").trim().toLowerCase();
-
-          if ((firstClientExt && repFirstClient && firstClientExt === repFirstClient) ||
-              (firstContractExt && repFirstContract && firstContractExt === repFirstContract)) {
-            return true;
-          }
-
-          const totalComissaoRep = rep.dados.reduce((sum, r) => sum + (parseFloat(r.comissao) || parseFloat(r.valorTotal) || 0), 0);
-          if (totalComissaoRep > 0 && Math.abs(totalComissaoRep - totalComissaoExtraida) < 0.01) {
-            return true;
-          }
-        }
-
-        if (firstContractExt) {
-          const contractsRep = new Set(rep.dados.map(r => String(r.contrato || "").trim().toLowerCase()).filter(Boolean));
-          if (contractsRep.has(firstContractExt)) return true;
-        }
-      }
-
-      // 4. Período e contagem de registros idênticos
-      if (rep.periodo && extractedPeriod && rep.periodo.trim().toLowerCase() === extractedPeriod.trim().toLowerCase() && rep.dados?.length === comissaoPreenchida.length) {
+      if (nameToCheck && rep.nome && rep.nome.trim().toLowerCase() === nameToCheck.trim().toLowerCase()) {
         return true;
       }
-
+      if (rep.periodo && reportPeriod && rep.periodo === reportPeriod && rep.dados?.length === registosParaProcessar.length) {
+        if (rep.dados?.[0]?.cliente && registosParaProcessar[0]?.cliente && rep.dados[0].cliente === registosParaProcessar[0].cliente) {
+          return true;
+        }
+      }
       return false;
     });
 
-    if (comissaoPreenchida.length > 0) {
+    if (registosParaProcessar.length > 0) {
       if (existingSaved) {
         setCurrentReportId(existingSaved.id);
-        setReportName(existingSaved.nome || docReportName);
-        if (existingSaved.periodo) setReportPeriod(existingSaved.periodo);
         showAlert(
-          `Extrato processado com sucesso! ${comissaoPreenchida.length} lançamento(s) extraído(s).\n\n⚠️ AVISO DE RELATÓRIO JÁ SALVO: Este relatório já consta como salvo no sistema ("${existingSaved.nome}"${existingSaved.periodo ? ` - Período: ${existingSaved.periodo}` : ""}). O registro (${existingSaved.id}) foi associado para atualizar e evitar duplicados ao salvar.`
+          `Extrato processado com sucesso! ${registosParaProcessar.length} lançamento(s) extraído(s).\n\n⚠️ NOTA: Este relatório já consta como salvo no sistema ("${existingSaved.nome}"${existingSaved.periodo ? ` - Período: ${existingSaved.periodo}` : ""}). O relatório foi associado para evitar duplicidade ao salvar.`
         );
       } else {
         showAlert(
-          `Extrato processado com sucesso! ${comissaoPreenchida.length} lançamento(s) extraído(s).`
+          `Extrato processado com sucesso! ${registosParaProcessar.length} lançamento(s) extraído(s).`
         );
       }
     } else {
@@ -9414,37 +9405,13 @@ export default function App() {
       let savedId = currentReportId;
 
       if (!savedId) {
-        const targetNameClean = (reportName || "").replace(/\.(pdf|xlsx|xls|csv|txt|ret|dat)$/i, "").trim().toLowerCase();
-        const targetFirstClient = (dadosParaSalvar[0]?.cliente || "").trim().toLowerCase();
-        const targetFirstContract = (dadosParaSalvar[0]?.contrato || "").trim().toLowerCase();
-        const totalComissaoToSave = dadosParaSalvar.reduce((sum, r) => sum + (parseFloat(r.comissao) || parseFloat(r.valorTotal) || 0), 0);
-
         const duplicateReport = savedReportsList.find((rep) => {
-          const repNomeClean = (rep.nome || "").replace(/\.(pdf|xlsx|xls|csv|txt|ret|dat)$/i, "").trim().toLowerCase();
-          if (repNomeClean && targetNameClean && repNomeClean === targetNameClean) return true;
-
-          if (rep.dados && Array.isArray(rep.dados) && rep.dados.length > 0 && rep.dados.length === dadosParaSalvar.length) {
-            const repFirstClient = (rep.dados[0]?.cliente || "").trim().toLowerCase();
-            const repFirstContract = (rep.dados[0]?.contrato || "").trim().toLowerCase();
-
-            if ((targetFirstClient && repFirstClient && repFirstClient === targetFirstClient) ||
-                (targetFirstContract && repFirstContract && repFirstContract === targetFirstContract)) {
-              return true;
-            }
-
-            const totalComissaoRep = rep.dados.reduce((sum, r) => sum + (parseFloat(r.comissao) || parseFloat(r.valorTotal) || 0), 0);
-            if (totalComissaoRep > 0 && Math.abs(totalComissaoRep - totalComissaoToSave) < 0.01) {
-              return true;
-            }
+          if (rep.nome && reportName && rep.nome.trim().toLowerCase() === reportName.trim().toLowerCase()) return true;
+          if (rep.periodo && reportPeriod && rep.periodo === reportPeriod && rep.dados?.length === dadosParaSalvar.length) {
+            if (rep.dados?.[0]?.cliente === dadosParaSalvar[0]?.cliente) return true;
           }
-
-          if (rep.periodo && reportPeriod && rep.periodo.trim().toLowerCase() === reportPeriod.trim().toLowerCase() && rep.dados?.length === dadosParaSalvar.length) {
-            return true;
-          }
-
           return false;
         });
-
         if (duplicateReport) {
           savedId = duplicateReport.id;
           setCurrentReportId(savedId);
@@ -9603,24 +9570,17 @@ export default function App() {
   };
 
   const carregarRelatorioSalvo = (report) => {
-    if (!report) return;
     setPdfData((report.dados || []).map((r) => ({ ...r, selected: true })));
-    setReportName(report.nome || "Relatório");
+    setReportName(report.nome);
     setReportPeriod(report.periodo || "");
     setCurrentReportId(report.id);
     setCurrentReportEmpresa(report.empresa || nomeEmpresa);
     setCurrentReportOperadora(
       report.dados && report.dados.length > 0
-        ? report.dados[0].codigoOperadora || report.dados[0].operadora || "AMIL"
+        ? report.dados[0].codigoOperadora || "AMIL"
         : "AMIL",
     );
-    setModalArquivosOpen(false);
     setCurrentView("processar");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    showAlert(
-      `Relatório "${report.nome || "Relatório"}" carregado com sucesso no painel de processamento com ${report.dados?.length || 0} lançamento(s).`,
-      "success"
-    );
   };
   const apagarRelatorioSalvo = (id) => {
     showConfirm(
@@ -10571,7 +10531,7 @@ export default function App() {
           )}
 
           {/* ECRÃ 12: PAINEL DE CONTROLE (ANTIGO DASHBOARD) */}
-          {currentView === "painel" && hasAccess("dashboard") && (
+          {currentView === "painel" && hasAccess("painel") && (
             <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
               <header>
                 <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
@@ -15232,9 +15192,7 @@ export default function App() {
 
           {/* ECRÃ 6: EMISSOR NFS-E — PADRÃO NACIONAL 2026 */}
           {currentView === "nfe" &&
-            (hasAccess("nfe") ||
-              currentUser?.role === "admin" ||
-              currentUser?.role === "master") && (
+            hasAccess("nfe") && (
               <div className="max-w-4xl mx-auto animate-in fade-in duration-500 pb-20">
                 <header className="mb-6 border-b border-slate-200 dark:border-slate-700 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div>
@@ -19072,7 +19030,20 @@ export default function App() {
                           role: newRole,
                           permissions:
                             newRole === "admin"
-                              ? SYSTEM_MODULES.map((m) => m.id)
+                              ? (currentUser?.username?.toLowerCase() === "donfim" || currentUser?.role === "master"
+                                  ? SYSTEM_MODULES.map((m) => m.id)
+                                  : [
+                                      "dashboard",
+                                      "painel",
+                                      "vendas",
+                                      "clientes",
+                                      "processar",
+                                      "historico",
+                                      "gestor",
+                                      "empresas",
+                                      "usuarios",
+                                      "ajuda",
+                                    ])
                               : userForm.permissions,
                         });
                       }}
@@ -19110,7 +19081,26 @@ export default function App() {
                       Permissões de Acesso
                     </label>
                     <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                      {SYSTEM_MODULES.map((mod) => (
+                      {SYSTEM_MODULES.filter((mod) => {
+                        const isDonfimOrMaster =
+                          currentUser?.username?.toLowerCase() === "donfim" ||
+                          currentUser?.role === "master";
+                        if (isDonfimOrMaster) return true;
+                        
+                        const ADMIN_ALLOWED_MODULES = [
+                          "dashboard",
+                          "painel",
+                          "vendas",
+                          "clientes",
+                          "processar",
+                          "historico",
+                          "gestor",
+                          "empresas",
+                          "usuarios",
+                          "ajuda",
+                        ];
+                        return ADMIN_ALLOWED_MODULES.includes(mod.id);
+                      }).map((mod) => (
                         <label
                           key={mod.id}
                           className="flex items-center space-x-2"
@@ -19219,7 +19209,7 @@ export default function App() {
             </div>
           )}
 
-          {currentView === "ajuda" && <AjudaSuporte />}
+          {currentView === "ajuda" && hasAccess("ajuda") && <AjudaSuporte />}
 
           {currentView === "lgpd" && hasAccess("lgpd") && (
             <TermosLGPDGestao currentUser={currentUser} />

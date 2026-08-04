@@ -18,12 +18,9 @@ import {
   List,
   Home,
   Check,
-  X,
-  Printer
+  X
 } from "lucide-react";
 import ModalNovoLancamento from "./ModalNovoLancamento";
-import ModalContasFixas from "./ModalContasFixas";
-import ModalImprimirBoletosCarnes from "./ModalImprimirBoletosCarnes";
 
 export default function ContasReceber({
   contasReceber,
@@ -37,8 +34,6 @@ export default function ContasReceber({
   const [itemEditar, setItemEditar] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showBuscaAvancada, setShowBuscaAvancada] = useState(false);
-  const [isModalContasFixasOpen, setIsModalContasFixasOpen] = useState(false);
-  const [modalPrintType, setModalPrintType] = useState(null);
 
   // Comprehensive Filter State matching Screenshot 6
   const [filterForm, setFilterForm] = useState({
@@ -192,15 +187,6 @@ export default function ContasReceber({
             <span>Adicionar</span>
           </button>
 
-          {/* Burgundy Contas fixas Button */}
-          <button
-            onClick={() => setIsModalContasFixasOpen(true)}
-            className="flex items-center space-x-1.5 bg-rose-900 hover:bg-rose-800 text-white text-xs font-bold px-3 py-2 rounded-md shadow-sm transition-colors border border-rose-950"
-          >
-            <Calendar size={14} />
-            <span>Contas fixas</span>
-          </button>
-
           {/* Mais ações Dropdown */}
           <div className="relative">
             <button
@@ -219,71 +205,22 @@ export default function ContasReceber({
               >
                 <button
                   className="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2"
-                  onClick={() => {
-                    setContasReceber((prev) =>
-                      prev.map((c) => ({ ...c, situacao: "Confirmado" }))
-                    );
-                    alert("Todas as contas a receber pendentes foram marcadas como CONFIRMADAS!");
-                  }}
+                  onClick={() => alert("Confirmar recebimentos selecionados.")}
                 >
                   <CheckCircle2 size={14} className="text-emerald-500" />
                   <span>Confirmar recebimentos</span>
                 </button>
                 <button
                   className="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2"
-                  onClick={() => {
-                    setContasReceber((prev) =>
-                      prev.map((c) => ({ ...c, situacao: "Cancelado" }))
-                    );
-                    alert("Contas a receber canceladas.");
-                  }}
+                  onClick={() => alert("Cancelar recebimentos selecionados.")}
                 >
                   <XCircle size={14} className="text-rose-500" />
                   <span>Cancelar recebimentos</span>
                 </button>
-                <button
-                  className="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2"
-                  onClick={() => setIsModalContasFixasOpen(true)}
-                >
-                  <Calendar size={14} />
-                  <span>Contas fixas</span>
-                </button>
                 <div className="border-t border-slate-200 dark:border-slate-800 my-1" />
                 <button
                   className="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2"
-                  onClick={() => setModalPrintType("carne")}
-                >
-                  <Printer size={14} />
-                  <span>Gerar carnês de pagamento</span>
-                </button>
-                <button
-                  className="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2"
-                  onClick={() => setModalPrintType("relatorio")}
-                >
-                  <Printer size={14} className="text-indigo-500" />
-                  <span>Relatório Impresso / PDF</span>
-                </button>
-                <button
-                  className="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2"
-                  onClick={() => {
-                    const headers = ["ID", "Descricao", "Cliente", "Pagamento", "Data", "Situacao", "Valor"];
-                    const rows = contasReceber.map((c) => [
-                      c.id,
-                      `"${(c.descricao || "").replace(/"/g, '""')}"`,
-                      `"${(c.entidade || "").replace(/"/g, '""')}"`,
-                      `"${c.pagamento || "Boleto"}"`,
-                      c.data || "",
-                      c.situacao || "",
-                      (parseFloat(c.valor) || 0).toFixed(2)
-                    ]);
-                    const csv = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-                    const link = document.createElement("a");
-                    link.href = encodeURI(csv);
-                    link.download = `contas_a_receber_${new Date().toISOString().slice(0, 10)}.csv`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                  }}
+                  onClick={() => alert("Exportando dados de recebimentos...")}
                 >
                   <Download size={14} />
                   <span>Exportar recebimentos</span>
@@ -707,23 +644,6 @@ export default function ContasReceber({
         onSave={handleSaveItem}
         tipo="receber"
         itemEditar={itemEditar}
-      />
-
-      {/* Modal Contas Fixas */}
-      <ModalContasFixas
-        isOpen={isModalContasFixasOpen}
-        onClose={() => setIsModalContasFixasOpen(false)}
-        contasReceber={contasReceber}
-        setContasReceber={setContasReceber}
-        tipoDefinido="receber"
-      />
-
-      {/* Modal Imprimir Boletos / Carnes / Relatorios */}
-      <ModalImprimirBoletosCarnes
-        isOpen={Boolean(modalPrintType)}
-        onClose={() => setModalPrintType(null)}
-        tipo={modalPrintType || "carne"}
-        items={contasReceber}
       />
     </div>
   );

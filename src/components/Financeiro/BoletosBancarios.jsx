@@ -19,21 +19,15 @@ import {
   Grid,
   List
 } from "lucide-react";
-import ModalImprimirBoletosCarnes from "./ModalImprimirBoletosCarnes";
-import ModalNovoLancamento from "./ModalNovoLancamento";
 
 export default function BoletosBancarios({
   boletos = [],
-  setBoletos = () => {},
+  setBoletos,
   subView = "gerenciar"
 }) {
   const [selectedPeriod, setSelectedPeriod] = useState("01 jan 2026 - 31 jul 2026");
   const [isMaisAcoesOpen, setIsMaisAcoesOpen] = useState(false);
   const [viewMode, setViewMode] = useState("list");
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [modalPrintType, setModalPrintType] = useState(null); // "boleto" | "carne" | "relatorio"
-  const [isModalNovoOpen, setIsModalNovoOpen] = useState(false);
-  const [itemEditar, setItemEditar] = useState(null);
 
   // Search form state matching screenshot 4
   const [formFilter, setFormFilter] = useState({
@@ -198,24 +192,14 @@ export default function BoletosBancarios({
               >
                 <button
                   className="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2"
-                  onClick={() => {
-                    setBoletos((prev) =>
-                      prev.map((b) => ({ ...b, situacao: "Confirmado" }))
-                    );
-                    alert("Todos os boletos listados foram marcados como CONFIRMADOS!");
-                  }}
+                  onClick={() => alert("Confirmar recebimentos de boletos.")}
                 >
                   <CheckCircle2 size={14} className="text-emerald-500" />
                   <span>Confirmar recebimentos</span>
                 </button>
                 <button
                   className="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2"
-                  onClick={() => {
-                    setBoletos((prev) =>
-                      prev.map((b) => ({ ...b, situacao: "Cancelado" }))
-                    );
-                    alert("Boletos cancelados.");
-                  }}
+                  onClick={() => alert("Cancelar recebimentos selecionados.")}
                 >
                   <XCircle size={14} className="text-rose-500" />
                   <span>Cancelar recebimentos</span>
@@ -223,50 +207,24 @@ export default function BoletosBancarios({
                 <div className="border-t border-slate-200 dark:border-slate-800 my-1" />
                 <button
                   className="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2"
-                  onClick={() => {
-                    const headers = ["ID", "NumBoleto", "Cliente", "Loja", "Emissao", "Vencimento", "Situacao", "Valor"];
-                    const rows = boletos.map((b) => [
-                      b.id,
-                      b.numBoleto,
-                      `"${(b.cliente || "").replace(/"/g, '""')}"`,
-                      `"${(b.loja || "").replace(/"/g, '""')}"`,
-                      b.dataEmissao || "",
-                      b.dataVencimento || "",
-                      b.situacao || "",
-                      (parseFloat(b.valor) || 0).toFixed(2)
-                    ]);
-                    const csv = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-                    const link = document.createElement("a");
-                    link.href = encodeURI(csv);
-                    link.download = `boletos_export_${new Date().toISOString().slice(0, 10)}.csv`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                  }}
+                  onClick={() => alert("Exportando recebimentos...")}
                 >
                   <FileText size={14} />
                   <span>Exportar recebimentos</span>
                 </button>
                 <button
                   className="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2"
-                  onClick={() => setModalPrintType("boleto")}
+                  onClick={() => window.print()}
                 >
                   <Printer size={14} />
                   <span>Imprimir boletos</span>
                 </button>
                 <button
                   className="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2"
-                  onClick={() => setModalPrintType("carne")}
+                  onClick={() => window.print()}
                 >
                   <Printer size={14} />
                   <span>Imprimir carnês</span>
-                </button>
-                <button
-                  className="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2"
-                  onClick={() => setModalPrintType("relatorio")}
-                >
-                  <Printer size={14} className="text-indigo-500" />
-                  <span>Relatório Impresso / PDF</span>
                 </button>
               </div>
             )}
@@ -525,17 +483,14 @@ export default function BoletosBancarios({
                     <td className="p-2 text-center">
                       <div className="flex items-center justify-center space-x-1">
                         <button
-                          onClick={() => setModalPrintType("boleto")}
+                          onClick={() => alert(`Imprimindo boleto ${item.numBoleto}`)}
                           className="p-1 bg-sky-500 hover:bg-sky-600 text-white rounded transition-colors"
-                          title="Imprimir PDF / Visualizar"
+                          title="Imprimir PDF"
                         >
                           <Printer size={12} />
                         </button>
                         <button
-                          onClick={() => {
-                            setItemEditar(item);
-                            setIsModalNovoOpen(true);
-                          }}
+                          onClick={() => alert(`Editando boleto ${item.numBoleto}`)}
                           className="p-1 bg-amber-500 hover:bg-amber-600 text-white rounded transition-colors"
                           title="Editar"
                         >
@@ -557,38 +512,6 @@ export default function BoletosBancarios({
           </table>
         </div>
       </div>
-
-      {/* Modal for Printing Boletos, Carnês and Reports */}
-      <ModalImprimirBoletosCarnes
-        isOpen={Boolean(modalPrintType)}
-        onClose={() => setModalPrintType(null)}
-        tipo={modalPrintType || "boleto"}
-        items={boletos}
-      />
-
-      {/* Modal for Adding / Editing Boleto */}
-      <ModalNovoLancamento
-        isOpen={isModalNovoOpen}
-        onClose={() => setIsModalNovoOpen(false)}
-        onSave={(item) => {
-          setBoletos((prev) => [
-            {
-              id: item.id || `bol-${Date.now()}`,
-              numBoleto: `000${Math.floor(100000 + Math.random() * 900000)}`,
-              cliente: item.entidade || "Cliente Boleto",
-              loja: "PROTETTA SEGUROS",
-              dataEmissao: new Date().toISOString().slice(0, 10),
-              dataVencimento: item.data || new Date().toISOString().slice(0, 10),
-              valor: item.valor || 100,
-              situacao: "A vencer",
-              contaBancaria: "Itaú - Ag. 0123 C/C 45678-9"
-            },
-            ...prev
-          ]);
-        }}
-        tipo="receber"
-        itemEditar={itemEditar}
-      />
     </div>
   );
 }
