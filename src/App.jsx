@@ -764,6 +764,13 @@ export default function App() {
     // NOW change local state (this will trigger loadFromDB via useEffect)
     setRawEmpresasList(newList);
     localStorage.setItem("protetta_empresas", JSON.stringify(newList));
+
+    // Synchronize active selected company with the principal company
+    const defaultEmp = newList.find((e) => e.isDefault);
+    if (defaultEmp) {
+      setSelectedEmpresaOverride(defaultEmp.nome);
+      localStorage.setItem("protetta_selected_empresa", defaultEmp.nome);
+    }
   };
 
   const [selectedEmpresaOverride, setSelectedEmpresaOverride] = useState(() => {
@@ -785,16 +792,17 @@ export default function App() {
         rawEmpresasList[0] || { nome: "PROTETTA" };
   }, [selectedEmpresaOverride, empresasList, currentUser, rawEmpresasList]);
 
-  const handleSelectEmpresa = (empName) => {
+  const handleSelectEmpresa = async (empName) => {
     setSelectedEmpresaOverride(empName);
     if (empName) {
       localStorage.setItem("protetta_selected_empresa", empName);
-      setEmpresasList((prevList) => {
+      await setEmpresasList((prevList) => {
         return prevList.map((e) => ({
           ...e,
           isDefault: e.nome.toUpperCase() === empName.toUpperCase(),
         }));
       });
+      await loadFromDB();
     } else {
       localStorage.removeItem("protetta_selected_empresa");
     }
@@ -1278,7 +1286,7 @@ export default function App() {
         "processar",
         "historico",
         "gestor",
-        "usuarios",
+        "empresas",
         "ajuda"
       ];
       return SPECIAL_ALLOWED_MODULES.includes(module);
@@ -2243,6 +2251,30 @@ export default function App() {
       fetchBackups();
     }
   }, [currentView, nomeEmpresaUpper, supabase]);
+
+  useEffect(() => {
+    if (currentView === "empresas" && activeEmpresa?.nome) {
+      const activeName = activeEmpresa.nome;
+      const alreadyDefault = rawEmpresasList.find(
+        (e) => e.nome.toUpperCase() === activeName.toUpperCase() && e.isDefault,
+      );
+      if (!alreadyDefault) {
+        const exists = rawEmpresasList.some(
+          (e) => e.nome.toUpperCase() === activeName.toUpperCase()
+        );
+        if (exists) {
+          setEmpresasList((prevList) => {
+            return prevList.map((e) => ({
+              ...e,
+              isDefault: e.nome.toUpperCase() === activeName.toUpperCase(),
+            }));
+          }).then(() => {
+            loadFromDB();
+          });
+        }
+      }
+    }
+  }, [currentView]);
 
   // Carregar os backups das duas fontes (Nuvem e Banco de Dados)
   const fetchBackups = async () => {
