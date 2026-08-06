@@ -1458,6 +1458,18 @@ export default function App() {
         });
 
         let newList = Array.from(map.values());
+        if (selectedEmpresaOverride) {
+          const matched = newList.find(
+            (e) => e.nome.toUpperCase() === selectedEmpresaOverride.toUpperCase()
+          );
+          if (matched && !matched.isDefault) {
+            newList = newList.map((e) => ({
+              ...e,
+              isDefault: e.nome.toUpperCase() === selectedEmpresaOverride.toUpperCase(),
+            }));
+            changed = true;
+          }
+        }
         let defaultsCount = newList.filter((e) => e.isDefault).length;
 
         if (defaultsCount !== 1 && newList.length > 0) {
@@ -9100,11 +9112,17 @@ export default function App() {
     setPdfData(comissaoPreenchida);
 
     // Verificação de relatório duplicado já salvo
-    const nameToCheck = reportName || reportDoc?.fileName || reportDoc?.nome || "";
     const existingSaved = savedReportsList.find((rep) => {
-      if (nameToCheck && rep.nome && rep.nome.trim().toLowerCase() === nameToCheck.trim().toLowerCase()) {
-        return true;
-      }
+      const currentNFs = Array.from(new Set(comissaoPreenchida.map(d => String(d.notaFiscal || "").trim()).filter(Boolean)));
+      const currentOps = Array.from(new Set(comissaoPreenchida.map(d => String(d.codigoOperadora || "").trim()).filter(Boolean)));
+      const repNFs = Array.from(new Set((rep.dados || []).map(d => String(d.notaFiscal || "").trim()).filter(Boolean)));
+      const repOps = Array.from(new Set((rep.dados || []).map(d => String(d.codigoOperadora || "").trim()).filter(Boolean)));
+      
+      const hasMatchingNf = currentNFs.length > 0 && repNFs.length > 0 && currentNFs.some(nf => repNFs.includes(nf));
+      const hasMatchingOp = currentOps.length > 0 && repOps.length > 0 && currentOps.some(op => repOps.includes(op));
+
+      if (hasMatchingNf && hasMatchingOp) return true;
+
       if (rep.periodo && reportPeriod && rep.periodo === reportPeriod && rep.dados?.length === registosParaProcessar.length) {
         if (rep.dados?.[0]?.cliente && registosParaProcessar[0]?.cliente && rep.dados[0].cliente === registosParaProcessar[0].cliente) {
           return true;
@@ -9438,7 +9456,16 @@ export default function App() {
 
       if (!savedId) {
         const duplicateReport = savedReportsList.find((rep) => {
-          if (rep.nome && reportName && rep.nome.trim().toLowerCase() === reportName.trim().toLowerCase()) return true;
+          const currentNFs = Array.from(new Set(dadosParaSalvar.map(d => String(d.notaFiscal || "").trim()).filter(Boolean)));
+          const currentOps = Array.from(new Set(dadosParaSalvar.map(d => String(d.codigoOperadora || "").trim()).filter(Boolean)));
+          const repNFs = Array.from(new Set((rep.dados || []).map(d => String(d.notaFiscal || "").trim()).filter(Boolean)));
+          const repOps = Array.from(new Set((rep.dados || []).map(d => String(d.codigoOperadora || "").trim()).filter(Boolean)));
+          
+          const hasMatchingNf = currentNFs.length > 0 && repNFs.length > 0 && currentNFs.some(nf => repNFs.includes(nf));
+          const hasMatchingOp = currentOps.length > 0 && repOps.length > 0 && currentOps.some(op => repOps.includes(op));
+
+          if (hasMatchingNf && hasMatchingOp) return true;
+
           if (rep.periodo && reportPeriod && rep.periodo === reportPeriod && rep.dados?.length === dadosParaSalvar.length) {
             if (rep.dados?.[0]?.cliente === dadosParaSalvar[0]?.cliente) return true;
           }
@@ -9583,6 +9610,16 @@ export default function App() {
           ? `O relatório "${reportName}" já existia no sistema e foi ATUALIZADO com sucesso para não gerar duplicidade!`
           : "Relatório salvo e clientes registrados com sucesso!";
         showAlert(finalMsg, "success");
+
+        // Clear the commission report section states
+        setPdfData([]);
+        setReportName("");
+        setReportPeriod("");
+        setCurrentReportId(null);
+        setCurrentReportEmpresa("");
+        setCurrentReportOperadora("");
+        setEditRowIndex(-1);
+        setEditRowData({});
       } catch (e) {
         console.error("ERRO NO SALVAMENTO DE CLIENTES:", e, "Tabela:", e.table);
         showAlert(
